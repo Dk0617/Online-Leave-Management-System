@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardShell, NavItem } from "@/src/components/layout/DashboardShell";
-import { ChangePasswordForm } from "@/src/components/shared/ChangePasswordForm";
-import { useAuth } from "@/src/context/AuthContext";
-import { useHodPortal } from "@/src/hooks/useHodPortal";
-import { Dashboard } from "./views/Dashboard";
-import { Pending } from "./views/Pending";
-import { History } from "./views/History";
+import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
+import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
+import { useAuth } from "@/src/AuthContext";
+import { useHodPortal } from "@/src/hooks";
+import { Dashboard, Pending, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },

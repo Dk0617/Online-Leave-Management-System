@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardShell, NavItem } from "@/src/components/layout/DashboardShell";
-import { ChangePasswordForm } from "@/src/components/shared/ChangePasswordForm";
-import { useAuth } from "@/src/context/AuthContext";
-import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { Dashboard } from "./views/Dashboard";
-import { ApplyLeave } from "./views/ApplyLeave";
-import { Profile } from "./views/Profile";
+import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
+import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
+import { useAuth } from "@/src/AuthContext";
+import { useStudentPortal } from "@/src/hooks";
+import { Dashboard, ApplyLeave, Profile } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },

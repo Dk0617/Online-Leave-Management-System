@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardShell, NavItem } from "@/src/components/layout/DashboardShell";
-import { ChangePasswordForm } from "@/src/components/shared/ChangePasswordForm";
-import { useAuth } from "@/src/context/AuthContext";
-import { useTroopPortal } from "@/src/hooks/useTroopPortal";
-import { Dashboard } from "./views/Dashboard";
-import { DayScholarQueue } from "./views/DayScholarQueue";
-import { CadetQueue } from "./views/CadetQueue";
-import { History } from "./views/History";
+import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
+import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
+import { useAuth } from "@/src/AuthContext";
+import { useTroopPortal } from "@/src/hooks";
+import { Dashboard, DayScholarQueue, CadetQueue, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },

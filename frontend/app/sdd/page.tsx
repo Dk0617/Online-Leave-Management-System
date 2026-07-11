@@ -1,63 +1,50 @@
 "use client";
 
-import { DashboardShell } from "@/src/components/layout/DashboardShell";
-import { LeaveTable } from "@/src/components/leave/LeaveTable";
-import { ApprovalActions } from "@/src/components/leave/ApprovalActions";
-import { StatTile } from "@/src/components/ui/Card";
-import { useAuth } from "@/src/context/AuthContext";
-import { useLeaves } from "@/src/context/LeaveContext";
-import { pendingForRole } from "@/src/lib/workflow";
+import { useState } from "react";
+import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
+import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
+import { useAuth } from "@/src/AuthContext";
+import { useSddPortal } from "@/src/hooks";
+import { Dashboard, Pending, History, Overview } from "./views";
+
+const NAV_ITEMS: NavItem[] = [
+  { key: "dashboard", label: "Dashboard", icon: "📊" },
+  { key: "pending", label: "Pending Reviews", icon: "⏳" },
+  { key: "overview", label: "Overview", icon: "🗂️" },
+  { key: "history", label: "History", icon: "📋" },
+  { key: "changePass", label: "Change Password", icon: "🔑" },
+];
+
+const TITLES: Record<string, string> = {
+  dashboard: "Dashboard",
+  pending: "Pending Reviews",
+  overview: "Overview",
+  history: "History",
+  changePass: "Change Password",
+};
 
 export default function SddPage() {
   const { user } = useAuth();
-  const { leaves, approveStage, rejectStage } = useLeaves();
+  const [view, setView] = useState("dashboard");
+  const portal = useSddPortal();
 
-  if (!user) return null;
-
-  const pending = pendingForRole(leaves, "SDD");
-  const decidedByMe = leaves.filter((l) =>
-    l.history.some((h) => h.stage === "SDD" && h.actorName === user.name)
-  );
+  const forced = !!user?.mustChangePassword;
+  const activeView = forced ? "changePass" : view;
 
   return (
     <DashboardShell
       role="SDD"
-      title="Senior Deputy Dean Dashboard"
-      subtitle={`${user.name} — final academic approval for cadet requests, before Gate exit`}
+      title={TITLES[activeView]}
+      navItems={NAV_ITEMS}
+      activeView={activeView}
+      onNavigate={(key) => !forced && setView(key)}
+      roleTag={user?.title}
     >
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Pending your approval" value={pending.length} tone="amber" />
-        <StatTile label="Reviewed by you" value={decidedByMe.length} />
-        <StatTile
-          label="Rejected by you"
-          value={
-            decidedByMe.filter((l) => l.overallStatus === "REJECTED").length
-          }
-          tone="red"
-        />
-      </div>
-
-      <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-50">
-        Pending Your Approval
-      </h2>
-      <LeaveTable
-        leaves={pending}
-        emptyMessage="No cadet leave requests waiting on you."
-        renderActions={(leave) => (
-          <ApprovalActions
-            onApprove={() => approveStage(leave.id, user)}
-            onReject={(remarks) => rejectStage(leave.id, user, remarks)}
-          />
-        )}
-      />
-
-      <h2 className="mb-3 mt-8 text-base font-semibold text-zinc-900 dark:text-zinc-50">
-        Previously Reviewed
-      </h2>
-      <LeaveTable
-        leaves={decidedByMe}
-        emptyMessage="You haven't reviewed any requests yet."
-      />
+      {activeView === "dashboard" && <Dashboard portal={portal} />}
+      {activeView === "pending" && <Pending portal={portal} />}
+      {activeView === "overview" && <Overview portal={portal} />}
+      {activeView === "history" && <History portal={portal} />}
+      {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>
   );
 }

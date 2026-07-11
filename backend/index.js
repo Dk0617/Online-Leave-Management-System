@@ -1,16 +1,18 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { connectDB } from "./config/db.js";
+import { connectDB } from "./db.js";
 
-import loginRoutes from "./routes/Login/loginRoutes.js";
-import adminRoutes from "./routes/Admin/adminRoutes.js";
-import studentRoutes from "./routes/Student/studentRoutes.js";
-import hodRoutes from "./routes/HOD/hodRoutes.js";
-import troopRoutes from "./routes/Troop/troopRoutes.js";
-import squadranRoutes from "./routes/Squadran/squadranRoutes.js";
-import sddRoutes from "./routes/SDD/sddRoutes.js";
-import gateRoutes from "./routes/Gate/gateRoutes.js";
+import {
+  authRouter as loginRoutes,
+  adminRouter as adminRoutes,
+  studentRouter as studentRoutes,
+  hodRouter as hodRoutes,
+  troopRouter as troopRoutes,
+  squadranRouter as squadranRoutes,
+  sddRouter as sddRoutes,
+  gateRouter as gateRoutes,
+} from "./routes.js";
 
 dotenv.config();
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/src/context/AuthContext";
+import { AuthProvider } from "@/src/AuthContext";
 
 const inter = Inter({
   variable: "--font-inter",

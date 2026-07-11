@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, ROLE_HOME } from "@/src/context/AuthContext";
-import { Crest } from "@/src/components/ui/Crest";
+import { useAuth, ROLE_HOME } from "@/src/AuthContext";
+import { Crest } from "@/src/components/ui";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();

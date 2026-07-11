@@ -1,15 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { DashboardShell, NavItem } from "@/src/components/layout/DashboardShell";
-import { useAdminPortal } from "@/src/hooks/useAdminPortal";
-import { Dashboard } from "./views/Dashboard";
-import { Intakes } from "./views/Intakes";
-import { Students } from "./views/Students";
-import { StaffRole } from "./views/StaffRole";
-import { Troop } from "./views/Troop";
-import { PasswordChanges } from "./views/PasswordChanges";
-import { AuditLog } from "./views/AuditLog";
+import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
+import { useAdminPortal } from "@/src/hooks";
+import { Dashboard, Intakes, Students, StaffRole, Troop, PasswordChanges, AuditLog } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },

@@ -2,10 +2,10 @@
 
 For KDUSC
 
-A fullstack web application for managing student leave requests, approvals, and gate movement tracking.
+A web application for managing student leave requests, approvals, and gate movement tracking.
 
-* 🌐 **Frontend** – Built with Next.js (React)
-* ⚙️ **Backend** – Built with Express.js (Node) & MongoDB
+* 🌐 **Frontend** – Next.js (React)
+* ⚙️ **Backend** – Express.js (Node) & MongoDB
 
 ---
 
@@ -13,7 +13,6 @@ A fullstack web application for managing student leave requests, approvals, and 
 
 ```
 online leave/
-│
 ├── backend/     # Express + MongoDB API
 ├── frontend/    # Next.js web app
 └── README.md
@@ -21,125 +20,25 @@ online leave/
 
 ---
 
-## 🛠️ Prerequisites
-
-Make sure you have installed:
-
-* Node.js (v18 or higher recommended)
-* npm or yarn
-* MongoDB Atlas account (or local MongoDB)
-
----
-
 ## ⚡ Getting Started
-
-### 1️⃣ Clone the Repository
 
 ```bash
 git clone https://github.com/Dk0617/Online-Leave-Management-System.git
 cd Online-Leave-Management-System
 ```
 
-### 2️⃣ Setup Environment Variables
-
-Each project contains a `.env.example` file.
-
-👉 **IMPORTANT:**
-
-> When you see a `.env.example` file, **make sure to rename it to `.env`** before running the project.
-
-Example:
+Copy `.env.example` to `.env` in `backend/` and fill in your MongoDB URI and JWT secret, then:
 
 ```bash
-cp .env.example .env
-```
-
----
-
-## 🗄️ MongoDB Setup (Atlas)
-
-1. Go to MongoDB Atlas
-2. Create a **free cluster**
-3. Create a **database user** (username & password)
-4. Go to **Network Access**
-   * Add IP Address:
-     ```
-     0.0.0.0/0
-     ```
-   👉 This allows access from anywhere (useful for development)
-5. Go to **Clusters → Connect → Drivers**
-6. Copy your connection string (URI), it looks like:
-
-```
-mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/<dbname>?retryWrites=true&w=majority
-```
-
-7. Replace values:
-   * `<username>` → your DB username
-   * `<password>` → your DB password
-   * `<dbname>` → your database name
-
----
-
-### Example `.env` for Backend
-
-```
-PORT=5000
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/mydb
-JWT_SECRET=your_secret_key
-```
-
----
-
-## ▶️ Running the Project
-
-### 🔹 Backend (Express)
-
-```bash
+# Backend
 cd backend
 npm install
 npm run dev
-```
 
-### 🔹 Frontend (Next.js)
-
-```bash
+# Frontend
 cd frontend
 npm install
 npm run dev
 ```
 
----
-
-## 🌍 API Connection Notes
-
-* Backend should run on:
-  ```
-  http://localhost:5000
-  ```
-
----
-
-## ⚠️ Important Notes
-
-* Never commit `.env` files to GitHub
-* Always use `.env.example` for sharing environment structure
-* Make sure MongoDB Network Access includes:
-  ```
-  0.0.0.0/0
-  ```
-  (for development only — restrict in production)
-
----
-
-## 📦 Tech Stack
-
-* Frontend: Next.js (React)
-* Backend: Express.js, Node.js
-* Database: MongoDB
-
----
-
-## 🙌 Contribution
-
-Feel free to fork and improve this project!
+Backend runs on `http://localhost:5000`.
