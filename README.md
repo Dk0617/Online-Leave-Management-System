@@ -3,9 +3,8 @@
 
 This project is a **fullstack application** that includes:
 
-* 🌐 **Frontend** – Built with Next.js
-* ⚙️ **Backend** – Built with Express.js & MongoDB
-* 📱 **Mobile App** – Built with Expo (React Native)
+* 🌐 **Frontend** – Built with Next.js(react)
+* ⚙️ **Backend** – Built with Express.js(node) & MongoDB
 
 ---
 
@@ -117,16 +116,6 @@ npm run dev
 cd frontend
 npm install
 npm run dev
-```
-
----
-
-### 🔹 Mobile App (Expo)
-
-```bash
-cd mobile
-npm install
-npx expo start
 ```
 
 * Open Expo Go on your phone OR emulator
