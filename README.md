@@ -165,10 +165,9 @@ npx expo start
 
 ## 📦 Tech Stack
 
-* Frontend: Next.js
+* Frontend: Next.js(react)
 * Backend: Express.js, Node.js
 * Database: MongoDB
-* Mobile: Expo (React Native)
 
 ---
 
