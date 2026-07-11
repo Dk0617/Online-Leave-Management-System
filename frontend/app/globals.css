@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  /* KDU Southern Campus OLMS palette (matches the reference HTML mockups) */
+  --navy: #0d1b5e;
+  --navy2: #162070;
+  --blue: #2563b0;
+  --sky: #4a90d9;
+  --light: #7ec8e3;
+  --orange: #e07b20;
+  --orange2: #f59332;
+  --gold: #d4a017;
+  --bg: #050d1f;
+  --card: #0c1835;
+  --card2: #111f45;
+  --border: rgba(74, 144, 217, 0.15);
+  --muted: #7a90b8;
+  --white: #e8eeff;
+
+  --ok: #22c55e;
+  --err: #ef4444;
+
+  --background: var(--bg);
+  --foreground: var(--white);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
