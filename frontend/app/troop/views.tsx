@@ -3,7 +3,7 @@
 import { StatTile, Badge } from "@/src/components/ui";
 import { ApprovalActions } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
-import { useTroopPortal } from "@/src/hooks";
+import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { LEAVE_TYPE_LABELS } from "@/src/types";
 import styles from "@/src/portal.module.css";
 

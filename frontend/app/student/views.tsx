@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
-import { useStudentPortal } from "@/src/hooks";
+import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { isApproved, isRejected } from "@/src/api";
 import { downloadLeavePassPdf } from "@/src/pdf";
 import { DOC_REQUIRED_TYPES, LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";

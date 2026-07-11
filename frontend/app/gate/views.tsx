@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
-import { useGatePortal, VerifyResult } from "@/src/hooks";
+import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 

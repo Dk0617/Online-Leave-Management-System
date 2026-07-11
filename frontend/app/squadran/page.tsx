@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
-import { useSquadranPortal } from "@/src/hooks";
+import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
 import { Dashboard, Pending, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [

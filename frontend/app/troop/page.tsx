@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
-import { useTroopPortal } from "@/src/hooks";
+import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { Dashboard, DayScholarQueue, CadetQueue, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [

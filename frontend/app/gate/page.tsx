@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
-import { useGatePortal } from "@/src/hooks";
+import { useGatePortal } from "@/src/hooks/useGatePortal";
 import { Dashboard, Verify, LogMovement, MovementLog } from "./views";
 
 const NAV_ITEMS: NavItem[] = [

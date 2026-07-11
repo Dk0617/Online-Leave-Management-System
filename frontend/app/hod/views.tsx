@@ -2,7 +2,7 @@
 
 import { StatTile, Badge } from "@/src/components/ui";
 import { ApprovalActions } from "@/src/components/leave";
-import { useHodPortal } from "@/src/hooks";
+import { useHodPortal } from "@/src/hooks/useHodPortal";
 import { LEAVE_TYPE_LABELS } from "@/src/types";
 import styles from "@/src/portal.module.css";
 

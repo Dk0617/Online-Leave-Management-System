@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, StatTile, Button, Badge } from "@/src/components/ui";
-import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks";
+import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
 import { isApproved, isRejected } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType } from "@/src/types";
 import styles from "./admin.module.css";

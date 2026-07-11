@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
-import { useAdminPortal } from "@/src/hooks";
+import { useAdminPortal } from "@/src/hooks/useAdminPortal";
 import { Dashboard, Intakes, Students, StaffRole, Troop, PasswordChanges, AuditLog } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
