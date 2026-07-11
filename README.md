@@ -137,3 +137,9 @@ npm run dev
 * Frontend: Next.js (React)
 * Backend: Express.js, Node.js
 * Database: MongoDB
+
+---
+
+## 🙌 Contribution
+
+Feel free to fork and improve this project!
