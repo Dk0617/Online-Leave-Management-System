@@ -1,22 +1,21 @@
+# Online Leave Management System
 
-# 🚀 Fullstack Application (Web + Mobile)
+For KDUSC
 
-This project is a **fullstack application** that includes:
+A fullstack web application for managing student leave requests, approvals, and gate movement tracking.
 
-* 🌐 **Frontend** – Built with Next.js
-* ⚙️ **Backend** – Built with Express.js & MongoDB
-* 📱 **Mobile App** – Built with Expo (React Native)
+* 🌐 **Frontend** – Built with Next.js (React)
+* ⚙️ **Backend** – Built with Express.js (Node) & MongoDB
 
 ---
 
 ## 📁 Project Structure
 
 ```
-fullstack/
+online leave/
 │
 ├── backend/     # Express + MongoDB API
 ├── frontend/    # Next.js web app
-├── mobile/      # Expo React Native app
 └── README.md
 ```
 
@@ -34,10 +33,12 @@ Make sure you have installed:
 
 ## ⚡ Getting Started
 
-### 1️⃣ Download the Repository
+### 1️⃣ Clone the Repository
 
-
----
+```bash
+git clone https://github.com/Dk0617/Online-Leave-Management-System.git
+cd Online-Leave-Management-System
+```
 
 ### 2️⃣ Setup Environment Variables
 
@@ -58,23 +59,15 @@ cp .env.example .env
 ## 🗄️ MongoDB Setup (Atlas)
 
 1. Go to MongoDB Atlas
-
 2. Create a **free cluster**
-
 3. Create a **database user** (username & password)
-
 4. Go to **Network Access**
-
    * Add IP Address:
-
      ```
      0.0.0.0/0
      ```
-
    👉 This allows access from anywhere (useful for development)
-
 5. Go to **Clusters → Connect → Drivers**
-
 6. Copy your connection string (URI), it looks like:
 
 ```
@@ -82,7 +75,6 @@ mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/<dbname>?retryWri
 ```
 
 7. Replace values:
-
    * `<username>` → your DB username
    * `<password>` → your DB password
    * `<dbname>` → your database name
@@ -109,8 +101,6 @@ npm install
 npm run dev
 ```
 
----
-
 ### 🔹 Frontend (Next.js)
 
 ```bash
@@ -121,30 +111,11 @@ npm run dev
 
 ---
 
-### 🔹 Mobile App (Expo)
-
-```bash
-cd mobile
-npm install
-npx expo start
-```
-
-* Open Expo Go on your phone OR emulator
-* Scan QR code
-
----
-
 ## 🌍 API Connection Notes
 
 * Backend should run on:
-
   ```
   http://localhost:5000
-  ```
-* For mobile testing, use your local IP instead of localhost:
-
-  ```
-  http://192.168.x.x:5000
   ```
 
 ---
@@ -154,30 +125,15 @@ npx expo start
 * Never commit `.env` files to GitHub
 * Always use `.env.example` for sharing environment structure
 * Make sure MongoDB Network Access includes:
-
   ```
   0.0.0.0/0
   ```
-
   (for development only — restrict in production)
 
 ---
 
 ## 📦 Tech Stack
 
-* Frontend: Next.js
+* Frontend: Next.js (React)
 * Backend: Express.js, Node.js
 * Database: MongoDB
-* Mobile: Expo (React Native)
-
----
-
-## 🙌 Contribution
-
-Feel free to fork and improve this project!
-
----
-=======
-# Online-Leave-Management-System
-For KDUSC
-
