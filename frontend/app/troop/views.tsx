@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { StatTile, Badge } from "@/src/components/ui";
 import { ApprovalActions } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
@@ -209,16 +210,22 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   );
 }
 
-export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
-  const { history } = portal;
+type TroopHistoryEntry = ReturnType<typeof useTroopPortal>["history"][number];
 
+function matchesSearch(l: TroopHistoryEntry, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return l.studentName.toLowerCase().includes(q) || l.indexNumber.toLowerCase().includes(q);
+}
+
+function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; emptyMessage: string }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
             <th>Student</th>
-            <th>Type</th>
+            <th>Intake</th>
             <th>Leave Type</th>
             <th>From</th>
             <th>Your Decision</th>
@@ -226,21 +233,20 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
           </tr>
         </thead>
         <tbody>
-          {history.length === 0 ? (
+          {rows.length === 0 ? (
             <tr>
               <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                No history.
+                {emptyMessage}
               </td>
             </tr>
           ) : (
-            history.map((l) => (
+            rows.map((l) => (
               <tr key={l.id}>
-                <td>{l.studentName}</td>
                 <td>
-                  <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
-                    {l.studentType === "CADET" ? "Cadet" : "DS"}
-                  </Badge>
+                  {l.studentName}
+                  <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                 </td>
+                <td>{l.intake ? `Intake ${l.intake}` : "—"}</td>
                 <td>{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td>{l.startDate}</td>
                 <td>
@@ -254,6 +260,47 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
+  const { history } = portal;
+  const [dsQuery, setDsQuery] = useState("");
+  const [cdQuery, setCdQuery] = useState("");
+
+  const dayScholarHistory = history.filter(
+    (l) => l.studentType === "DAY_SCHOLAR" && matchesSearch(l, dsQuery)
+  );
+  const cadetHistory = history.filter((l) => l.studentType === "CADET" && matchesSearch(l, cdQuery));
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-white">Day Scholar History</h2>
+        <div className="w-64">
+          <input
+            value={dsQuery}
+            onChange={(e) => setDsQuery(e.target.value)}
+            placeholder="🔍 Search by name or index number..."
+            className={styles.input}
+          />
+        </div>
+      </div>
+      <HistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
+
+      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-white">Cadet History</h2>
+        <div className="w-64">
+          <input
+            value={cdQuery}
+            onChange={(e) => setCdQuery(e.target.value)}
+            placeholder="🔍 Search by name or index number..."
+            className={styles.input}
+          />
+        </div>
+      </div>
+      <HistoryTable rows={cadetHistory} emptyMessage="No Cadet history." />
     </div>
   );
 }

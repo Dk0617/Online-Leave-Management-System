@@ -28,7 +28,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
         <StatTile label="Awaiting You" value={pending.length} tone="amber" />
         <StatTile label="Fully Approved" value={approvedByMe} tone="green" />
         <StatTile label="Rejected" value={rejectedByMe} tone="red" />
-        <StatTile label="In Pipeline" value={pipeline.length} />
+        <StatTile label="In Progress" value={pipeline.length} />
       </div>
 
       <div className="mb-4 flex items-center gap-2 rounded-lg border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-4 py-2.5 text-xs text-[#4ade80]">

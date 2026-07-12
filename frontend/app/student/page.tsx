@@ -36,7 +36,7 @@ export default function StudentPage() {
       navItems={NAV_ITEMS}
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
-      roleTag={user ? `${user.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"} · ${user.indexNumber}` : undefined}
+      roleTag={user ? `${user.studentType === "CADET" ? "🎖️ Cadet" : "🏠Day Scholar"}\n${user.indexNumber}` : undefined}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "applyLeave" && <ApplyLeave portal={portal} onDone={() => setView("dashboard")} />}

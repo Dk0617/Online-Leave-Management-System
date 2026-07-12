@@ -61,6 +61,10 @@
 .input:focus {
   border-color: var(--sky);
 }
+.input option {
+  background: #ffffff;
+  color: #1e293b;
+}
 
 .label {
   display: block;

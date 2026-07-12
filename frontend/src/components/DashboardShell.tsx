@@ -4,7 +4,6 @@ import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Role, ROLE_LABELS } from "@/src/types";
 import { useAuth } from "@/src/AuthContext";
-import { Crest } from "@/src/components/ui";
 
 export interface NavItem {
   key: string;
@@ -74,24 +73,34 @@ export function DashboardShell({
     <div className="flex min-h-screen flex-1 bg-[var(--bg)]">
       <aside className="fixed left-0 top-0 flex h-screen w-64 flex-col border-r border-[var(--border)] bg-gradient-to-b from-[var(--navy)] to-[#0a1435] shadow-[4px_0_24px_rgba(0,0,0,0.3)]">
         <div className="flex items-center gap-3 border-b border-[var(--border)] p-5">
-          <Crest size={42} />
+          <div className="flex h-14 w-[55px] shrink-0 items-center justify-center rounded-xl border-2 border-[var(--orange)] shadow-[0_0_0_2px_var(--gold),0_4px_10px_rgba(0,0,0,0.35)]">
+            <img
+              src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
+              alt="KDU logo"
+              className="h-full w-full object-contain"
+            />
+          </div>
           <div>
-            <div className="text-[15px] font-extrabold tracking-wide text-white">OLMS</div>
+            <div className="text-[15px] font-extrabold tracking-wide text-white">
+              OLMS{role === "ADMIN" ? " Admin" : ""}
+            </div>
             <div className="text-[10px] font-semibold tracking-widest text-[var(--orange2)]">
               KDU SOUTHERN CAMPUS
             </div>
           </div>
         </div>
 
-        <div className="mx-4 mt-4 rounded-lg border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.08)] p-3.5">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-[#60a5fa]">
-            {ROLE_LABELS[role]}
+        {role !== "ADMIN" && (
+          <div className="mx-4 mt-4 rounded-lg border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.08)] p-3.5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-[#60a5fa]">
+              {role === "STUDENT" ? "Logged in as" : ROLE_LABELS[role]}
+            </div>
+            <div className="mt-0.5 text-[13px] font-bold text-white">{user.name}</div>
+            {roleTag && (
+              <div className="mt-0.5 whitespace-pre-line font-mono text-[11px] text-[var(--muted)]">{roleTag}</div>
+            )}
           </div>
-          <div className="mt-0.5 text-[13px] font-bold text-white">{user.name}</div>
-          {roleTag && (
-            <div className="mt-0.5 font-mono text-[11px] text-[var(--muted)]">{roleTag}</div>
-          )}
-        </div>
+        )}
 
         <nav className="flex-1 overflow-y-auto py-4">
           <div className="px-5 pb-1.5 pt-2 text-[9px] font-bold uppercase tracking-[.25em] text-[rgba(126,200,227,0.4)]">
