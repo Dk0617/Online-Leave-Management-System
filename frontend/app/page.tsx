@@ -3,13 +3,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ROLE_HOME } from "@/src/AuthContext";
-import { Crest } from "@/src/components/ui";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -45,7 +45,13 @@ export default function LoginPage() {
       <div className="w-full max-w-[420px]">
         <div className="rounded-[28px] bg-[rgba(255,255,255,0.97)] px-10 py-11 shadow-[0_24px_80px_rgba(13,27,94,0.5)]">
           <div className="mb-6 flex items-center gap-4 border-b-2 border-[#e8edf5] pb-5">
-            <Crest size={64} />
+            <div className="flex h-16 w-[81px] shrink-0 items-center justify-center rounded-xl border-2 border-[#e07b20] shadow-[0_0_0_2px_#d4a017,0_4px_10px_rgba(13,27,94,0.25)]">
+              <img
+                src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
+                alt="KDU logo"
+                className="h-full w-full object-contain"
+              />
+            </div>
             <div>
               <div className="text-[10px] font-bold uppercase tracking-[.2em] text-[#e07b20]">
                 KDU Southern Campus
@@ -82,19 +88,28 @@ export default function LoginPage() {
                 placeholder="Enter your username"
               />
             </label>
-            <label className="block">
+            <div>
               <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#475569]">
                 Password
               </span>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 className="w-full rounded-lg border-[1.5px] border-[#e2e8f0] bg-[#f8fafc] px-3.5 py-3 text-sm text-[#1e293b] outline-none transition-all focus:border-[#2563b0] focus:bg-white focus:shadow-[0_0_0_4px_rgba(37,99,176,0.1)]"
                 placeholder="Enter your password"
               />
-            </label>
+              <label className="mt-2 flex items-center gap-2 text-xs text-[#475569]">
+                <input
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={(e) => setShowPassword(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Show password
+              </label>
+            </div>
             <button
               type="submit"
               disabled={submitting}
