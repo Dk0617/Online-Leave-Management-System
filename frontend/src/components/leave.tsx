@@ -120,7 +120,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
       <span className="min-w-[130px] shrink-0 text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
         {label}
       </span>
-      <span className="text-[13px] text-white">{value}</span>
+      <span className="text-[13px] text-[var(--white)]">{value}</span>
     </div>
   );
 }
@@ -162,8 +162,8 @@ export function LeaveDetailModal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm">
       <div className="max-h-[85vh] w-[90%] max-w-[520px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-5">
-          <h3 className="text-[15px] font-bold text-white">Leave Application Details</h3>
-          <button onClick={onClose} className="text-xl leading-none text-[var(--muted)] hover:text-white">
+          <h3 className="text-[15px] font-bold text-[var(--white)]">Leave Application Details</h3>
+          <button onClick={onClose} className="text-xl leading-none text-[var(--muted)] hover:text-[var(--white)]">
             ✕
           </button>
         </div>

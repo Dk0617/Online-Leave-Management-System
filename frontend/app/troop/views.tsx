@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { StatTile, Badge } from "@/src/components/ui";
-import { ApprovalActions } from "@/src/components/leave";
+import { StatTile, Badge, Button } from "@/src/components/ui";
+import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
-import { LEAVE_TYPE_LABELS } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function tone(status: string) {
@@ -20,6 +20,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const rejectedByMe = history.filter((l) => l.troopStatus === "Rejected").length;
   const dsPending = allPending.filter((l) => l.studentType === "DAY_SCHOLAR").length;
   const cdPending = allPending.filter((l) => l.studentType === "CADET").length;
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
@@ -36,7 +37,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         <StatTile label="Rejected" value={rejectedByMe} tone="red" />
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-white">All Pending — Your Troop</h2>
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">All Pending — Your Troop</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
@@ -82,7 +83,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
                   <td className="text-xs text-[var(--muted)]">
                     {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
                   </td>
-                  <td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                     <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
                   </td>
                 </tr>
@@ -91,12 +95,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
           </tbody>
         </table>
       </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
 
 export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { dayScholarPending, approve, reject } = portal;
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
@@ -142,7 +149,10 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
                   <td>
                     <Badge tone="green">HOD Approved</Badge>
                   </td>
-                  <td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                     <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
                   </td>
                 </tr>
@@ -151,12 +161,15 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
           </tbody>
         </table>
       </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
 
 export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { cadetPending, approve, reject } = portal;
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
@@ -197,7 +210,10 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
                   </td>
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
-                  <td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                     <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
                   </td>
                 </tr>
@@ -206,6 +222,8 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
           </tbody>
         </table>
       </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
@@ -277,7 +295,7 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-white">Day Scholar History</h2>
+        <h2 className="text-sm font-bold text-[var(--white)]">Day Scholar History</h2>
         <div className="w-64">
           <input
             value={dsQuery}
@@ -290,7 +308,7 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
       <HistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-white">Cadet History</h2>
+        <h2 className="text-sm font-bold text-[var(--white)]">Cadet History</h2>
         <div className="w-64">
           <input
             value={cdQuery}

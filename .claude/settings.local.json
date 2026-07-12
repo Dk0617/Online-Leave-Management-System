@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npx tsc *)",
-      "Bash(npx eslint *)",
-      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:5000 --max-time 3)"
-    ]
-  }
-}

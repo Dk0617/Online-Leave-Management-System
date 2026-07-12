@@ -5,7 +5,7 @@ import { Button, Card } from "@/src/components/ui";
 import { useAuth } from "@/src/AuthContext";
 
 const inputClass =
-  "w-full rounded-lg border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-3.5 py-2.5 text-sm text-white outline-none focus:border-[var(--sky)]";
+  "w-full rounded-lg border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-3.5 py-2.5 text-sm text-[var(--white)] outline-none focus:border-[var(--sky)]";
 const labelClass =
   "mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]";
 
@@ -52,12 +52,12 @@ export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolea
   return (
     <Card className="p-5">
       {forced && (
-        <div className="mb-4 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-3.5 py-2.5 text-xs font-semibold text-[#fbbf24]">
+        <div className="mb-4 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-3.5 py-2.5 text-xs font-semibold text-[var(--warn)]">
           🔒 This is your first login (or your password was reset). You must set a new password before you can
           use the system.
         </div>
       )}
-      <h2 className="mb-4 text-sm font-bold text-white">🔑 Update Password</h2>
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">🔑 Update Password</h2>
       <div className="mb-3.5">
         <label className={labelClass}>Current Password</label>
         <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className={inputClass} />
@@ -71,7 +71,7 @@ export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolea
         <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputClass} />
       </div>
       {message && (
-        <p className={`mb-3 text-xs ${message.ok ? "text-[var(--sky)]" : "text-[#f87171]"}`}>{message.text}</p>
+        <p className={`mb-3 text-xs ${message.ok ? "text-[var(--sky)]" : "text-[var(--err)]"}`}>{message.text}</p>
       )}
       <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
         🔐 Update Password

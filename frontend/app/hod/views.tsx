@@ -1,9 +1,10 @@
 "use client";
 
-import { StatTile, Badge } from "@/src/components/ui";
-import { ApprovalActions } from "@/src/components/leave";
+import { useState } from "react";
+import { StatTile, Badge, Button } from "@/src/components/ui";
+import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
-import { LEAVE_TYPE_LABELS } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function tone(status: string) {
@@ -14,6 +15,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
   const { pending, history, approve, reject } = portal;
   const approvedByMe = history.filter((l) => l.hodStatus === "Approved").length;
   const rejectedByMe = history.filter((l) => l.hodStatus === "Rejected").length;
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
@@ -30,7 +32,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
         <StatTile label="Total" value={history.length + pending.length} />
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-white">Pending Applications</h2>
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending Applications</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
@@ -67,7 +69,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>{l.appliedDate}</td>
-                  <td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                     <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
                   </td>
                 </tr>
@@ -76,64 +81,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
 
-export function Pending({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
-  const { pending, approve, reject } = portal;
-
-  return (
-    <div>
-      <div className={styles.infoBanner}>
-        <strong>Review Queue:</strong> Only Day Scholar students in your department appear here. Cadet leaves
-        do not come to HOD.
-      </div>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Reason</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No pending applications.
-                </td>
-              </tr>
-            ) : (
-              pending.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.studentName}</td>
-                  <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  <td>{l.reason.length > 40 ? `${l.reason.slice(0, 40)}…` : l.reason}</td>
-                  <td>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

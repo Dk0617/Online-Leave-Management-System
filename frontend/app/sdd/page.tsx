@@ -5,11 +5,10 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
-import { Dashboard, Pending, History, Overview } from "./views";
+import { Dashboard, History, Overview } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "pending", label: "Pending Reviews", icon: "⏳" },
   { key: "overview", label: "Overview", icon: "🗂️" },
   { key: "history", label: "History", icon: "📋" },
   { key: "changePass", label: "Change Password", icon: "🔑" },
@@ -17,7 +16,6 @@ const NAV_ITEMS: NavItem[] = [
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
-  pending: "Pending Reviews",
   overview: "Overview",
   history: "History",
   changePass: "Change Password",
@@ -41,7 +39,6 @@ export default function SddPage() {
       roleTag={user?.title}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
-      {activeView === "pending" && <Pending portal={portal} />}
       {activeView === "overview" && <Overview portal={portal} />}
       {activeView === "history" && <History portal={portal} />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}

@@ -7,12 +7,12 @@ import { ButtonHTMLAttributes, ReactNode } from "react";
 type BadgeTone = "gray" | "amber" | "green" | "red" | "blue" | "purple";
 
 const BADGE_TONE_CLASSES: Record<BadgeTone, string> = {
-  gray: "bg-[rgba(100,116,139,0.12)] text-[#94a3b8] ring-[rgba(100,116,139,0.2)]",
-  amber: "bg-[rgba(245,158,11,0.12)] text-[#fbbf24] ring-[rgba(245,158,11,0.2)]",
-  green: "bg-[rgba(34,197,94,0.12)] text-[#4ade80] ring-[rgba(34,197,94,0.2)]",
-  red: "bg-[rgba(239,68,68,0.12)] text-[#f87171] ring-[rgba(239,68,68,0.2)]",
+  gray: "bg-[rgba(100,116,139,0.12)] text-[var(--muted)] ring-[rgba(100,116,139,0.2)]",
+  amber: "bg-[rgba(245,158,11,0.12)] text-[var(--warn)] ring-[rgba(245,158,11,0.2)]",
+  green: "bg-[rgba(34,197,94,0.12)] text-[var(--ok)] ring-[rgba(34,197,94,0.2)]",
+  red: "bg-[rgba(239,68,68,0.12)] text-[var(--err)] ring-[rgba(239,68,68,0.2)]",
   blue: "bg-[rgba(74,144,217,0.12)] text-[var(--sky)] ring-[rgba(74,144,217,0.2)]",
-  purple: "bg-[rgba(124,58,237,0.15)] text-[#c4b5fd] ring-[rgba(124,58,237,0.3)]",
+  purple: "bg-[rgba(124,58,237,0.15)] text-[var(--purple)] ring-[rgba(124,58,237,0.3)]",
 };
 
 export function Badge({
@@ -45,9 +45,9 @@ const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   secondary:
     "bg-[var(--card2)] text-[var(--white)] ring-1 ring-inset ring-[var(--border)] hover:bg-[rgba(74,144,217,0.12)]",
   success:
-    "bg-[rgba(34,197,94,0.12)] text-[#4ade80] ring-1 ring-inset ring-[rgba(34,197,94,0.4)] hover:bg-[rgba(34,197,94,0.25)]",
+    "bg-[rgba(34,197,94,0.12)] text-[var(--ok)] ring-1 ring-inset ring-[rgba(34,197,94,0.4)] hover:bg-[rgba(34,197,94,0.25)]",
   danger:
-    "bg-[rgba(239,68,68,0.12)] text-[#f87171] ring-1 ring-inset ring-[rgba(239,68,68,0.4)] hover:bg-[rgba(239,68,68,0.25)]",
+    "bg-[rgba(239,68,68,0.12)] text-[var(--err)] ring-1 ring-inset ring-[rgba(239,68,68,0.4)] hover:bg-[rgba(239,68,68,0.25)]",
   ghost:
     "bg-transparent text-[var(--muted)] ring-1 ring-inset ring-[var(--border)] hover:text-[var(--white)] hover:border-[rgba(74,144,217,0.4)]",
 };
@@ -110,14 +110,14 @@ export function StatTile({
 }) {
   const toneClass =
     tone === "amber"
-      ? "text-[#fbbf24]"
+      ? "text-[var(--warn)]"
       : tone === "green"
-      ? "text-[#4ade80]"
+      ? "text-[var(--ok)]"
       : tone === "red"
-      ? "text-[#f87171]"
+      ? "text-[var(--err)]"
       : tone === "blue"
       ? "text-[var(--sky)]"
-      : "text-[var(--light)]";
+      : "text-[var(--white)]";
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-4">

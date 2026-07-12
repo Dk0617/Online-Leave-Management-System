@@ -32,7 +32,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
       <div className={`${styles.flowBanner} ${isCadet ? "cadet" : ""}`}>
         <div className="text-xl">{isCadet ? "🎖️" : "🏠"}</div>
         <div>
-          <strong className="text-white">
+          <strong className="text-[var(--white)]">
             {isCadet ? "Cadet Leave Flow:" : "Day Scholar Leave Flow:"}
           </strong>{" "}
           {isCadet
@@ -244,12 +244,12 @@ export function ApplyLeave({
         <div>
           {isCadet ? (
             <>
-              <strong className="text-white">Cadet flow:</strong> Troop Commander → Squadron Commander → SDD.
+              <strong className="text-[var(--white)]">Cadet flow:</strong> Troop Commander → Squadron Commander → SDD.
               PDF available after all 3 approve.
             </>
           ) : (
             <>
-              <strong className="text-white">Day Scholar flow:</strong> HOD → Troop Commander. PDF available
+              <strong className="text-[var(--white)]">Day Scholar flow:</strong> HOD → Troop Commander. PDF available
               after both approve.
             </>
           )}
@@ -257,11 +257,11 @@ export function ApplyLeave({
       </div>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">📋 Leave Details</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📋 Leave Details</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={styles.label}>
-              Leave Type<span className="ml-0.5 text-[#f87171]">*</span>
+              Leave Type<span className="ml-0.5 text-[var(--err)]">*</span>
             </label>
             <select
               value={type}
@@ -278,7 +278,7 @@ export function ApplyLeave({
           </div>
 
           {isEmergency && (
-            <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[#fca5a5]">
+            <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
               🚨 <strong>Emergency Leave</strong> is routed immediately to your first-level approver and
               prioritized ahead of normal requests. Use this only for genuine emergencies.
             </div>
@@ -287,25 +287,25 @@ export function ApplyLeave({
           <div className={styles.formGrid}>
             <div>
               <label className={styles.label}>
-                Start Date<span className="ml-0.5 text-[#f87171]">*</span>
+                Start Date<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
               <input type="date" min={today} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
-                Start Time<span className="ml-0.5 text-[#f87171]">*</span>
+                Start Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
               <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
-                End Date<span className="ml-0.5 text-[#f87171]">*</span>
+                End Date<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
               <input type="date" min={today} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
-                End Time<span className="ml-0.5 text-[#f87171]">*</span>
+                End Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
               <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={styles.input} />
             </div>
@@ -313,7 +313,7 @@ export function ApplyLeave({
 
           <div>
             <label className={styles.label}>
-              Reason<span className="ml-0.5 text-[#f87171]">*</span>
+              Reason<span className="ml-0.5 text-[var(--err)]">*</span>
             </label>
             <textarea
               value={reason}
@@ -325,18 +325,29 @@ export function ApplyLeave({
           </div>
 
           <div>
-            <label className={styles.label}>
-              Supporting Document{docRequired ? <span className="ml-0.5 text-[#f87171]">*</span> : " (optional)"}
-            </label>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.png,.doc,.docx"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-xs text-[var(--muted)]"
-            />
+            <div className="mb-1.5 flex items-center gap-2">
+              <label className={styles.label} style={{ marginBottom: 0 }}>
+                Supporting Document
+              </label>
+              <Badge tone={docRequired ? "red" : "gray"}>{docRequired ? "Required" : "Optional"}</Badge>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                📎 Upload Document
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.png,.doc,.docx"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  className="hidden"
+                />
+              </label>
+              <span className="truncate text-xs text-[var(--muted)]">
+                {file ? file.name : "No file chosen"}
+              </span>
+            </div>
           </div>
 
-          {error && <p className="text-sm text-[#f87171]">{error}</p>}
+          {error && <p className="text-sm text-[var(--err)]">{error}</p>}
 
           <Button type="submit" variant="accent" disabled={submitting}>
             {submitting ? "Submitting…" : "📤 Submit Leave Application"}
@@ -431,7 +442,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold text-white">👤 Personal Information</h2>
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">👤 Personal Information</h2>
 
       <div className={styles.photoRow}>
         <div className={styles.photoPreview}>
@@ -448,7 +459,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
           </label>
           <button
             onClick={handleRemovePhoto}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3.5 py-2 text-xs font-bold text-[#fca5a5]"
+            className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3.5 py-2 text-xs font-bold text-[var(--err-soft)]"
           >
             🗑️ Remove
           </button>

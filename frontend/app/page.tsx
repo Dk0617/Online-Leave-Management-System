@@ -45,7 +45,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[420px]">
         <div className="rounded-[28px] bg-[rgba(255,255,255,0.97)] px-10 py-11 shadow-[0_24px_80px_rgba(13,27,94,0.5)]">
           <div className="mb-6 flex items-center gap-4 border-b-2 border-[#e8edf5] pb-5">
-            <div className="flex h-16 w-[81px] shrink-0 items-center justify-center rounded-xl border-2 border-[#e07b20] shadow-[0_0_0_2px_#d4a017,0_4px_10px_rgba(13,27,94,0.25)]">
+            <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e07b20] shadow-[0_0_0_2px_#d4a017,0_4px_10px_rgba(13,27,94,0.25)]">
               <img
                 src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
                 alt="KDU logo"

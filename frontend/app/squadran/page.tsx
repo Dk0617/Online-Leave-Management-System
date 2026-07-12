@@ -5,18 +5,16 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
-import { Dashboard, Pending, History } from "./views";
+import { Dashboard, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "pending", label: "Pending Reviews", icon: "⏳" },
   { key: "history", label: "History", icon: "📋" },
   { key: "changePass", label: "Change Password", icon: "🔑" },
 ];
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
-  pending: "Pending Reviews",
   history: "History",
   changePass: "Change Password",
 };
@@ -39,7 +37,6 @@ export default function SquadranPage() {
       roleTag={user?.designation}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
-      {activeView === "pending" && <Pending portal={portal} />}
       {activeView === "history" && <History portal={portal} />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>

@@ -17,11 +17,39 @@
   --muted: #7a90b8;
   --white: #e8eeff;
 
-  --ok: #22c55e;
-  --err: #ef4444;
+  /* Semantic status colors — used by Badge/Button tones and inline
+     success/error text across the app. Dark-mode values below;
+     [data-theme="light"] redefines all of these for legibility on a
+     white background. */
+  --ok: #4ade80;
+  --ok-soft: #22c55e;
+  --err: #f87171;
+  --err-soft: #fca5a5;
+  --warn: #fbbf24;
+  --purple: #c4b5fd;
 
   --background: var(--bg);
   --foreground: var(--white);
+}
+
+/* Light theme — the sidebar stays navy in both themes (brand identity),
+   only the page background/cards/text/status colors flip. */
+:root[data-theme="light"] {
+  --bg: #eef1f8;
+  --card: #ffffff;
+  --card2: #f3f5fb;
+  --border: rgba(13, 27, 94, 0.12);
+  --muted: #64748b;
+  --white: #16213f;
+
+  --ok: #16a34a;
+  --ok-soft: #15803d;
+  --err: #dc2626;
+  --err-soft: #ef4444;
+  --warn: #b45309;
+  --purple: #7c3aed;
+
+  --sky: #2563b0;
 }
 
 @theme inline {
@@ -34,4 +62,5 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }

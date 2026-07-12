@@ -1,10 +1,11 @@
 "use client";
 
-import { StatTile, Badge } from "@/src/components/ui";
-import { ApprovalActions } from "@/src/components/leave";
+import { useState } from "react";
+import { StatTile, Badge, Button } from "@/src/components/ui";
+import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
 import { isApproved, isRejected } from "@/src/api";
-import { LEAVE_TYPE_LABELS } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function tone(status: string) {
@@ -15,6 +16,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
   const { pending, history, pipeline, approve, reject } = portal;
   const approvedByMe = history.filter((l) => l.sddStatus === "Approved").length;
   const rejectedByMe = history.filter((l) => l.sddStatus === "Rejected").length;
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
@@ -31,12 +33,12 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
         <StatTile label="In Progress" value={pipeline.length} />
       </div>
 
-      <div className="mb-4 flex items-center gap-2 rounded-lg border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-4 py-2.5 text-xs text-[#4ade80]">
+      <div className="mb-4 flex items-center gap-2 rounded-lg border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-4 py-2.5 text-xs text-[var(--ok)]">
         ⭐ Your approval grants the official leave pass. All 3 stages must be complete before a cadet can exit
         campus.
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-white">Ready for Final Approval</h2>
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Ready for Final Approval</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
@@ -79,7 +81,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
                   <td>
                     <Badge tone="green">Approved</Badge>
                   </td>
-                  <td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                     <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
                   </td>
                 </tr>
@@ -88,66 +93,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
 
-export function Pending({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
-  const { pending, approve, reject } = portal;
-
-  return (
-    <div>
-      <div className={styles.infoBanner}>
-        <strong>All applications below have cleared Troop Commander and Squadron Commander review. Only your
-        decision remains.</strong>
-      </div>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Dept</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Reason</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  No applications awaiting your approval.
-                </td>
-              </tr>
-            ) : (
-              pending.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.studentName}</td>
-                  <td>{l.indexNumber}</td>
-                  <td>{l.department}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  <td>{l.reason.length > 35 ? `${l.reason.slice(0, 35)}…` : l.reason}</td>
-                  <td>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
@@ -252,9 +199,9 @@ export function Overview({ portal }: { portal: ReturnType<typeof useSddPortal> }
                     <td
                       className={
                         overall === "Fully Approved"
-                          ? "text-[#4ade80]"
+                          ? "text-[var(--ok)]"
                           : overall === "Rejected"
-                          ? "text-[#f87171]"
+                          ? "text-[var(--err)]"
                           : "text-[var(--muted)]"
                       }
                     >

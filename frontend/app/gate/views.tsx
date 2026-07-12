@@ -46,7 +46,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" />
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-white">Leave Passes — Exit / Entry &amp; Validity Status</h2>
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Leave Passes — Exit / Entry &amp; Validity Status</h2>
       <div className="mb-6 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
@@ -107,7 +107,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         </table>
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-white">Recent Movements</h2>
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Recent Movements</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
@@ -176,7 +176,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
 
   return (
     <Card className="p-5">
-      <h2 className="mb-1 text-sm font-bold text-white">🔍 Verify Leave Pass</h2>
+      <h2 className="mb-1 text-sm font-bold text-[var(--white)]">🔍 Verify Leave Pass</h2>
       <p className="mb-4 text-xs text-[var(--muted)]">
         Enter a student&apos;s index number to check if they have a valid approved leave pass.
       </p>
@@ -203,7 +203,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
         >
           {!result.found && (
             <>
-              <div className="mb-2 text-lg font-bold text-[#f87171]">❌ No Leave Found</div>
+              <div className="mb-2 text-lg font-bold text-[var(--err)]">❌ No Leave Found</div>
               <p className="text-xs text-[var(--muted)]">
                 No leave application found for index number <strong>{indexNumber}</strong>.
               </p>
@@ -211,7 +211,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
           )}
           {result.found && result.valid && result.leave && (
             <>
-              <div className="mb-3 text-lg font-bold text-[#4ade80]">✅ Valid Leave Pass</div>
+              <div className="mb-3 text-lg font-bold text-[var(--ok)]">✅ Valid Leave Pass</div>
               <VerifyRows leave={result.leave as unknown as LeaveRequest} />
               <div className="mt-3 flex gap-2">
                 <Button variant="danger" className="!text-xs" onClick={() => quickLog("Exit")}>
@@ -225,7 +225,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
           )}
           {result.found && !result.valid && result.reason === "not_active" && result.leave && (
             <>
-              <div className="mb-2 text-lg font-bold text-[#f87171]">⚠️ Leave Pass Not Active</div>
+              <div className="mb-2 text-lg font-bold text-[var(--err)]">⚠️ Leave Pass Not Active</div>
               <p className="mb-2 text-xs text-[var(--muted)]">
                 Student has an approved leave but it is not currently active.
               </p>
@@ -234,7 +234,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
           )}
           {result.found && !result.valid && result.reason === "not_approved" && (
             <>
-              <div className="mb-2 text-lg font-bold text-[#f87171]">❌ No Valid Leave Pass</div>
+              <div className="mb-2 text-lg font-bold text-[var(--err)]">❌ No Valid Leave Pass</div>
               <p className="text-xs text-[var(--muted)]">
                 Student <strong>{indexNumber}</strong> does not have a fully approved leave pass. Entry/Exit
                 not permitted on leave grounds.
@@ -264,7 +264,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-[10px] uppercase text-[var(--muted)]">{label}</div>
-      <div className="font-semibold text-white">{value}</div>
+      <div className="font-semibold text-[var(--white)]">{value}</div>
     </div>
   );
 }
@@ -295,7 +295,7 @@ export function LogMovement({ portal }: { portal: ReturnType<typeof useGatePorta
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold text-white">📝 Log Student Movement</h2>
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📝 Log Student Movement</h2>
       <div className="mb-3.5">
         <label className={styles.label}>Student Index Number</label>
         <input value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. SC/2021/001" className={styles.input} />
@@ -311,7 +311,7 @@ export function LogMovement({ portal }: { portal: ReturnType<typeof useGatePorta
         <label className={styles.label}>Notes (optional)</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any remarks…" className={styles.input} />
       </div>
-      {error && <p className="mb-3 text-xs text-[#f87171]">{error}</p>}
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
       <div className="flex gap-2.5">
         <Button variant="danger" className="flex-1" onClick={() => handleSubmit("Exit")}>
           🚪 Log EXIT
@@ -336,7 +336,7 @@ export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePorta
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-bold text-white">Full Movement Log</span>
+        <span className="text-sm font-bold text-[var(--white)]">Full Movement Log</span>
         <Button variant="secondary" className="!text-xs" onClick={handleClear}>
           Clear Log
         </Button>

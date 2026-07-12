@@ -25,7 +25,7 @@ function Breakdown({
       <div className="h-2.5 flex-1 overflow-hidden rounded-md bg-[var(--card2)]">
         <div className="h-full rounded-md" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="w-8 shrink-0 text-right text-xs font-bold text-white">{value}</div>
+      <div className="w-8 shrink-0 text-right text-xs font-bold text-[var(--white)]">{value}</div>
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
     <div>
       <div className={styles.welcomeBanner}>
         <div>
-          <h2 className="text-lg font-bold text-white">Welcome back 👋</h2>
+          <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>
           <p className="text-xs text-[var(--muted)]">
             Here&apos;s what&apos;s happening across OLMS today.
           </p>
@@ -73,7 +73,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <h2 className="mb-4 text-sm font-bold text-white">📈 Leave Status Breakdown</h2>
+          <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📈 Leave Status Breakdown</h2>
           {leaves.length === 0 ? (
             <p className="text-xs text-[var(--muted)]">No leave records yet.</p>
           ) : (
@@ -85,7 +85,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           )}
         </Card>
         <Card className="p-5">
-          <h2 className="mb-4 text-sm font-bold text-white">🎓 Students by Type</h2>
+          <h2 className="mb-4 text-sm font-bold text-[var(--white)]">🎓 Students by Type</h2>
           {students.length === 0 ? (
             <p className="text-xs text-[var(--muted)]">No students yet.</p>
           ) : (
@@ -99,7 +99,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-bold text-white">🗓️ Intake Overview</h2>
+          <h2 className="mb-3 text-sm font-bold text-[var(--white)]">🗓️ Intake Overview</h2>
           {intakes.length === 0 ? (
             <p className="text-xs text-[var(--muted)]">No intakes yet — add one in the Intakes section.</p>
           ) : (
@@ -111,7 +111,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
                     key={i.id}
                     className="flex justify-between border-b border-[rgba(255,255,255,0.04)] pb-2 last:border-none"
                   >
-                    <span className="text-white">Intake {i.code}</span>
+                    <span className="text-[var(--white)]">Intake {i.code}</span>
                     <span className="text-xs uppercase text-[var(--muted)]">
                       {count} student{count === 1 ? "" : "s"}
                     </span>
@@ -122,7 +122,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           )}
         </Card>
         <Card className="p-5">
-          <h2 className="mb-3 text-sm font-bold text-white">🕓 Recently Added Students</h2>
+          <h2 className="mb-3 text-sm font-bold text-[var(--white)]">🕓 Recently Added Students</h2>
           {recentStudents.length === 0 ? (
             <p className="text-xs text-[var(--muted)]">No students yet.</p>
           ) : (
@@ -132,7 +132,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
                   key={s.id}
                   className="flex justify-between border-b border-[rgba(255,255,255,0.04)] pb-2 last:border-none"
                 >
-                  <span className="text-white">
+                  <span className="text-[var(--white)]">
                     {s.firstName} {s.lastName}
                   </span>
                   <span className="text-xs uppercase text-[var(--muted)]">{s.indexNumber}</span>
@@ -173,7 +173,7 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">➕ Add Intake</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Add Intake</h2>
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <label className={styles.label}>Intake Number / Code</label>
@@ -189,11 +189,11 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             Add Intake
           </Button>
         </div>
-        {error && <p className="mt-2 text-xs text-[#f87171]">{error}</p>}
+        {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">All Intakes</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Intakes</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
@@ -335,7 +335,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">➕ Create Student Account</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Create Student Account</h2>
 
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
@@ -442,14 +442,14 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
           </div>
         </div>
 
-        {error && <p className="mb-3 text-xs text-[#f87171]">{error}</p>}
+        {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         <Button variant="primary" onClick={handleCreate}>
           Create Student
         </Button>
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">All Students</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Students</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
@@ -555,7 +555,7 @@ export function StaffRole({
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">➕ Create {title} Account</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Create {title} Account</h2>
         <div className={`${extraLabel ? styles.formGrid3 : styles.formGrid2} mb-4`}>
           <div>
             <label className={styles.label}>Username</label>
@@ -581,14 +581,14 @@ export function StaffRole({
           <label className={styles.label}>Password (leave blank to auto-generate)</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
         </div>
-        {error && <p className="mb-3 text-xs text-[#f87171]">{error}</p>}
+        {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         <Button variant="primary" onClick={handleCreate}>
           Create {title}
         </Button>
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">All {title}s</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All {title}s</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
@@ -700,7 +700,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
           {editingId ? "✏️ Edit Troop Commander" : "➕ Create Troop Commander Account"}
         </h2>
         <div className={`${styles.formGrid3} mb-3.5`}>
@@ -732,7 +732,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
             )}
           </div>
         </div>
-        {error && <p className="mb-3 text-xs text-[#f87171]">{error}</p>}
+        {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         <div className="flex gap-2">
           <Button variant="primary" onClick={handleSubmit}>
             {editingId ? "Update Troop Commander" : "Create Troop Commander"}
@@ -746,7 +746,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-white">All Troop Commanders</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Troop Commanders</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
@@ -807,7 +807,7 @@ export function PasswordChanges({ portal }: { portal: ReturnType<typeof useAdmin
 
   return (
     <Card className="p-5">
-      <h2 className="mb-2 text-sm font-bold text-white">🔑 Password Change Notifications</h2>
+      <h2 className="mb-2 text-sm font-bold text-[var(--white)]">🔑 Password Change Notifications</h2>
       <p className="mb-4 text-xs text-[var(--muted)]">
         Automatic log of password changes made by users across all portals.
       </p>
@@ -880,7 +880,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
 
   return (
     <Card className="p-5">
-      <h2 className="mb-2 text-sm font-bold text-white">🛡️ System Audit Log</h2>
+      <h2 className="mb-2 text-sm font-bold text-[var(--white)]">🛡️ System Audit Log</h2>
       <p className="mb-4 text-xs text-[var(--muted)]">
         Every login, leave submission, approval, rejection, and password change across all portals — most recent first.
       </p>
@@ -924,7 +924,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
                   <td>
                     {a.action}
                     {a.action === "leave_submitted" && (a.details || "").includes("EMERGENCY") && (
-                      <span className="ml-1 font-bold text-[#f87171]">🚨</span>
+                      <span className="ml-1 font-bold text-[var(--err)]">🚨</span>
                     )}
                   </td>
                   <td className="text-[var(--muted)]">{a.details}</td>
