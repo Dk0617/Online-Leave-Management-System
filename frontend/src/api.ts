@@ -118,6 +118,7 @@ export function normalizeStaff(raw: Raw): StaffAccount {
     id: String(raw._id ?? raw.id),
     username: raw.username as string,
     name: raw.name as string,
+    email: raw.email as string | undefined,
     department: raw.department as string | undefined,
     title: raw.title as string | undefined,
     post: raw.post as string | undefined,

@@ -41,6 +41,7 @@ export interface NewStaffInput {
   name: string;
   password?: string;
   extra?: string;
+  email?: string;
 }
 
 export interface NewTroopInput {
@@ -48,6 +49,7 @@ export interface NewTroopInput {
   name: string;
   password?: string;
   intakes: string[];
+  email?: string;
 }
 
 export function useAdminPortal() {

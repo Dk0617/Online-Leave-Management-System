@@ -67,6 +67,7 @@ export interface StaffAccount {
   id: string;
   username: string;
   name: string;
+  email?: string;
   department?: string; // HOD
   title?: string; // SDD
   post?: string; // Gate

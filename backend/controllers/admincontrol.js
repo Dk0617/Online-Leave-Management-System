@@ -18,6 +18,18 @@ function genPassword() {
   return out;
 }
 
+// Email-code login looks a user up by email across every role, so the same
+// email can't be reused on a second account (which would make login-by-code
+// ambiguous / silently log in to the wrong account).
+async function isEmailTaken(email, excludeId) {
+  if (!email) return false;
+  for (const Model of Object.values(ROLE_MODELS)) {
+    const existing = await Model.findOne({ email, _id: { $ne: excludeId } });
+    if (existing) return true;
+  }
+  return false;
+}
+
 // ── Dashboard-wide views ────────────────────────────────────────
 export const listUsers = async (req, res) => {
   const result = {};
@@ -99,6 +111,9 @@ export const createStudent = async (req, res) => {
       .status(409)
       .json({ message: "A student with that index number already exists" });
   }
+  if (email && (await isEmailTaken(email))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
 
   const created = await Student.create({
     username: indexNumber,
@@ -163,6 +178,9 @@ export const updateStudent = async (req, res) => {
   if (firstName) student.firstName = firstName;
   if (lastName) student.lastName = lastName;
   if (department !== undefined) student.department = department;
+  if (email && email !== student.email && (await isEmailTaken(email, student._id))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
   if (email !== undefined) student.email = email;
   if (mobile !== undefined) student.mobile = mobile;
   if (intake !== undefined) student.intake = intake;
@@ -207,15 +225,18 @@ export const createStaff = async (req, res) => {
   if (!resolved) return;
   const { role, Model } = resolved;
 
-  const { username, name, password, extra } = req.body;
+  const { username, name, password, extra, email } = req.body;
   if (!username || !name) {
     return res.status(400).json({ message: "Username and name are required" });
   }
 
   const existing = await Model.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
+  if (email && (await isEmailTaken(email))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
 
-  const doc = { username, name, password: password || genPassword() };
+  const doc = { username, name, password: password || genPassword(), email: email || undefined };
   const extraField = STAFF_EXTRA_FIELD[role];
   if (extraField && extra) doc[extraField] = extra;
 
@@ -236,7 +257,7 @@ export const updateStaff = async (req, res) => {
   if (!resolved) return;
   const { role, Model } = resolved;
 
-  const { username, name, password, extra } = req.body;
+  const { username, name, password, extra, email } = req.body;
   const staff = await Model.findById(req.params.id);
   if (!staff) return res.status(404).json({ message: "Account not found" });
 
@@ -246,6 +267,10 @@ export const updateStaff = async (req, res) => {
     staff.username = username;
   }
   if (name) staff.name = name;
+  if (email && email !== staff.email && (await isEmailTaken(email, staff._id))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
+  if (email !== undefined) staff.email = email;
   const extraField = STAFF_EXTRA_FIELD[role];
   if (extraField && extra !== undefined) staff[extraField] = extra;
   if (password) {
@@ -268,7 +293,7 @@ export const deleteStaff = async (req, res) => {
 
 // ── Troop (extra: intakes[] + edit) ────────────────────────────────
 export const createTroop = async (req, res) => {
-  const { username, name, password, intakes } = req.body;
+  const { username, name, password, intakes, email } = req.body;
   if (!username || !name) {
     return res.status(400).json({ message: "Username and name are required" });
   }
@@ -278,12 +303,16 @@ export const createTroop = async (req, res) => {
 
   const existing = await Troop.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
+  if (email && (await isEmailTaken(email))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
 
   const created = await Troop.create({
     username,
     name,
     password: password || genPassword(),
     intakes,
+    email: email || undefined,
   });
   await writeAudit("ADMIN", req.user.name, "account_created", `troop ${username}`);
   const { password: _pw, ...safe } = created.toObject();
@@ -295,7 +324,7 @@ export const listTroops = async (req, res) => {
 };
 
 export const updateTroop = async (req, res) => {
-  const { username, name, password, intakes } = req.body;
+  const { username, name, password, intakes, email } = req.body;
   const troop = await Troop.findById(req.params.id);
   if (!troop) return res.status(404).json({ message: "Troop Commander not found" });
 
@@ -305,6 +334,10 @@ export const updateTroop = async (req, res) => {
     troop.username = username;
   }
   if (name) troop.name = name;
+  if (email && email !== troop.email && (await isEmailTaken(email, troop._id))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
+  if (email !== undefined) troop.email = email;
   if (Array.isArray(intakes)) troop.intakes = intakes;
   if (password) {
     troop.password = password;

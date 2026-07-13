@@ -46,6 +46,21 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         </div>
       </div>
 
+      {approved > 0 && (
+        <div className="mb-5 flex items-center gap-3 rounded-xl border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)] px-4 py-3 text-sm">
+          <span className="text-xl">🎉</span>
+          <span className="text-[var(--white)]">
+            <strong>
+              {approved} leave{approved > 1 ? "s" : ""} fully approved
+            </strong>{" "}
+            — download your official Leave Pass below and show it (with the QR/code) at the gate.
+            {portal.profile?.email
+              ? " A confirmation email was also sent to you when it was approved."
+              : " Ask admin to add your email to your account to also get an email the moment this happens."}
+          </span>
+        </div>
+      )}
+
       <div className={styles.statGrid}>
         <StatTile icon="📋" label="Total Applied" value={total} />
         <StatTile icon="⏳" label="Pending" value={pending} tone="amber" />

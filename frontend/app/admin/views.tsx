@@ -590,6 +590,7 @@ export function StaffRole({
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [extra, setExtra] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -598,6 +599,7 @@ export function StaffRole({
     setUsername("");
     setName("");
     setExtra("");
+    setEmail("");
     setPassword("");
   }
 
@@ -608,6 +610,7 @@ export function StaffRole({
     setUsername(u.username);
     setName(u.name);
     setExtra(u.department || u.title || u.post || "");
+    setEmail(u.email || "");
     setPassword("");
   }
 
@@ -623,6 +626,7 @@ export function StaffRole({
           username: username.trim(),
           name: name.trim(),
           extra: extra.trim() || undefined,
+          email: email.trim() || undefined,
           password: password.trim() || undefined,
         });
       } else {
@@ -630,6 +634,7 @@ export function StaffRole({
           username: username.trim(),
           name: name.trim(),
           extra: extra.trim() || undefined,
+          email: email.trim() || undefined,
           password: password.trim() || undefined,
         });
       }
@@ -676,6 +681,16 @@ export function StaffRole({
           )}
         </div>
         <div className="mb-4">
+          <label className={styles.label}>Email (optional — enables login by email code)</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            className={styles.input}
+          />
+        </div>
+        <div className="mb-4">
           <label className={styles.label}>Password {editingId ? "(leave blank to keep current)" : "(leave blank to auto-generate)"}</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
         </div>
@@ -701,13 +716,14 @@ export function StaffRole({
                 <th>Username</th>
                 <th>Name</th>
                 {extraLabel && <th>{extraLabel}</th>}
+                <th>Email</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={extraLabel ? 4 : 3} className="py-6 text-center text-[var(--muted)]">
+                  <td colSpan={extraLabel ? 5 : 4} className="py-6 text-center text-[var(--muted)]">
                     No accounts yet.
                   </td>
                 </tr>
@@ -717,6 +733,7 @@ export function StaffRole({
                     <td>{u.username}</td>
                     <td>{u.name}</td>
                     {extraLabel && <td>{u.department || u.title || u.post || ""}</td>}
+                    <td className="text-xs text-[var(--muted)]">{u.email || "—"}</td>
                     <td className="space-x-1.5 whitespace-nowrap">
                       <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(u.id)}>
                         Edit
@@ -742,6 +759,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
   const [editingId, setEditingId] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedIntakes, setSelectedIntakes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -754,6 +772,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
     setEditingId(null);
     setUsername("");
     setName("");
+    setEmail("");
     setPassword("");
     setSelectedIntakes([]);
   }
@@ -764,6 +783,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
     setEditingId(id);
     setUsername(t.username);
     setName(t.name);
+    setEmail(t.email || "");
     setPassword("");
     setSelectedIntakes(t.intakes ?? []);
   }
@@ -784,6 +804,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
           username: username.trim(),
           name: name.trim(),
           intakes: selectedIntakes,
+          email: email.trim() || undefined,
           password: password.trim() || undefined,
         });
       } else {
@@ -791,6 +812,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
           username: username.trim(),
           name: name.trim(),
           intakes: selectedIntakes,
+          email: email.trim() || undefined,
           password: password.trim() || undefined,
         });
       }
@@ -829,6 +851,16 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
             <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
           </div>
         </div>
+        <div className="mb-3.5">
+          <label className={styles.label}>Email (optional — enables login by email code)</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            className={styles.input}
+          />
+        </div>
         <div className="mb-4">
           <label className={styles.label}>Assigned Intake(s)</label>
           <div className={styles.chkGroup}>
@@ -866,13 +898,14 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
                 <th>Username</th>
                 <th>Name</th>
                 <th>Assigned Intakes</th>
+                <th>Email</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {troops.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-[var(--muted)]">
+                  <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
                     No accounts yet.
                   </td>
                 </tr>
@@ -895,6 +928,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
                         <span className="text-[var(--muted)]">None</span>
                       )}
                     </td>
+                    <td className="text-xs text-[var(--muted)]">{t.email || "—"}</td>
                     <td className="space-x-1.5">
                       <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(t.id)}>
                         Edit

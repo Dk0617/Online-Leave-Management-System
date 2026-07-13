@@ -1,6 +1,9 @@
 import Leave from "../models/Leave.js";
 import Troop from "../models/Troop.js";
+import Student from "../models/Student.js";
 import { writeAudit } from "../utils/audit.js";
+import { isApproved } from "../utils/leaveStatus.js";
+import { sendApprovalEmail } from "../utils/mailer.js";
 
 function sortByPriorityThenNewest(leaves) {
   return leaves.sort((a, b) => {
@@ -26,6 +29,18 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
   await leave.save();
 
   await writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
+
+  if (decision === "Approved" && isApproved(leave)) {
+    try {
+      const student = await Student.findById(leave.studentId);
+      if (student?.email) {
+        await sendApprovalEmail(student.email, student.name, leave);
+      }
+    } catch (err) {
+      console.error("Failed to send approval email:", err.message);
+    }
+  }
+
   res.json(leave);
 }
 
