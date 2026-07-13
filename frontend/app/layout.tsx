@@ -29,19 +29,8 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${inter.variable} ${plexMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <head>
-        {/* Applies the saved theme before first paint, so there's no flash
-            of the wrong theme while React hydrates. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try {
-              var t = localStorage.getItem("ols_theme");
-              if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
-            } catch (e) {}`,
-          }}
-        />
-      </head>
       <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -9,6 +9,7 @@ export interface VerifyResult {
   valid?: boolean;
   reason?: "not_active" | "not_approved";
   leave?: Record<string, unknown>;
+  studentPhoto?: string;
 }
 
 export function useGatePortal() {
@@ -38,6 +39,10 @@ export function useGatePortal() {
     return api.get<VerifyResult>(`/gate/verify/${encodeURIComponent(indexNumber)}`);
   }
 
+  async function verifyByCode(code: string): Promise<VerifyResult> {
+    return api.get<VerifyResult>(`/gate/verify-code/${encodeURIComponent(code)}`);
+  }
+
   async function logMovement(input: {
     indexNumber: string;
     direction: "Exit" | "Entry";
@@ -53,5 +58,5 @@ export function useGatePortal() {
     await refresh();
   }
 
-  return { approvedLeaves, movements, loading, refresh, verify, logMovement, clearMovementLog };
+  return { approvedLeaves, movements, loading, refresh, verify, verifyByCode, logMovement, clearMovementLog };
 }

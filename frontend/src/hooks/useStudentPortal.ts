@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, normalizeLeave, normalizeStudent } from "@/src/api";
 import { LeaveRequest, LeaveType, Student } from "@/src/types";
+import { PassVerification } from "@/src/pdf";
 
 export interface NewLeaveInput {
   type: LeaveType;
@@ -64,5 +65,9 @@ export function useStudentPortal() {
     await refresh();
   }
 
-  return { leaves, profile, loading, error, refresh, applyLeave, updateProfile, updatePhoto };
+  async function getMovements(leaveId: string): Promise<PassVerification> {
+    return api.get<PassVerification>(`/student/leaves/${leaveId}/movements`);
+  }
+
+  return { leaves, profile, loading, error, refresh, applyLeave, updateProfile, updatePhoto, getMovements };
 }

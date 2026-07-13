@@ -131,6 +131,58 @@ export const listStudents = async (req, res) => {
   res.json(students);
 };
 
+export const updateStudent = async (req, res) => {
+  const {
+    indexNumber,
+    firstName,
+    lastName,
+    department,
+    email,
+    mobile,
+    studentType,
+    intake,
+    troopIds,
+    hodId,
+    sqnId,
+    password,
+  } = req.body;
+
+  const student = await Student.findById(req.params.id);
+  if (!student) return res.status(404).json({ message: "Student not found" });
+
+  if (indexNumber && indexNumber !== student.indexNumber) {
+    const clash = await Student.findOne({ indexNumber, _id: { $ne: student._id } });
+    if (clash) {
+      return res
+        .status(409)
+        .json({ message: "A student with that index number already exists" });
+    }
+    student.indexNumber = indexNumber;
+    student.username = indexNumber;
+  }
+  if (firstName) student.firstName = firstName;
+  if (lastName) student.lastName = lastName;
+  if (department !== undefined) student.department = department;
+  if (email !== undefined) student.email = email;
+  if (mobile !== undefined) student.mobile = mobile;
+  if (intake !== undefined) student.intake = intake;
+  if (Array.isArray(troopIds)) student.troopIds = troopIds;
+  if (studentType) {
+    student.studentType = studentType;
+    student.hodId = studentType === "DAY_SCHOLAR" ? hodId || undefined : undefined;
+    student.sqnId = studentType === "CADET" ? sqnId || undefined : undefined;
+  }
+  if (password) {
+    student.password = password;
+    student.mustChangePassword = true;
+  }
+
+  await student.save();
+  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber}`);
+  const { password: _pw, ...safe } = student.toObject();
+  res.json(safe);
+};
+
 export const deleteStudent = async (req, res) => {
   await Student.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
@@ -177,6 +229,34 @@ export const listStaff = async (req, res) => {
   const resolved = staffModelFor(req, res);
   if (!resolved) return;
   res.json(await resolved.Model.find().select("-password").sort({ createdAt: 1 }));
+};
+
+export const updateStaff = async (req, res) => {
+  const resolved = staffModelFor(req, res);
+  if (!resolved) return;
+  const { role, Model } = resolved;
+
+  const { username, name, password, extra } = req.body;
+  const staff = await Model.findById(req.params.id);
+  if (!staff) return res.status(404).json({ message: "Account not found" });
+
+  if (username && username !== staff.username) {
+    const clash = await Model.findOne({ username, _id: { $ne: staff._id } });
+    if (clash) return res.status(409).json({ message: "That username is already taken" });
+    staff.username = username;
+  }
+  if (name) staff.name = name;
+  const extraField = STAFF_EXTRA_FIELD[role];
+  if (extraField && extra !== undefined) staff[extraField] = extra;
+  if (password) {
+    staff.password = password;
+    staff.mustChangePassword = true;
+  }
+
+  await staff.save();
+  await writeAudit("ADMIN", req.user.name, "account_updated", `${role.toLowerCase()} ${staff.username}`);
+  const { password: _pw, ...safe } = staff.toObject();
+  res.json(safe);
 };
 
 export const deleteStaff = async (req, res) => {

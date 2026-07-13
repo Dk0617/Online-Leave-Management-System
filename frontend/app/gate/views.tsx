@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import jsQR from "jsqr";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
@@ -151,20 +152,52 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 }
 
 export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
-  const { verify, logMovement } = portal;
-  const [indexNumber, setIndexNumber] = useState("");
+  const { verify, verifyByCode, logMovement } = portal;
+  const [mode, setMode] = useState<"code" | "index">("code");
+  const [query, setQuery] = useState("");
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [hasCamera, setHasCamera] = useState<boolean | null>(null);
 
-  async function handleVerify() {
-    if (!indexNumber.trim()) return;
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setHasCamera(false);
+      return;
+    }
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devices) => setHasCamera(devices.some((d) => d.kind === "videoinput")))
+      .catch(() => setHasCamera(false));
+  }, []);
+
+  function switchMode(next: "code" | "index") {
+    setMode(next);
+    setQuery("");
+    setResult(null);
+  }
+
+  async function runVerify(rawQuery: string, viaMode: "code" | "index") {
+    if (!rawQuery.trim()) return;
     setLoading(true);
     try {
-      const res = await verify(indexNumber.trim().toUpperCase());
+      const res =
+        viaMode === "code" ? await verifyByCode(rawQuery.trim()) : await verify(rawQuery.trim().toUpperCase());
       setResult(res);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleVerify() {
+    await runVerify(query, mode);
+  }
+
+  function handleScanned(code: string) {
+    setScannerOpen(false);
+    setMode("code");
+    setQuery(code);
+    runVerify(code, "code");
   }
 
   async function quickLog(direction: "Exit" | "Entry") {
@@ -177,15 +210,54 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   return (
     <Card className="p-5">
       <h2 className="mb-1 text-sm font-bold text-[var(--white)]">🔍 Verify Leave Pass</h2>
-      <p className="mb-4 text-xs text-[var(--muted)]">
-        Enter a student&apos;s index number to check if they have a valid approved leave pass.
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Use the <strong>Gate Verification Code</strong> printed on the student&apos;s PDF pass. It looks up the
+        student&apos;s photo live from the system — not from the PDF — so always compare that photo with the
+        person in front of you before allowing exit or entry. This catches a copied or borrowed PDF.
       </p>
+
+      <div className="mb-3 flex flex-wrap gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => switchMode("code")}
+          className={`rounded-lg px-3 py-1.5 font-semibold transition-colors ${
+            mode === "code"
+              ? "bg-[var(--orange)] text-white"
+              : "bg-[var(--card2)] text-[var(--muted)] hover:text-[var(--white)]"
+          }`}
+        >
+          🔑 By Verification Code
+        </button>
+        <button
+          type="button"
+          onClick={() => switchMode("index")}
+          className={`rounded-lg px-3 py-1.5 font-semibold transition-colors ${
+            mode === "index"
+              ? "bg-[var(--orange)] text-white"
+              : "bg-[var(--card2)] text-[var(--muted)] hover:text-[var(--white)]"
+          }`}
+        >
+          🪪 By Index Number
+        </button>
+        {hasCamera && (
+          <button
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            className="rounded-lg bg-[rgba(37,99,176,0.15)] px-3 py-1.5 font-semibold text-[var(--sky)] transition-colors hover:bg-[rgba(37,99,176,0.28)]"
+          >
+            📷 Scan QR Code
+          </button>
+        )}
+      </div>
+
+      {scannerOpen && <QrScanner onScan={handleScanned} onClose={() => setScannerOpen(false)} />}
+
       <div className="mb-4 flex gap-2">
         <input
-          value={indexNumber}
-          onChange={(e) => setIndexNumber(e.target.value)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleVerify()}
-          placeholder="Enter index number e.g. SC/2021/001"
+          placeholder={mode === "code" ? "Code from the PDF, e.g. K7M2QX" : "Enter index number e.g. SC/2021/001"}
           className={styles.input}
         />
         <Button variant="primary" onClick={handleVerify} disabled={loading}>
@@ -205,14 +277,23 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
             <>
               <div className="mb-2 text-lg font-bold text-[var(--err)]">❌ No Leave Found</div>
               <p className="text-xs text-[var(--muted)]">
-                No leave application found for index number <strong>{indexNumber}</strong>.
+                {mode === "code" ? (
+                  <>
+                    No leave application matches verification code <strong>{query}</strong>. Do not allow
+                    exit/entry — this pass could be fake or altered.
+                  </>
+                ) : (
+                  <>
+                    No leave application found for index number <strong>{query}</strong>.
+                  </>
+                )}
               </p>
             </>
           )}
           {result.found && result.valid && result.leave && (
             <>
               <div className="mb-3 text-lg font-bold text-[var(--ok)]">✅ Valid Leave Pass</div>
-              <VerifyRows leave={result.leave as unknown as LeaveRequest} />
+              <VerifyRows leave={result.leave as unknown as LeaveRequest} photo={result.studentPhoto} />
               <div className="mt-3 flex gap-2">
                 <Button variant="danger" className="!text-xs" onClick={() => quickLog("Exit")}>
                   🚪 Log Exit
@@ -229,15 +310,15 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
               <p className="mb-2 text-xs text-[var(--muted)]">
                 Student has an approved leave but it is not currently active.
               </p>
-              <VerifyRows leave={result.leave as unknown as LeaveRequest} minimal />
+              <VerifyRows leave={result.leave as unknown as LeaveRequest} photo={result.studentPhoto} minimal />
             </>
           )}
           {result.found && !result.valid && result.reason === "not_approved" && (
             <>
               <div className="mb-2 text-lg font-bold text-[var(--err)]">❌ No Valid Leave Pass</div>
               <p className="text-xs text-[var(--muted)]">
-                Student <strong>{indexNumber}</strong> does not have a fully approved leave pass. Entry/Exit
-                not permitted on leave grounds.
+                Student <strong>{query}</strong> does not have a fully approved leave pass. Entry/Exit not
+                permitted on leave grounds.
               </p>
             </>
           )}
@@ -247,15 +328,117 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   );
 }
 
-function VerifyRows({ leave, minimal }: { leave: LeaveRequest; minimal?: boolean }) {
+// Reads a QR code using the device's own camera (getUserMedia + jsQR decoding
+// entirely in the browser) — no dedicated barcode-scanner hardware required.
+// If the camera can't be opened for any reason, it shows an error and closes
+// itself; manual code entry in the parent form is unaffected either way.
+function QrScanner({ onScan, onClose }: { onScan: (code: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let frameId: number;
+    let stopped = false;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function tick() {
+      if (stopped) return;
+      const video = videoRef.current;
+      if (video && ctx && video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code?.data) {
+          stopped = true;
+          onScan(code.data);
+          return;
+        }
+      }
+      frameId = requestAnimationFrame(tick);
+    }
+
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "environment" } })
+      .then((s) => {
+        if (stopped) {
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        stream = s;
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.play().catch(() => {});
+        }
+        frameId = requestAnimationFrame(tick);
+      })
+      .catch(() => setError("Could not open the camera. Enter the code manually below instead."));
+
+    return () => {
+      stopped = true;
+      if (frameId) cancelAnimationFrame(frameId);
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [onScan]);
+
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-      <Row label="Student" value={leave.studentName} />
-      <Row label="Index" value={leave.indexNumber} />
-      {!minimal && <Row label="Type" value={leave.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"} />}
-      {!minimal && <Row label="Leave Type" value={LEAVE_TYPE_LABELS[leave.type]} />}
-      <Row label="Valid From" value={`${leave.startDate} ${leave.startTime}`} />
-      <Row label="Valid To" value={`${leave.endDate} ${leave.endTime}`} />
+    <div className="mb-4 overflow-hidden rounded-xl border border-[var(--border)] bg-black">
+      {error ? (
+        <div className="flex items-center justify-between gap-3 bg-[rgba(239,68,68,0.1)] p-3 text-xs text-[var(--err)]">
+          <span>{error}</span>
+          <Button variant="secondary" className="!text-xs" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      ) : (
+        <div className="relative">
+          <video ref={videoRef} muted playsInline className="max-h-64 w-full object-contain" />
+          <div className="absolute inset-x-0 top-2 flex justify-center">
+            <span className="rounded-full bg-black/60 px-3 py-1 text-[10px] font-semibold text-white">
+              Point the camera at the QR code on the student&apos;s pass
+            </span>
+          </div>
+          <div className="absolute bottom-2 right-2">
+            <Button variant="secondary" className="!text-xs" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VerifyRows({ leave, minimal, photo }: { leave: LeaveRequest; minimal?: boolean; photo?: string }) {
+  return (
+    <div className="flex gap-4">
+      <div className="shrink-0">
+        <div className="mb-1 text-center text-[9px] uppercase tracking-wide text-[var(--muted)]">
+          Photo on File
+        </div>
+        {photo ? (
+          <img
+            src={photo}
+            alt="Student on file"
+            className="h-24 w-24 rounded-lg border-2 border-[var(--orange)] object-cover"
+          />
+        ) : (
+          <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed border-[var(--border)] px-1 text-center text-[9px] text-[var(--muted)]">
+            No Photo On File
+          </div>
+        )}
+      </div>
+      <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        <Row label="Student" value={leave.studentName} />
+        <Row label="Index" value={leave.indexNumber} />
+        {!minimal && <Row label="Type" value={leave.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"} />}
+        {!minimal && <Row label="Leave Type" value={LEAVE_TYPE_LABELS[leave.type]} />}
+        <Row label="Valid From" value={`${leave.startDate} ${leave.startTime}`} />
+        <Row label="Valid To" value={`${leave.endDate} ${leave.endTime}`} />
+      </div>
     </div>
   );
 }

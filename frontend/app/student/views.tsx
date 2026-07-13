@@ -27,6 +27,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
   const rejected = leaves.filter(isRejected).length;
   const pending = total - approved - rejected;
 
+  async function handleDownloadPdf(leave: LeaveRequest) {
+    const verification = await portal.getMovements(leave.id).catch(() => undefined);
+    await downloadLeavePassPdf(leave, portal.profile?.photo, verification);
+  }
+
   return (
     <div>
       <div className={`${styles.flowBanner} ${isCadet ? "cadet" : ""}`}>
@@ -113,7 +118,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     </button>
                     {isApproved(l) && (
                       <button
-                        onClick={() => downloadLeavePassPdf(l, portal.profile?.photo)}
+                        onClick={() => handleDownloadPdf(l)}
                         className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
                       >
                         📥 PDF
@@ -131,9 +136,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         <LeaveDetailModal
           leave={selected}
           onClose={() => setSelected(null)}
-          onDownloadPdf={
-            isApproved(selected) ? () => downloadLeavePassPdf(selected, portal.profile?.photo) : undefined
-          }
+          onDownloadPdf={isApproved(selected) ? () => handleDownloadPdf(selected) : undefined}
         />
       )}
     </div>

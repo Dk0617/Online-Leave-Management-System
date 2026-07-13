@@ -1,10 +1,20 @@
+import crypto from "crypto";
 import Student from "../models/Student.js";
 import Leave from "../models/Leave.js";
+import Movement from "../models/Movement.js";
 import { writeAudit } from "../utils/audit.js";
 
 const DOC_REQUIRED_TYPES = ["Medical Leave", "Academic Leave", "Other"];
 // ~2MB of raw file becomes ~2.7MB once base64-encoded.
 const MAX_ATTACHMENT_BYTES = 2.7 * 1024 * 1024;
+// Excludes ambiguous characters (0/O, 1/I/L) so gate staff can read/type it easily.
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function generateVerifyCode() {
+  const bytes = crypto.randomBytes(6);
+  let code = "";
+  for (let i = 0; i < 6; i++) code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  return code;
+}
 
 export const applyLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
@@ -68,6 +78,7 @@ export const applyLeave = async (req, res) => {
     attachmentName: attachmentName || undefined,
     attachmentData: attachmentData || undefined,
     appliedDate: new Date().toISOString().split("T")[0],
+    verifyCode: generateVerifyCode(),
     hodStatus: isCadet ? "N/A" : "Pending",
     troopStatus: "Pending",
     sqnStatus: isCadet ? "Pending" : "N/A",
@@ -86,6 +97,24 @@ export const applyLeave = async (req, res) => {
 export const myLeaves = async (req, res) => {
   const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: -1 });
   res.json(leaves);
+};
+
+// Powers the "digital signature" section of the leave-pass PDF — the
+// student's own client re-downloads the pass after gate staff have
+// verified Exit / Re-Entry so the PDF can show who verified it and when,
+// pulled live from the Movement log rather than trusted from the PDF.
+export const leaveMovements = async (req, res) => {
+  const leave = await Leave.findById(req.params.leaveId);
+  if (!leave || String(leave.studentId) !== req.user.id) {
+    return res.status(404).json({ message: "Leave not found" });
+  }
+  const movements = await Movement.find({ leaveId: leave._id }).sort({ createdAt: 1 });
+  const exit = movements.find((m) => m.direction === "Exit");
+  const entry = movements.find((m) => m.direction === "Entry");
+  res.json({
+    exit: exit ? { by: exit.loggedBy, at: exit.createdAt } : null,
+    entry: entry ? { by: entry.loggedBy, at: entry.createdAt } : null,
+  });
 };
 
 export const getProfile = async (req, res) => {

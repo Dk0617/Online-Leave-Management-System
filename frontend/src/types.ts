@@ -122,6 +122,7 @@ export interface LeaveRequest {
   attachmentName?: string;
   attachmentData?: string;
   appliedDate: string;
+  verifyCode?: string;
 
   hodStatus: LeaveStatus;
   troopStatus: LeaveStatus;

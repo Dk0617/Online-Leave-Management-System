@@ -49,6 +49,11 @@ const leaveSchema = new mongoose.Schema(
     troopApprovedAt: String,
     sqnApprovedAt: String,
     sddApprovedAt: String,
+
+    // Printed on the PDF pass. Gate staff type this into the Gate portal to
+    // pull the student's photo live from the database (not from the PDF)
+    // so a copied/borrowed PDF can't be used to impersonate another student.
+    verifyCode: { type: String, index: true },
   },
   { timestamps: true }
 );

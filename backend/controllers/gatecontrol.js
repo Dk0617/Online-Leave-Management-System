@@ -1,5 +1,6 @@
 import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
+import Student from "../models/Student.js";
 import { isApproved } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
 
@@ -26,14 +27,38 @@ export const verifyByIndexNumber = async (req, res) => {
     return res.json({ found: false });
   }
 
+  const studentPhoto = (await Student.findOne({ indexNumber }).select("photo"))?.photo;
+
   const valid = leaves.find(isCurrentlyValid);
-  if (valid) return res.json({ found: true, valid: true, leave: valid });
+  if (valid) return res.json({ found: true, valid: true, leave: valid, studentPhoto });
 
   const anyApproved = leaves.find(isApproved);
   if (anyApproved) {
-    return res.json({ found: true, valid: false, reason: "not_active", leave: anyApproved });
+    return res.json({ found: true, valid: false, reason: "not_active", leave: anyApproved, studentPhoto });
   }
-  return res.json({ found: true, valid: false, reason: "not_approved" });
+  return res.json({ found: true, valid: false, reason: "not_approved", studentPhoto });
+};
+
+// Looked up by the "Gate Verification Code" printed on the student's PDF
+// pass. Unlike index-number lookup, this ties a specific PDF document to
+// one specific leave — and always returns the photo live from the Student
+// record, never anything embedded in the PDF itself, so a copied or
+// borrowed PDF can be caught by comparing the on-screen photo to the
+// person physically presenting it.
+export const verifyByCode = async (req, res) => {
+  const code = (req.params.code || "").toUpperCase().trim();
+  const leave = await Leave.findOne({ verifyCode: code });
+  if (!leave) return res.json({ found: false });
+
+  const studentPhoto = (await Student.findOne({ indexNumber: leave.indexNumber }).select("photo"))?.photo;
+
+  if (isCurrentlyValid(leave)) {
+    return res.json({ found: true, valid: true, leave, studentPhoto });
+  }
+  if (isApproved(leave)) {
+    return res.json({ found: true, valid: false, reason: "not_active", leave, studentPhoto });
+  }
+  return res.json({ found: true, valid: false, reason: "not_approved", leave, studentPhoto });
 };
 
 export const logMovement = async (req, res) => {

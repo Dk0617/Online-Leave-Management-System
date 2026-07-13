@@ -117,6 +117,10 @@ export function useAdminPortal() {
     await api.post("/admin/students", input);
     await refresh();
   }
+  async function editStudent(id: string, input: Partial<NewStudentInput>) {
+    await api.patch(`/admin/students/${id}`, input);
+    await refresh();
+  }
   async function removeStudent(id: string) {
     await api.delete(`/admin/students/${id}`);
     await refresh();
@@ -125,6 +129,10 @@ export function useAdminPortal() {
   // ── Generic staff (HOD / Squadron / SDD / Gate) ────────────────
   async function addStaff(role: StaffRole, input: NewStaffInput) {
     await api.post(`/admin/staff/${role.toLowerCase()}`, input);
+    await refresh();
+  }
+  async function editStaff(role: StaffRole, id: string, input: Partial<NewStaffInput>) {
+    await api.patch(`/admin/staff/${role.toLowerCase()}/${id}`, input);
     await refresh();
   }
   async function removeStaff(role: StaffRole, id: string) {
@@ -173,8 +181,10 @@ export function useAdminPortal() {
     addIntake,
     removeIntake,
     addStudent,
+    editStudent,
     removeStudent,
     addStaff,
+    editStaff,
     removeStaff,
     addTroop,
     editTroop,

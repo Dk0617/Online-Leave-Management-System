@@ -252,9 +252,15 @@ function refLabel(ref: string | RefName | undefined): string {
   return typeof ref === "string" ? ref : ref.name;
 }
 
-export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { students, intakes, troops, hods, squadrans, addStudent, removeStudent } = portal;
+function refId(ref: string | RefName | undefined): string {
+  if (!ref) return "";
+  return typeof ref === "string" ? ref : ref.id;
+}
 
+export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { students, intakes, troops, hods, squadrans, addStudent, editStudent, removeStudent } = portal;
+
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [indexNumber, setIndexNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -269,6 +275,10 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const departmentOptions = Array.from(
+    new Set(hods.map((h) => h.department).filter((d): d is string => !!d))
+  ).sort();
+
   function toggleTroop(id: string) {
     setTroopIds((prev) => {
       if (prev.includes(id)) return prev.filter((t) => t !== id);
@@ -278,17 +288,40 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   }
 
   function resetForm() {
+    setEditingId(null);
     setIndexNumber("");
     setFirstName("");
     setLastName("");
     setDepartment("");
     setEmail("");
     setMobile("");
+    setIntake("");
+    setStudentType("DAY_SCHOLAR");
+    setHodId("");
+    setSqnId("");
     setPassword("");
     setTroopIds([]);
   }
 
-  async function handleCreate() {
+  function startEdit(id: string) {
+    const s = students.find((x) => x.id === id);
+    if (!s) return;
+    setEditingId(id);
+    setIndexNumber(s.indexNumber);
+    setFirstName(s.firstName);
+    setLastName(s.lastName);
+    setDepartment(s.department ?? "");
+    setEmail(s.email ?? "");
+    setMobile(s.mobile ?? "");
+    setIntake(s.intake ?? "");
+    setStudentType(s.studentType);
+    setHodId(refId(s.hodId));
+    setSqnId(refId(s.sqnId));
+    setTroopIds(s.troopIds.map(refId).filter(Boolean));
+    setPassword("");
+  }
+
+  async function handleSubmit() {
     if (!indexNumber.trim() || !firstName.trim() || !lastName.trim()) {
       setError("Index number, first and last name are required.");
       return;
@@ -306,24 +339,29 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       return;
     }
     setError(null);
+    const input = {
+      indexNumber: indexNumber.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      department: department.trim() || undefined,
+      email: email.trim() || undefined,
+      mobile: mobile.trim() || undefined,
+      studentType,
+      intake,
+      troopIds,
+      hodId: studentType === "DAY_SCHOLAR" ? hodId : undefined,
+      sqnId: studentType === "CADET" ? sqnId : undefined,
+      password: password.trim() || undefined,
+    };
     try {
-      await addStudent({
-        indexNumber: indexNumber.trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        department: department.trim() || undefined,
-        email: email.trim() || undefined,
-        mobile: mobile.trim() || undefined,
-        studentType,
-        intake,
-        troopIds,
-        hodId: studentType === "DAY_SCHOLAR" ? hodId : undefined,
-        sqnId: studentType === "CADET" ? sqnId : undefined,
-        password: password.trim() || undefined,
-      });
+      if (editingId) {
+        await editStudent(editingId, input);
+      } else {
+        await addStudent(input);
+      }
       resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create student");
+      setError(err instanceof Error ? err.message : "Failed to save student");
     }
   }
 
@@ -335,7 +373,9 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Create Student Account</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
+          {editingId ? "✏️ Edit Student Account" : "➕ Create Student Account"}
+        </h2>
 
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
@@ -355,7 +395,14 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
             <label className={styles.label}>Department / Section</label>
-            <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. IT" className={styles.input} />
+            <select value={department} onChange={(e) => setDepartment(e.target.value)} className={styles.input}>
+              <option value="">{departmentOptions.length ? "Select department…" : "No departments — add an HOD first"}</option>
+              {departmentOptions.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={styles.label}>Email</label>
@@ -436,16 +483,25 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
         </div>
 
         <div className="mb-4">
-          <label className={styles.label}>Password (defaults to Department name — override if needed)</label>
+          <label className={styles.label}>
+            Password {editingId ? "(leave blank to keep current)" : "(defaults to Department name — override if needed)"}
+          </label>
           <div className="flex gap-2">
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={styles.input} />
           </div>
         </div>
 
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
-        <Button variant="primary" onClick={handleCreate}>
-          Create Student
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={handleSubmit}>
+            {editingId ? "Update Student" : "Create Student"}
+          </Button>
+          {editingId && (
+            <Button variant="secondary" onClick={resetForm}>
+              Cancel Edit
+            </Button>
+          )}
+        </div>
       </Card>
 
       <Card className="p-5">
@@ -487,7 +543,10 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
                     <td>{s.department}</td>
                     <td>{s.troopIds.map(refLabel).filter(Boolean).join(", ")}</td>
                     <td>{refLabel(s.studentType === "CADET" ? s.sqnId : s.hodId)}</td>
-                    <td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(s.id)}>
+                        Edit
+                      </Button>
                       <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(s.id)}>
                         Delete
                       </Button>
@@ -519,31 +578,56 @@ export function StaffRole({
   const list: StaffAccount[] =
     role === "HOD" ? portal.hods : role === "SQUADRAN" ? portal.squadrans : role === "SDD" ? portal.sdds : portal.gates;
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [extra, setExtra] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function handleCreate() {
+  function resetForm() {
+    setEditingId(null);
+    setUsername("");
+    setName("");
+    setExtra("");
+    setPassword("");
+  }
+
+  function startEdit(id: string) {
+    const u = list.find((x) => x.id === id);
+    if (!u) return;
+    setEditingId(id);
+    setUsername(u.username);
+    setName(u.name);
+    setExtra(u.department || u.title || u.post || "");
+    setPassword("");
+  }
+
+  async function handleSubmit() {
     if (!username.trim() || !name.trim() || (extraLabel && !extra.trim())) {
       setError("Please fill in all fields.");
       return;
     }
     setError(null);
     try {
-      await portal.addStaff(role, {
-        username: username.trim(),
-        name: name.trim(),
-        extra: extra.trim() || undefined,
-        password: password.trim() || undefined,
-      });
-      setUsername("");
-      setName("");
-      setExtra("");
-      setPassword("");
+      if (editingId) {
+        await portal.editStaff(role, editingId, {
+          username: username.trim(),
+          name: name.trim(),
+          extra: extra.trim() || undefined,
+          password: password.trim() || undefined,
+        });
+      } else {
+        await portal.addStaff(role, {
+          username: username.trim(),
+          name: name.trim(),
+          extra: extra.trim() || undefined,
+          password: password.trim() || undefined,
+        });
+      }
+      resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account");
+      setError(err instanceof Error ? err.message : "Failed to save account");
     }
   }
 
@@ -555,7 +639,9 @@ export function StaffRole({
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Create {title} Account</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
+          {editingId ? `✏️ Edit ${title}` : `➕ Create ${title} Account`}
+        </h2>
         <div className={`${extraLabel ? styles.formGrid3 : styles.formGrid2} mb-4`}>
           <div>
             <label className={styles.label}>Username</label>
@@ -578,13 +664,20 @@ export function StaffRole({
           )}
         </div>
         <div className="mb-4">
-          <label className={styles.label}>Password (leave blank to auto-generate)</label>
+          <label className={styles.label}>Password {editingId ? "(leave blank to keep current)" : "(leave blank to auto-generate)"}</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
-        <Button variant="primary" onClick={handleCreate}>
-          Create {title}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={handleSubmit}>
+            {editingId ? `Update ${title}` : `Create ${title}`}
+          </Button>
+          {editingId && (
+            <Button variant="secondary" onClick={resetForm}>
+              Cancel Edit
+            </Button>
+          )}
+        </div>
       </Card>
 
       <Card className="p-5">
@@ -612,7 +705,10 @@ export function StaffRole({
                     <td>{u.username}</td>
                     <td>{u.name}</td>
                     {extraLabel && <td>{u.department || u.title || u.post || ""}</td>}
-                    <td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(u.id)}>
+                        Edit
+                      </Button>
                       <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(u.id)}>
                         Delete
                       </Button>

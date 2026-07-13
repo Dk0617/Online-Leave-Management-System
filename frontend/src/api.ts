@@ -174,6 +174,7 @@ export function normalizeLeave(raw: Raw): LeaveRequest {
     attachmentName: raw.attachmentName as string | undefined,
     attachmentData: raw.attachmentData as string | undefined,
     appliedDate: raw.appliedDate as string,
+    verifyCode: raw.verifyCode as string | undefined,
     hodStatus: raw.hodStatus as LeaveRequest["hodStatus"],
     troopStatus: raw.troopStatus as LeaveRequest["troopStatus"],
     sqnStatus: raw.sqnStatus as LeaveRequest["sqnStatus"],

@@ -45,8 +45,11 @@ export function DashboardShell({
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
-    const saved = document.documentElement.getAttribute("data-theme");
-    if (saved === "light") setTheme("light");
+    const saved = window.localStorage.getItem("ols_theme");
+    if (saved === "light") {
+      setTheme("light");
+      document.documentElement.setAttribute("data-theme", "light");
+    }
   }, []);
 
   function toggleTheme() {

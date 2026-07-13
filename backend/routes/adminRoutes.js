@@ -8,9 +8,11 @@ import {
   deleteIntake,
   createStudent,
   listStudents,
+  updateStudent,
   deleteStudent,
   createStaff,
   listStaff,
+  updateStaff,
   deleteStaff,
   createTroop,
   listTroops,
@@ -35,6 +37,7 @@ router.delete("/intakes/:code", deleteIntake);
 
 router.get("/students", listStudents);
 router.post("/students", createStudent);
+router.patch("/students/:id", updateStudent);
 router.delete("/students/:id", deleteStudent);
 
 router.get("/troop", listTroops);
@@ -45,6 +48,7 @@ router.delete("/troop/:id", deleteTroop);
 // Generic HOD / Squadron / SDD / Gate account management
 router.get("/staff/:role", listStaff);
 router.post("/staff/:role", createStaff);
+router.patch("/staff/:role/:id", updateStaff);
 router.delete("/staff/:role/:id", deleteStaff);
 
 router.get("/notifications", listNotifications);
