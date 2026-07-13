@@ -236,7 +236,9 @@ export function ApplyLeave({
   const isAcademic = type === "Academic Leave";
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   const today = new Date().toISOString().split("T")[0];
-
+  const minStartDate = isEmergency
+    ? today
+    : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const missing: string[] = [];
