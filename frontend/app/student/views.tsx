@@ -411,7 +411,13 @@ export function ApplyLeave({
               <label className={styles.label}>
                 Start Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={styles.input} />
+              <input
+                type="time"
+                lang="en-GB"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className={styles.input}
+              />
             </div>
             <div>
               <label className={styles.label}>
@@ -423,7 +429,13 @@ export function ApplyLeave({
               <label className={styles.label}>
                 End Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={styles.input} />
+              <input
+                type="time"
+                lang="en-GB"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className={styles.input}
+              />
             </div>
           </div>
 
