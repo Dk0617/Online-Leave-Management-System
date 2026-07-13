@@ -1,23 +1,26 @@
 import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
 import Student from "../models/Student.js";
-import { isApproved } from "../utils/leaveStatus.js";
+import { isGateEligible } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
 
 function isCurrentlyValid(leave) {
-  if (!isApproved(leave)) return false;
+  if (!isGateEligible(leave)) return false;
   const now = new Date();
   const start = new Date(`${leave.startDate}T${leave.startTime || "00:00"}`);
   const end = new Date(`${leave.endDate}T${leave.endTime || "23:59"}`);
   return now >= start && now <= end;
 }
 
-// Every fully-approved leave — the gate dashboard's "Leave Passes" table
-// and the on-leave-now/exit-entry stats are all computed client-side from
-// this list plus the movement log, mirroring gate_staff.html.
+// Every fully-approved, gate-eligible leave — Academic Leave is excluded
+// even once approved (it's an academic excuse kept with the HOD, not an
+// exit permit; its auto-created companion Personal Leave is the real
+// pass). The gate dashboard's "Leave Passes" table and the on-leave-now/
+// exit-entry stats are computed client-side from this list plus the
+// movement log, mirroring gate_staff.html.
 export const approvedLeaves = async (req, res) => {
   const leaves = await Leave.find();
-  res.json(leaves.filter(isApproved));
+  res.json(leaves.filter(isGateEligible));
 };
 
 export const verifyByIndexNumber = async (req, res) => {
@@ -32,7 +35,7 @@ export const verifyByIndexNumber = async (req, res) => {
   const valid = leaves.find(isCurrentlyValid);
   if (valid) return res.json({ found: true, valid: true, leave: valid, studentPhoto });
 
-  const anyApproved = leaves.find(isApproved);
+  const anyApproved = leaves.find(isGateEligible);
   if (anyApproved) {
     return res.json({ found: true, valid: false, reason: "not_active", leave: anyApproved, studentPhoto });
   }
@@ -55,12 +58,23 @@ export const verifyByCode = async (req, res) => {
   if (isCurrentlyValid(leave)) {
     return res.json({ found: true, valid: true, leave, studentPhoto });
   }
-  if (isApproved(leave)) {
+  if (isGateEligible(leave)) {
     return res.json({ found: true, valid: false, reason: "not_active", leave, studentPhoto });
   }
   return res.json({ found: true, valid: false, reason: "not_approved", leave, studentPhoto });
 };
 
+// This is the real security choke point for exit/entry — the Verify tab
+// only ever offers "Log Exit/Entry" once its own time-window check has
+// passed, but this endpoint is also reachable directly from the separate
+// Log Movement form (index number typed in with no prior verification), so
+// the check has to live here too, not just in the Verify UI. Exit is
+// strictly confined to the approved leave's date/time window (applies to
+// both Day Scholar and Cadet passes) — a student can't be let out before
+// their leave starts, or after it has already ended. Entry is deliberately
+// not time-boxed: gate staff must always be able to record a student
+// returning (even late), so blocking that would only destroy the record,
+// not add safety.
 export const logMovement = async (req, res) => {
   const { indexNumber, direction, leaveId, notes } = req.body;
   if (!indexNumber || !["Exit", "Entry"].includes(direction)) {
@@ -69,16 +83,31 @@ export const logMovement = async (req, res) => {
       .json({ message: "Index number and a valid direction are required" });
   }
 
-  const leave = leaveId
-    ? await Leave.findById(leaveId)
-    : await Leave.findOne({ indexNumber: indexNumber.toUpperCase() });
+  let leave;
+  if (leaveId) {
+    leave = await Leave.findById(leaveId);
+  } else {
+    const candidates = await Leave.find({ indexNumber: indexNumber.toUpperCase() });
+    leave = candidates.find(isCurrentlyValid) || candidates.find(isGateEligible) || null;
+  }
+
+  if (!leave || !isGateEligible(leave)) {
+    return res.status(403).json({
+      message: `${indexNumber} does not have a fully approved, currently gate-eligible leave pass.`,
+    });
+  }
+  if (direction === "Exit" && !isCurrentlyValid(leave)) {
+    return res.status(403).json({
+      message: `Exit is only allowed within the approved leave period (${leave.startDate} ${leave.startTime} to ${leave.endDate} ${leave.endTime}). It is currently outside that window.`,
+    });
+  }
 
   const movement = await Movement.create({
     indexNumber: indexNumber.toUpperCase(),
-    studentName: leave?.studentName || "Unknown",
-    studentType: leave?.studentType,
+    studentName: leave.studentName,
+    studentType: leave.studentType,
     direction,
-    leaveId: leave?._id,
+    leaveId: leave._id,
     notes,
     loggedBy: req.user.name,
   });
@@ -88,7 +117,9 @@ export const logMovement = async (req, res) => {
 };
 
 export const listMovements = async (req, res) => {
-  res.json(await Movement.find().sort({ createdAt: -1 }));
+  // Unbounded before — every gate dashboard load would re-fetch the entire
+  // movement history, getting slower forever as it accumulates.
+  res.json(await Movement.find().sort({ createdAt: -1 }).limit(500));
 };
 
 export const clearMovements = async (req, res) => {

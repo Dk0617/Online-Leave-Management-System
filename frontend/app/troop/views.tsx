@@ -14,7 +14,7 @@ function tone(status: string) {
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { user } = useAuth();
-  const { allPending, history, approve, reject } = portal;
+  const { allPending, history, approve, reject, error, refresh } = portal;
   const intakesText = user?.intakes?.length ? user.intakes.map((i) => `Intake ${i}`).join(", ") : "no intakes assigned yet";
   const approvedByMe = history.filter((l) => l.troopStatus === "Approved").length;
   const rejectedByMe = history.filter((l) => l.troopStatus === "Rejected").length;
@@ -24,10 +24,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load Troop data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div className={styles.infoBanner}>
         <strong>Dual Role:</strong> You approve <strong>Day Scholar</strong> leaves at <em>Stage 2</em> (after
-        HOD approval) and <strong>Cadet</strong> leaves at <em>Stage 1</em> (direct from student). Only
-        students from your assigned intake(s) appear here — {intakesText}.
+        HOD approval) and <strong>Cadet</strong> leaves at <em>Stage 1</em> (direct from student, moving on to
+        Squadron Commander next) — except Cadet <strong>Academic Leave</strong>, which you approve alone and
+        file in your own office (no Squadron/SDD step, and no HOD involved — that only applies to Day
+        Scholars). Only students from your assigned intake(s) appear here — {intakesText}.
       </div>
 
       <div className={styles.statGrid}>
@@ -81,7 +91,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td className="text-xs text-[var(--muted)]">
-                    {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
+                    {l.studentType === "DAY_SCHOLAR"
+                      ? "Stage 2 (Final)"
+                      : l.sqnStatus === "N/A"
+                      ? "Stage 1 (Final — Academic Leave)"
+                      : "Stage 1 of 3"}
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
@@ -174,7 +188,9 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
+        <strong>Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander —
+        except <strong>Academic Leave</strong>, which you approve alone and file in your own office (no
+        further stages, no HOD involved).
       </div>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
@@ -271,7 +287,11 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
                   <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
                 </td>
                 <td className="text-xs text-[var(--muted)]">
-                  {l.studentType === "DAY_SCHOLAR" ? "PDF Ready (if Approved)" : "Squadron Commander"}
+                  {l.studentType === "DAY_SCHOLAR"
+                    ? "PDF Ready (if Approved)"
+                    : l.sqnStatus === "N/A"
+                    ? "Filed with you (Academic Leave, final)"
+                    : "Squadron Commander"}
                 </td>
               </tr>
             ))

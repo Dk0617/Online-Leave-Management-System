@@ -54,6 +54,11 @@ const leaveSchema = new mongoose.Schema(
     // pull the student's photo live from the database (not from the PDF)
     // so a copied/borrowed PDF can't be used to impersonate another student.
     verifyCode: { type: String, index: true },
+
+    // Academic Leave always auto-creates a companion Personal Leave (same
+    // dates) — this links the pair together for traceability. See
+    // studentcontrol.js applyLeave / createLinkedPersonalLeave.
+    linkedLeaveId: { type: mongoose.Schema.Types.ObjectId, ref: "Leave" },
   },
   { timestamps: true }
 );

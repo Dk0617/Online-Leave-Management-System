@@ -4,7 +4,15 @@ import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
 import { writeAudit } from "../utils/audit.js";
 
-const DOC_REQUIRED_TYPES = ["Medical Leave", "Academic Leave", "Other"];
+// Day Scholar attachment rule is unchanged. Cadets follow a different rule:
+// Medical + Personal are mandatory, Academic needs none (it's an academic
+// excuse, not a campus-exit reason), Other stays required for both.
+const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Academic Leave", "Other"];
+const DOC_REQUIRED_TYPES_CADET = ["Medical Leave", "Personal Leave", "Other"];
+function requiresAttachment(type, studentType) {
+  return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES_DAY_SCHOLAR).includes(type);
+}
+
 // ~2MB of raw file becomes ~2.7MB once base64-encoded.
 const MAX_ATTACHMENT_BYTES = 2.7 * 1024 * 1024;
 // Excludes ambiguous characters (0/O, 1/I/L) so gate staff can read/type it easily.
@@ -14,6 +22,47 @@ function generateVerifyCode() {
   let code = "";
   for (let i = 0; i < 6; i++) code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
   return code;
+}
+
+// Academic Leave always requires a companion Personal Leave (same dates) —
+// for Day Scholars this is a standing policy; for Cadets it covers the
+// "going home during a lecture-day period" case. Uses each student's
+// normal full routing for Personal Leave (never the single-stage academic
+// shortcut, which only applies to the Academic Leave itself). Exempt from
+// its own attachment rule since there's no separate upload step for it —
+// it reuses whatever the student attached to the Academic Leave, if any.
+async function createLinkedPersonalLeave(primary, student) {
+  const isCadet = student.studentType === "CADET";
+  const linked = await Leave.create({
+    studentId: student._id,
+    studentName: student.name,
+    indexNumber: student.indexNumber,
+    department: student.department,
+    studentType: student.studentType,
+    intake: student.intake,
+    hodId: isCadet ? undefined : student.hodId,
+    troopIds: student.troopIds,
+    sqnId: isCadet ? student.sqnId : undefined,
+    type: "Personal Leave",
+    priority: primary.priority,
+    startDate: primary.startDate,
+    startTime: primary.startTime,
+    endDate: primary.endDate,
+    endTime: primary.endTime,
+    reason: `Linked to Academic Leave (Ref LV-${primary._id}): ${primary.reason}`,
+    attachmentName: primary.attachmentName,
+    attachmentData: primary.attachmentData,
+    appliedDate: primary.appliedDate,
+    verifyCode: generateVerifyCode(),
+    linkedLeaveId: primary._id,
+    hodStatus: isCadet ? "N/A" : "Pending",
+    troopStatus: "Pending",
+    sqnStatus: isCadet ? "Pending" : "N/A",
+    sddStatus: isCadet ? "Pending" : "N/A",
+  });
+  primary.linkedLeaveId = linked._id;
+  await primary.save();
+  return linked;
 }
 
 export const applyLeave = async (req, res) => {
@@ -38,7 +87,7 @@ export const applyLeave = async (req, res) => {
   if (!endDate) missing.push("End Date");
   if (!endTime) missing.push("End Time");
   if (!reason) missing.push("Reason");
-  if (DOC_REQUIRED_TYPES.includes(type) && !attachmentData) {
+  if (requiresAttachment(type, student.studentType) && !attachmentData) {
     missing.push("Supporting Document");
   }
   if (missing.length) {
@@ -57,6 +106,13 @@ export const applyLeave = async (req, res) => {
 
   const isCadet = student.studentType === "CADET";
   const isEmergency = type === "Emergency Leave";
+  const isAcademic = type === "Academic Leave";
+
+  // Cadet Academic Leave never touches HOD (HOD is Day Scholar-only) and is
+  // a single-stage approval by the Troop Commander alone — filed in the
+  // Troop Commander's office, the same role HOD plays for a Day Scholar's
+  // Academic Leave. Squadron and SDD never see it either.
+  const cadetAcademicOnly = isCadet && isAcademic;
 
   const leave = await Leave.create({
     studentId: student._id,
@@ -65,9 +121,9 @@ export const applyLeave = async (req, res) => {
     department: student.department,
     studentType: student.studentType,
     intake: student.intake,
-    hodId: student.hodId,
+    hodId: isCadet ? undefined : student.hodId,
     troopIds: student.troopIds,
-    sqnId: student.sqnId,
+    sqnId: isCadet ? student.sqnId : undefined,
     type,
     priority: isEmergency ? "emergency" : "normal",
     startDate,
@@ -81,15 +137,20 @@ export const applyLeave = async (req, res) => {
     verifyCode: generateVerifyCode(),
     hodStatus: isCadet ? "N/A" : "Pending",
     troopStatus: "Pending",
-    sqnStatus: isCadet ? "Pending" : "N/A",
-    sddStatus: isCadet ? "Pending" : "N/A",
+    sqnStatus: isCadet && !cadetAcademicOnly ? "Pending" : "N/A",
+    sddStatus: isCadet && !cadetAcademicOnly ? "Pending" : "N/A",
   });
+
+  let linkedLeave = null;
+  if (isAcademic) {
+    linkedLeave = await createLinkedPersonalLeave(leave, student);
+  }
 
   await writeAudit(
     "STUDENT",
     student.username,
     "leave_submitted",
-    `type=${type}, id=${leave._id}${isEmergency ? " [EMERGENCY]" : ""}`
+    `type=${type}, id=${leave._id}${isEmergency ? " [EMERGENCY]" : ""}${linkedLeave ? `, linked_personal=${linkedLeave._id}` : ""}`
   );
   res.status(201).json(leave);
 };

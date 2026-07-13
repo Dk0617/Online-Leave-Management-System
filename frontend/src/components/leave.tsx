@@ -171,8 +171,19 @@ export function LeaveDetailModal({
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
+  // Cadet Academic Leave is a single-stage routing (Troop Commander alone,
+  // no Squadron/SDD/HOD) — identified by sqnStatus permanently "N/A", same
+  // marker used by isApproved/isRejected. Everything else follows the
+  // normal 3-stage cadet chain.
+  const isCadetAcademicOnly = isCadet && leave.sqnStatus === "N/A";
 
-  const steps: TimelineStep[] = isCadet
+  const steps: TimelineStep[] = isCadetAcademicOnly
+    ? [
+        { label: "Applied", status: "done" },
+        { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, true) },
+        { label: "Filed", status: approved ? "done" : "wait" },
+      ]
+    : isCadet
     ? [
         { label: "Applied", status: "done" },
         { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, true) },

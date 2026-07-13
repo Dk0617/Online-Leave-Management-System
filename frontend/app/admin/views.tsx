@@ -31,7 +31,7 @@ function Breakdown({
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { students, hods, troops, squadrans, sdds, gates, leaves, intakes } = portal;
+  const { students, hods, troops, squadrans, sdds, gates, leaves, intakes, error, refresh } = portal;
 
   const approvedCount = leaves.filter(isApproved).length;
   const rejectedCount = leaves.filter(isRejected).length;
@@ -44,6 +44,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load admin data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div className={styles.welcomeBanner}>
         <div>
           <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>

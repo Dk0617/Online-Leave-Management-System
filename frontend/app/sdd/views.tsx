@@ -13,13 +13,21 @@ function tone(status: string) {
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
-  const { pending, history, pipeline, approve, reject } = portal;
+  const { pending, history, pipeline, approve, reject, error, refresh } = portal;
   const approvedByMe = history.filter((l) => l.sddStatus === "Approved").length;
   const rejectedByMe = history.filter((l) => l.sddStatus === "Rejected").length;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load SDD data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div className={styles.infoBanner}>
         <strong>Final Authority — Cadet Leaves Only:</strong> Applications reach you only after <em>both</em>{" "}
         the Troop Commander and Squadron Commander have approved. Your approval is the final step — the cadet

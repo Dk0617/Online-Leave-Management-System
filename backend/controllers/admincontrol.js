@@ -20,14 +20,15 @@ function genPassword() {
 
 // Email-code login looks a user up by email across every role, so the same
 // email can't be reused on a second account (which would make login-by-code
-// ambiguous / silently log in to the wrong account).
+// ambiguous / silently log in to the wrong account). Checked in parallel —
+// checking the 7 role collections one at a time turns every account
+// create/update into 7 sequential round trips to the database.
 async function isEmailTaken(email, excludeId) {
   if (!email) return false;
-  for (const Model of Object.values(ROLE_MODELS)) {
-    const existing = await Model.findOne({ email, _id: { $ne: excludeId } });
-    if (existing) return true;
-  }
-  return false;
+  const results = await Promise.all(
+    Object.values(ROLE_MODELS).map((Model) => Model.findOne({ email, _id: { $ne: excludeId } }))
+  );
+  return results.some(Boolean);
 }
 
 // ── Dashboard-wide views ────────────────────────────────────────

@@ -37,8 +37,11 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   "Emergency Leave": "🚨 Emergency Leave",
 };
 
-// Leave types that require a supporting document attachment.
+// Leave types that require a supporting document attachment. Day Scholar
+// rule is unchanged; Cadets follow a different rule (see requiresAttachment
+// in api.ts, kept in sync with backend/controllers/studentcontrol.js).
 export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave", "Academic Leave", "Other"];
+export const DOC_REQUIRED_TYPES_CADET: LeaveType[] = ["Medical Leave", "Personal Leave", "Other"];
 
 // ── Auth / session ────────────────────────────────────────────────
 export interface AuthUser {
@@ -124,6 +127,7 @@ export interface LeaveRequest {
   attachmentData?: string;
   appliedDate: string;
   verifyCode?: string;
+  linkedLeaveId?: string;
 
   hodStatus: LeaveStatus;
   troopStatus: LeaveStatus;

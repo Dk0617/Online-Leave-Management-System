@@ -10,9 +10,11 @@ export function useSddPortal() {
   const [overview, setOverview] = useState<LeaveRequest[]>([]);
   const [pipeline, setPipeline] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [p, h, o, pl] = await Promise.all([
         api.get<Record<string, unknown>[]>("/sdd/leaves/pending"),
@@ -24,6 +26,8 @@ export function useSddPortal() {
       setHistory(h.map(normalizeLeave));
       setOverview(o.map(normalizeLeave));
       setPipeline(pl.map(normalizeLeave));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load SDD data");
     } finally {
       setLoading(false);
     }
@@ -42,5 +46,5 @@ export function useSddPortal() {
     await refresh();
   }
 
-  return { pending, history, overview, pipeline, loading, refresh, approve, reject };
+  return { pending, history, overview, pipeline, loading, error, refresh, approve, reject };
 }

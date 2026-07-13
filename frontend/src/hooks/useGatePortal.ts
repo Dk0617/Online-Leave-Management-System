@@ -16,9 +16,11 @@ export function useGatePortal() {
   const [approvedLeaves, setApprovedLeaves] = useState<LeaveRequest[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [leavesRaw, movRaw] = await Promise.all([
         api.get<Record<string, unknown>[]>("/gate/leaves"),
@@ -26,6 +28,8 @@ export function useGatePortal() {
       ]);
       setApprovedLeaves(leavesRaw.map(normalizeLeave));
       setMovements(movRaw.map(normalizeMovement));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load gate data");
     } finally {
       setLoading(false);
     }
@@ -58,5 +62,5 @@ export function useGatePortal() {
     await refresh();
   }
 
-  return { approvedLeaves, movements, loading, refresh, verify, verifyByCode, logMovement, clearMovementLog };
+  return { approvedLeaves, movements, loading, error, refresh, verify, verifyByCode, logMovement, clearMovementLog };
 }

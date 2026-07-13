@@ -21,7 +21,7 @@ function validity(l: { startDate: string; startTime: string; endDate: string; en
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
-  const { approvedLeaves, movements } = portal;
+  const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();
   const todayMovements = movements.filter((m) => m.timestamp.startsWith(today));
 
@@ -35,6 +35,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load gate data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div className={styles.infoBanner}>
         <strong>Gate Staff Role:</strong> Verify student leave passes, log exits and entries, and monitor who
         is currently on leave. Students must have a fully approved leave pass before exiting campus.

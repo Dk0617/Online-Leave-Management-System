@@ -10,9 +10,11 @@ export function useTroopPortal() {
   const [cadetPending, setCadetPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [all, ds, cd, hist] = await Promise.all([
         api.get<Record<string, unknown>[]>("/troop/leaves/pending"),
@@ -24,6 +26,8 @@ export function useTroopPortal() {
       setDayScholarPending(ds.map(normalizeLeave));
       setCadetPending(cd.map(normalizeLeave));
       setHistory(hist.map(normalizeLeave));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load Troop data");
     } finally {
       setLoading(false);
     }
@@ -48,6 +52,7 @@ export function useTroopPortal() {
     cadetPending,
     history,
     loading,
+    error,
     refresh,
     approve,
     reject,

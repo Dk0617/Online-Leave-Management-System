@@ -8,9 +8,11 @@ export function useHodPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [p, h] = await Promise.all([
         api.get<Record<string, unknown>[]>("/hod/leaves/pending"),
@@ -18,6 +20,8 @@ export function useHodPortal() {
       ]);
       setPending(p.map(normalizeLeave));
       setHistory(h.map(normalizeLeave));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load HOD data");
     } finally {
       setLoading(false);
     }
@@ -36,5 +40,5 @@ export function useHodPortal() {
     await refresh();
   }
 
-  return { pending, history, loading, refresh, approve, reject };
+  return { pending, history, loading, error, refresh, approve, reject };
 }

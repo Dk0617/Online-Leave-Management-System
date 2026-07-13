@@ -69,10 +69,14 @@ export async function downloadLeavePassPdf(
   verification?: PassVerification
 ) {
   const isCadet = leave.studentType === "CADET";
-  const crestData = await loadImageAsDataURL("/KDU-LOGO-ORIGINAL-5x4-inch-copy.png");
-  const qrData = leave.verifyCode
-    ? await QRCode.toDataURL(leave.verifyCode, { margin: 0, width: 200 }).catch(() => null)
-    : null;
+  // Run independently — previously sequential, so a slow/failed logo load
+  // (up to a 2s fallback timeout) delayed the QR code from even starting.
+  const [crestData, qrData] = await Promise.all([
+    loadImageAsDataURL("/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"),
+    leave.verifyCode
+      ? QRCode.toDataURL(leave.verifyCode, { margin: 0, width: 200 }).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = 210;
@@ -318,52 +322,50 @@ export async function downloadLeavePassPdf(
   });
   y += 10;
 
-  // Digital approval panels replace plain "sign here" lines. The student
-  // panel is a fact (only the authenticated student can reach this
-  // download). The gate panel is pulled live from the Movement log — it
-  // stays instructional until the gate has actually scanned this pass, then
-  // shows who verified Exit / Re-Entry and when. Re-downloading the pass
-  // after each gate scan refreshes this section with the real record.
+  // Digital signature panels are pulled live from the Movement log and only
+  // appear once Exit has actually been verified at the gate — before that,
+  // this whole section is blank (no placeholder/instructional text), since
+  // there is nothing genuine to show yet. The pass a student re-downloads
+  // after Exit is the one they present at the gate again for Re-Entry, and
+  // downloading once more afterward adds the Entry signature too.
   const hasExit = !!verification?.exit;
   const hasEntry = !!verification?.entry;
-  const panelY = y;
-  const panelW = 90;
-  const panelH = hasExit || hasEntry ? 32 : 26;
-  const leftX = 10;
-  const rightX = 110;
-  const sigLineY = panelY + panelH - 4.5;
-  const sigLabelY = panelY + panelH - 1.4;
 
-  doc.setFillColor(220, 252, 231);
-  doc.setDrawColor(34, 197, 94);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(leftX, panelY, panelW, panelH, 2, 2, "FD");
-  checkBadge(doc, leftX + 6, panelY + 6, 3);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(21, 128, 61);
-  doc.text("STUDENT DIGITAL APPROVAL", leftX + 11, panelY + 7.3);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.3);
-  doc.setTextColor(...DARK);
-  doc.text(`Certified by: ${leave.studentName}`, leftX + 4, panelY + 12.5);
-  doc.setFontSize(6.8);
-  doc.setTextColor(...MUTED);
-  doc.text(`${leave.indexNumber}  |  Downloaded ${new Date().toLocaleString()}`, leftX + 4, panelY + 16.5);
-  doc.setDrawColor(...MUTED);
-  doc.setLineWidth(0.2);
-  doc.line(leftX + 4, sigLineY, leftX + panelW - 4, sigLineY);
-  doc.setFontSize(6.2);
-  doc.text("Physical signature (if additionally required)", leftX + panelW / 2, sigLabelY, { align: "center" });
+  if (hasExit) {
+    const panelY = y;
+    const panelW = 90;
+    const panelH = 32;
+    const leftX = 10;
+    const rightX = 110;
+    const sigLineY = panelY + panelH - 4.5;
+    const sigLabelY = panelY + panelH - 1.4;
 
-  const rightFill: [number, number, number] = hasExit || hasEntry ? [220, 252, 231] : [255, 247, 230];
-  const rightBorder: [number, number, number] = hasExit || hasEntry ? [34, 197, 94] : ORANGE;
-  doc.setFillColor(...rightFill);
-  doc.setDrawColor(...rightBorder);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(rightX, panelY, panelW, panelH, 2, 2, "FD");
+    doc.setFillColor(220, 252, 231);
+    doc.setDrawColor(34, 197, 94);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(leftX, panelY, panelW, panelH, 2, 2, "FD");
+    checkBadge(doc, leftX + 6, panelY + 6, 3);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(21, 128, 61);
+    doc.text("STUDENT DIGITAL APPROVAL", leftX + 11, panelY + 7.3);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    doc.setTextColor(...DARK);
+    doc.text(`Certified by: ${leave.studentName}`, leftX + 4, panelY + 12.5);
+    doc.setFontSize(6.8);
+    doc.setTextColor(...MUTED);
+    doc.text(`${leave.indexNumber}  |  Downloaded ${new Date().toLocaleString()}`, leftX + 4, panelY + 16.5);
+    doc.setDrawColor(...MUTED);
+    doc.setLineWidth(0.2);
+    doc.line(leftX + 4, sigLineY, leftX + panelW - 4, sigLineY);
+    doc.setFontSize(6.2);
+    doc.text("Physical signature (if additionally required)", leftX + panelW / 2, sigLabelY, { align: "center" });
 
-  if (hasExit || hasEntry) {
+    doc.setFillColor(220, 252, 231);
+    doc.setDrawColor(34, 197, 94);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(rightX, panelY, panelW, panelH, 2, 2, "FD");
     checkBadge(doc, rightX + 6, panelY + 6, 3);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
@@ -371,27 +373,21 @@ export async function downloadLeavePassPdf(
     doc.text("GATE DIGITALLY VERIFIED", rightX + 11, panelY + 7.3);
     let ly = panelY + 12.5;
     doc.setFont("helvetica", "normal");
-    if (verification?.exit) {
-      doc.setFontSize(6.8);
-      doc.setTextColor(...DARK);
-      doc.text(`Exit verified by: ${verification.exit.by}`, rightX + 4, ly);
-      doc.setFontSize(6.2);
-      doc.setTextColor(...MUTED);
-      doc.text(new Date(verification.exit.at).toLocaleString(), rightX + 4, ly + 3.6);
-    } else {
-      doc.setFontSize(6.5);
-      doc.setTextColor(...MUTED);
-      doc.text("Exit: not yet verified at gate", rightX + 4, ly);
-    }
+    doc.setFontSize(6.8);
+    doc.setTextColor(...DARK);
+    doc.text(`Exit verified by: ${verification!.exit!.by}`, rightX + 4, ly);
+    doc.setFontSize(6.2);
+    doc.setTextColor(...MUTED);
+    doc.text(new Date(verification!.exit!.at).toLocaleString(), rightX + 4, ly + 3.6);
     ly += 8;
-    if (verification?.entry) {
+    if (hasEntry) {
       doc.setFontSize(6.8);
       doc.setTextColor(...DARK);
-      doc.text(`Entry verified by: ${verification.entry.by}`, rightX + 4, ly);
+      doc.text(`Entry verified by: ${verification!.entry!.by}`, rightX + 4, ly);
       doc.setFontSize(6.2);
       doc.setTextColor(...MUTED);
-      doc.text(new Date(verification.entry.at).toLocaleString(), rightX + 4, ly + 3.6);
-    } else if (verification?.exit) {
+      doc.text(new Date(verification!.entry!.at).toLocaleString(), rightX + 4, ly + 3.6);
+    } else {
       doc.setFontSize(6.5);
       doc.setTextColor(...MUTED);
       doc.text("Re-entry verification pending at the gate.", rightX + 4, ly);
@@ -404,32 +400,9 @@ export async function downloadLeavePassPdf(
     doc.text("Re-download after each gate scan to refresh this record", rightX + panelW / 2, sigLabelY, {
       align: "center",
     });
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...NAVY);
-    doc.text("GATE VERIFICATION - EXIT & RE-ENTRY", rightX + 4, panelY + 5.5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...MUTED);
-    doc.text(
-      doc.splitTextToSize(
-        "Not valid on signature alone. Gate staff must scan the QR / enter the code above in the OLMS Gate Portal separately at Exit and at Re-Entry, and confirm the live photo match, before allowing movement.",
-        panelW - 8
-      ),
-      rightX + 4,
-      panelY + 9.3
-    );
-    doc.setDrawColor(...MUTED);
-    doc.setLineWidth(0.2);
-    doc.line(rightX + 4, sigLineY, rightX + panelW - 4, sigLineY);
-    doc.setFontSize(6.2);
-    doc.text("Staff name / signature (if additionally required)", rightX + panelW / 2, sigLabelY, {
-      align: "center",
-    });
-  }
 
-  y += panelH + 8;
+    y += panelH + 8;
+  }
 
   try {
     doc.saveGraphicsState();

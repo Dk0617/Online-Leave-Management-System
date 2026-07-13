@@ -6,7 +6,7 @@ const sddSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
     name: { type: String, required: true },
-    email: String,
+    email: { type: String, index: true },
     title: { type: String, default: "Senior Deputy Dean" },
     mustChangePassword: { type: Boolean, default: true },
   },

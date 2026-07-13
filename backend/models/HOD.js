@@ -7,7 +7,7 @@ const hodSchema = new mongoose.Schema(
     password: { type: String, required: true },
     name: { type: String, required: true },
     department: String,
-    email: String,
+    email: { type: String, index: true },
     designation: { type: String, default: "Head of Department" },
     mustChangePassword: { type: Boolean, default: true },
   },

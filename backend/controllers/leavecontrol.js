@@ -80,7 +80,10 @@ export const hod = buildRoleHandlers({
   scopeFilter: async (req) => ({ hodId: req.user.id }),
 });
 
-// ── Squadron Commander — Cadet leaves, only after Troop has approved ─
+// ── Squadron Commander — Cadet leaves, only after Troop has approved.
+// Academic Leave never reaches Squadron at all (Troop Commander alone
+// decides it — sqnStatus sits permanently at "N/A" for it, so it never
+// matches the base "sqnStatus: Pending" filter below). ──────────────────
 export const squadran = buildRoleHandlers({
   role: "SQUADRAN",
   statusField: "sqnStatus",
@@ -90,13 +93,16 @@ export const squadran = buildRoleHandlers({
   pendingExtraFilter: { troopStatus: "Approved" },
 });
 
-// ── Senior Deputy Dean — every Cadet, no per-SDD ownership ──────────
+// ── Senior Deputy Dean — every Cadet, no per-SDD ownership. Scoped to
+// CADET explicitly: sddStatus sits at "N/A" (not "Pending") for every Day
+// Scholar leave, which would otherwise leak into the $ne-"Pending" history
+// query below. ────────────────────────────────────────────────────────
 export const sdd = buildRoleHandlers({
   role: "SDD",
   statusField: "sddStatus",
   commentField: "sddComment",
   atField: "sddApprovedAt",
-  scopeFilter: async () => ({}),
+  scopeFilter: async () => ({ studentType: "CADET" }),
   pendingExtraFilter: { troopStatus: "Approved", sqnStatus: "Approved" },
 });
 
@@ -106,8 +112,12 @@ export const sddOverview = async (req, res) => {
 };
 
 export const sddPipeline = async (req, res) => {
+  // sddStatus stays "N/A" for Cadet Academic Leave (Troop Commander alone
+  // decides it) — excluded here so the "In Progress" count doesn't include
+  // leaves that will never actually reach SDD.
   const leaves = await Leave.find({
     studentType: "CADET",
+    sddStatus: { $ne: "N/A" },
     $or: [{ troopStatus: "Pending" }, { sqnStatus: "Pending" }],
   });
   res.json(leaves);
@@ -149,7 +159,7 @@ export const troopPending = async (req, res) => {
 
 export const troopHistory = async (req, res) => {
   const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({ ...scope, troopStatus: { $ne: "Pending" } }).sort({
+  const leaves = await Leave.find({ ...scope, troopStatus: { $in: ["Approved", "Rejected"] } }).sort({
     createdAt: -1,
   });
   res.json(leaves);

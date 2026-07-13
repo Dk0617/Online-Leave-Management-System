@@ -9,7 +9,7 @@ const studentSchema = new mongoose.Schema(
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     department: String,
-    email: String,
+    email: { type: String, index: true },
     mobile: String,
     studentType: {
       type: String,

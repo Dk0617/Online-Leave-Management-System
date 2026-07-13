@@ -6,9 +6,9 @@ import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { isApproved, isRejected } from "@/src/api";
+import { isApproved, isGateEligible, isRejected, requiresAttachment } from "@/src/api";
 import { downloadLeavePassPdf } from "@/src/pdf";
-import { DOC_REQUIRED_TYPES, LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "./student.module.css";
 
 function statusBadge(status: string) {
@@ -18,7 +18,7 @@ function statusBadge(status: string) {
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
   const { user } = useAuth();
-  const { leaves } = portal;
+  const { leaves, error, refresh } = portal;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   const isCadet = user?.studentType === "CADET";
@@ -34,6 +34,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load your leaves: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
       <div className={`${styles.flowBanner} ${isCadet ? "cadet" : ""}`}>
         <div className="text-xl">{isCadet ? "🎖️" : "🏠"}</div>
         <div>
@@ -45,21 +53,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             : "Your applications go → HOD → Troop Commander → PDF download available once both approve."}
         </div>
       </div>
-
-      {approved > 0 && (
-        <div className="mb-5 flex items-center gap-3 rounded-xl border border-[rgba(34,197,94,0.35)] bg-[rgba(34,197,94,0.1)] px-4 py-3 text-sm">
-          <span className="text-xl">🎉</span>
-          <span className="text-[var(--white)]">
-            <strong>
-              {approved} leave{approved > 1 ? "s" : ""} fully approved
-            </strong>{" "}
-            — download your official Leave Pass below and show it (with the QR/code) at the gate.
-            {portal.profile?.email
-              ? " A confirmation email was also sent to you when it was approved."
-              : " Ask admin to add your email to your account to also get an email the moment this happens."}
-          </span>
-        </div>
-      )}
 
       <div className={styles.statGrid}>
         <StatTile icon="📋" label="Total Applied" value={total} />
@@ -131,13 +124,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     >
                       View
                     </button>
-                    {isApproved(l) && (
+                    {isGateEligible(l) ? (
                       <button
                         onClick={() => handleDownloadPdf(l)}
                         className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
                       >
                         📥 PDF
                       </button>
+                    ) : (
+                      isApproved(l) &&
+                      l.type === "Academic Leave" && (
+                        <span className="text-[10px] text-[var(--muted)]">
+                          Kept on file with {isCadet ? "Troop Commander" : "HOD"}
+                        </span>
+                      )
                     )}
                   </td>
                 </tr>
@@ -151,7 +151,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         <LeaveDetailModal
           leave={selected}
           onClose={() => setSelected(null)}
-          onDownloadPdf={isApproved(selected) ? () => handleDownloadPdf(selected) : undefined}
+          onDownloadPdf={isGateEligible(selected) ? () => handleDownloadPdf(selected) : undefined}
         />
       )}
     </div>
@@ -200,7 +200,8 @@ export function ApplyLeave({
   const [submitting, setSubmitting] = useState(false);
 
   const isEmergency = type === "Emergency Leave";
-  const docRequired = type ? DOC_REQUIRED_TYPES.includes(type) : false;
+  const isAcademic = type === "Academic Leave";
+  const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   const today = new Date().toISOString().split("T")[0];
 
   async function handleSubmit(e: FormEvent) {
@@ -299,6 +300,18 @@ export function ApplyLeave({
             <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
               🚨 <strong>Emergency Leave</strong> is routed immediately to your first-level approver and
               prioritized ahead of normal requests. Use this only for genuine emergencies.
+            </div>
+          )}
+
+          {isAcademic && (
+            <div className="rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.1)] px-3.5 py-2.5 text-xs text-[var(--sky)]">
+              ℹ️ <strong>Academic Leave</strong> automatically creates a linked <strong>Personal Leave</strong>{" "}
+              for the same dates — you only need to submit this one form. Academic Leave is kept on file
+              with your {isCadet ? "Troop Commander" : "HOD"} (no downloadable pass); the linked Personal
+              Leave is what you&apos;ll use to exit/re-enter campus once approved.
+              {isCadet
+                ? " For cadets, Academic Leave is approved by your Troop Commander alone (no Squadron, no SDD, no HOD)."
+                : " For Day Scholars, Academic Leave still goes through HOD then Troop Commander as usual."}
             </div>
           )}
 

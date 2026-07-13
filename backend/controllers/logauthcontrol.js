@@ -27,27 +27,35 @@ export const login = async (req, res) => {
       .json({ message: "Username and password are required" });
   }
 
-  for (const [role, Model] of Object.entries(ROLE_MODELS)) {
-    const user = await Model.findOne({ username });
-    if (!user) continue;
+  // Every login checks all 7 role collections for this username — done in
+  // parallel (same first-match order as before) instead of one at a time,
+  // since this runs on every single login attempt in the whole system.
+  const matches = await Promise.all(
+    Object.entries(ROLE_MODELS).map(async ([role, Model]) => {
+      const user = await Model.findOne({ username });
+      return user ? { role, user } : null;
+    })
+  );
+  const found = matches.find(Boolean);
+  if (!found) {
+    return res.status(401).json({ message: "Invalid username or password" });
+  }
+  const { role, user } = found;
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      await writeAudit(role, username, "login_failed", "");
-      return res.status(401).json({ message: "Invalid username or password" });
-    }
-
-    const token = signToken(user, role);
-
-    const { password: _pw, ...safeUser } = user.toObject();
-    await writeAudit(role, username, "login_success", "");
-    return res.json({
-      token,
-      user: { ...safeUser, role, mustChangePassword: !!user.mustChangePassword },
-    });
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    await writeAudit(role, username, "login_failed", "");
+    return res.status(401).json({ message: "Invalid username or password" });
   }
 
-  return res.status(401).json({ message: "Invalid username or password" });
+  const token = signToken(user, role);
+
+  const { password: _pw, ...safeUser } = user.toObject();
+  await writeAudit(role, username, "login_success", "");
+  return res.json({
+    token,
+    user: { ...safeUser, role, mustChangePassword: !!user.mustChangePassword },
+  });
 };
 
 // Shared by every role — looks up the caller's own model via their token.
@@ -100,26 +108,31 @@ export const requestOtp = async (req, res) => {
   const email = (req.body.email || "").trim().toLowerCase();
   if (!email) return res.status(400).json({ message: "Email is required" });
 
-  for (const [role, Model] of Object.entries(ROLE_MODELS)) {
-    const user = await Model.findOne({ email });
-    if (!user) continue;
-
-    const code = generateOtp();
-    const codeHash = await bcrypt.hash(code, 10);
-    await OtpCode.create({
-      email,
-      codeHash,
-      role,
-      userId: user._id,
-      expiresAt: new Date(Date.now() + OTP_TTL_MS),
-    });
-
-    await sendOtpEmail(email, code);
-    await writeAudit(role, user.username, "otp_requested", "");
-    return res.json({ message: "A login code has been sent to your email." });
+  const matches = await Promise.all(
+    Object.entries(ROLE_MODELS).map(async ([role, Model]) => {
+      const user = await Model.findOne({ email });
+      return user ? { role, user } : null;
+    })
+  );
+  const found = matches.find(Boolean);
+  if (!found) {
+    return res.status(404).json({ message: "No account is registered with that email." });
   }
+  const { role, user } = found;
 
-  return res.status(404).json({ message: "No account is registered with that email." });
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  await OtpCode.create({
+    email,
+    codeHash,
+    role,
+    userId: user._id,
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  });
+
+  await sendOtpEmail(email, code);
+  await writeAudit(role, user.username, "otp_requested", "");
+  res.json({ message: "A login code has been sent to your email." });
 };
 
 export const verifyOtp = async (req, res) => {

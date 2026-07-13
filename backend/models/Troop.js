@@ -6,7 +6,7 @@ const troopSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
     name: { type: String, required: true },
-    email: String,
+    email: { type: String, index: true },
     intakes: { type: [String], default: [] },
     designation: { type: String, default: "Troop Commander" },
     mustChangePassword: { type: Boolean, default: true },

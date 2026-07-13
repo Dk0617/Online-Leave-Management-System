@@ -8,9 +8,11 @@ export function useSquadranPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [p, h] = await Promise.all([
         api.get<Record<string, unknown>[]>("/squadran/leaves/pending"),
@@ -18,6 +20,8 @@ export function useSquadranPortal() {
       ]);
       setPending(p.map(normalizeLeave));
       setHistory(h.map(normalizeLeave));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load Squadron data");
     } finally {
       setLoading(false);
     }
@@ -36,5 +40,5 @@ export function useSquadranPortal() {
     await refresh();
   }
 
-  return { pending, history, loading, refresh, approve, reject };
+  return { pending, history, loading, error, refresh, approve, reject };
 }
