@@ -261,6 +261,15 @@ export function ApplyLeave({
       setError("End date/time must be after start date/time.");
       return;
     }
+    if (!isEmergency) {
+      const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+      if (new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
+        setError(
+          "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that."
+        );
+        return;
+      }
+    }
     if (file && file.size > MAX_FILE_BYTES) {
       setError("File too large (max 2MB). Please choose a smaller file.");
       return;

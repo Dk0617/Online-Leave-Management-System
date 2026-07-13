@@ -2,13 +2,16 @@ import nodemailer from "nodemailer";
 
 // If EMAIL_USER/EMAIL_PASS aren't set in .env, we can't actually send mail —
 // fall back to printing the code in the backend terminal so local dev/testing
-// still works without any email setup. Set both env vars (a Gmail address +
-// an "App Password" from Google Account > Security > App Passwords) to send
-// real emails.
+// still works without any email setup. Set both env vars (the KDU email
+// address on Microsoft 365/Outlook + its account password, or an app
+// password if the account has MFA/modern-auth app passwords enabled) to
+// send real emails via KDU's own mail server.
 const transporter =
   process.env.EMAIL_USER && process.env.EMAIL_PASS
     ? nodemailer.createTransport({
-        service: "gmail",
+        host: "smtp.office365.com",
+        port: 587,
+        secure: false, // STARTTLS on port 587
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       })
     : null;

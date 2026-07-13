@@ -109,6 +109,20 @@ export const applyLeave = async (req, res) => {
     return res.status(400).json({ message: "Attachment too large (max 2MB)" });
   }
 
+  // Every leave type except Emergency Leave must be submitted at least 2
+  // days ahead of the leave's own start date/time — Emergency Leave is the
+  // one deliberate exception, since it exists precisely for same-day needs.
+  if (type !== "Emergency Leave") {
+    const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+    const startDateTime = new Date(`${startDate}T${startTime}`);
+    if (startDateTime.getTime() - Date.now() < MIN_NOTICE_MS) {
+      return res.status(400).json({
+        message:
+          "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.",
+      });
+    }
+  }
+
   const isCadet = student.studentType === "CADET";
   const isEmergency = type === "Emergency Leave";
   const isAcademic = type === "Academic Leave";
