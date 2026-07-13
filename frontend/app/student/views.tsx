@@ -244,7 +244,9 @@ export function ApplyLeave({
   const isAcademic = type === "Academic Leave";
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   const today = new Date().toISOString().split("T")[0];
-
+  const minStartDate = isEmergency
+    ? today
+    : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const missing: string[] = [];
@@ -259,6 +261,10 @@ export function ApplyLeave({
     if (docRequired && !file) missing.push("Supporting Document");
     if (missing.length) {
       setError(`Please complete: ${missing.join(", ")}`);
+      return;
+    }
+   if (!isEmergency && startDate && startDate < minStartDate) {
+      setError("Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.");
       return;
     }
     if (new Date(`${endDate}T${endTime}`) < new Date(`${startDate}T${startTime}`)) {
