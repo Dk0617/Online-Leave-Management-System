@@ -253,6 +253,10 @@ export function ApplyLeave({
       setError(`Please complete: ${missing.join(", ")}`);
       return;
     }
+   if (!isEmergency && startDate && startDate < minStartDate) {
+      setError("Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.");
+      return;
+    }
     if (new Date(`${endDate}T${endTime}`) < new Date(`${startDate}T${startTime}`)) {
       setError("End date/time must be after start date/time.");
       return;
