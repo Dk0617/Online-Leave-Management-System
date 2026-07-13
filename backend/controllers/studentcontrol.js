@@ -27,12 +27,16 @@ function generateVerifyCode() {
 
 // Academic Leave always requires a companion Personal Leave (same dates) —
 // for Day Scholars this is a standing policy; for Cadets it covers the
-// "going home during a lecture-day period" case. Uses each student's
-// normal full routing for Personal Leave (never the single-stage academic
-// shortcut, which only applies to the Academic Leave itself). Exempt from
-// its own attachment rule since there's no separate upload step for it —
-// it reuses whatever the student attached to the Academic Leave, if any.
-async function createLinkedPersonalLeave(primary, student) {
+// "going home during a lecture-day period" case. Academic Leave and its
+// linked Personal Leave are ONE approval procedure, not two: the Personal
+// Leave is routed through the exact same approvers, in the exact same
+// order, as the Academic Leave itself (HOD -> Squadron for Cadets, HOD ->
+// Troop for Day Scholars) — it does not go through the normal full chain
+// (Troop -> Squadron -> SDD) that a standalone Personal Leave would.
+// Exempt from its own attachment rule since there's no separate upload
+// step for it — it reuses whatever the student attached to the Academic
+// Leave, if any.
+async function createLinkedPersonalLeave(primary, student, hodIdForLeave) {
   const isCadet = student.studentType === "CADET";
   const linked = await Leave.create({
     studentId: student._id,
@@ -41,7 +45,7 @@ async function createLinkedPersonalLeave(primary, student) {
     department: student.department,
     studentType: student.studentType,
     intake: student.intake,
-    hodId: isCadet ? undefined : student.hodId,
+    hodId: hodIdForLeave,
     troopIds: student.troopIds,
     sqnId: isCadet ? student.sqnId : undefined,
     type: "Personal Leave",
@@ -56,10 +60,10 @@ async function createLinkedPersonalLeave(primary, student) {
     appliedDate: primary.appliedDate,
     verifyCode: generateVerifyCode(),
     linkedLeaveId: primary._id,
-    hodStatus: isCadet ? "N/A" : "Pending",
-    troopStatus: "Pending",
+    hodStatus: "Pending",
+    troopStatus: isCadet ? "N/A" : "Pending",
     sqnStatus: isCadet ? "Pending" : "N/A",
-    sddStatus: isCadet ? "Pending" : "N/A",
+    sddStatus: "N/A",
   });
   primary.linkedLeaveId = linked._id;
   await primary.save();
@@ -157,7 +161,7 @@ export const applyLeave = async (req, res) => {
 
   let linkedLeave = null;
   if (isAcademic) {
-    linkedLeave = await createLinkedPersonalLeave(leave, student);
+    linkedLeave = await createLinkedPersonalLeave(leave, student, hodIdForLeave);
   }
 
   await writeAudit(
@@ -170,10 +174,9 @@ export const applyLeave = async (req, res) => {
 };
 
 export const myLeaves = async (req, res) => {
-  // Ordered by the sequence they were actually applied in (oldest first),
-  // not newest-first — so the list reads top-to-bottom as a chronological
-  // history of applications rather than jumping around.
-  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: 1 });
+  // Newest application first (descending by submission date/time) — the
+  // most recently applied leave always appears at the top of the dashboard.
+  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: -1 });
   res.json(leaves);
 };
 

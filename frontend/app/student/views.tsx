@@ -29,9 +29,19 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   const isCadet = user?.studentType === "CADET";
-  const total = leaves.length;
-  const approved = leaves.filter(isApproved).length;
-  const rejected = leaves.filter(isRejected).length;
+
+  // Academic Leave and its auto-created Personal Leave are one application,
+  // not two — the Personal Leave companion is hidden as its own row (and
+  // excluded from the stat counts below); its status/PDF is folded into
+  // the Academic Leave's row instead.
+  const visibleLeaves = leaves.filter((l) => !(l.type === "Personal Leave" && l.linkedLeaveId));
+  function companionOf(l: LeaveRequest): LeaveRequest | undefined {
+    return l.linkedLeaveId ? leaves.find((x) => x.id === l.linkedLeaveId) : undefined;
+  }
+
+  const total = visibleLeaves.length;
+  const approved = visibleLeaves.filter(isApproved).length;
+  const rejected = visibleLeaves.filter(isRejected).length;
   const pending = total - approved - rejected;
 
   async function handleDownloadPdf(leave: LeaveRequest) {
@@ -93,66 +103,74 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             </tr>
           </thead>
           <tbody>
-            {leaves.length === 0 ? (
+            {visibleLeaves.length === 0 ? (
               <tr>
                 <td colSpan={isCadet ? 9 : 7} className="py-8 text-center text-[var(--muted)]">
                   No applications yet.
                 </td>
               </tr>
             ) : (
-              leaves.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.appliedDate}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  {isCadet ? (
-                    // Cadet Academic Leave routes HOD -> Squadron only (Troop
-                    // and SDD stay "N/A" — shown as a dash, not a badge).
-                    // Every other cadet leave type routes Troop -> Squadron ->
-                    // SDD (HOD stays "N/A" for those).
-                    <>
-                      <td>{statusOrDash(l.hodStatus)}</td>
-                      <td>{statusOrDash(l.troopStatus)}</td>
-                      <td>{statusOrDash(l.sqnStatus)}</td>
-                      <td>{statusOrDash(l.sddStatus)}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td>{statusOrDash(l.hodStatus)}</td>
-                      <td>{statusOrDash(l.troopStatus)}</td>
-                    </>
-                  )}
-                  <td className="space-x-1.5 whitespace-nowrap">
-                    <button
-                      onClick={() => setSelected(l)}
-                      className="rounded-md border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--sky)]"
-                    >
-                      View
-                    </button>
-                    {isGateEligible(l) ? (
-                      <button
-                        onClick={() => handleDownloadPdf(l)}
-                        className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
-                      >
-                        📥 PDF
-                      </button>
+              visibleLeaves.map((l) => {
+                const companion = companionOf(l);
+                // The Academic Leave record itself never becomes gate-eligible
+                // (by design), but its linked Personal Leave does — that's the
+                // one whose PDF actually gets downloaded for this merged row.
+                const pdfSource = companion && isGateEligible(companion) ? companion : isGateEligible(l) ? l : null;
+                return (
+                  <tr key={l.id}>
+                    <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
+                    <td>
+                      {LEAVE_TYPE_LABELS[l.type]}
+                      {companion && " + Personal Leave"}
+                      {l.priority === "emergency" && (
+                        <span className="ml-1">
+                          <Badge tone="red">Emergency</Badge>
+                        </span>
+                      )}
+                    </td>
+                    <td>{l.startDate}</td>
+                    <td>{l.endDate}</td>
+                    {isCadet ? (
+                      // Cadet Academic Leave routes HOD -> Squadron only (Troop
+                      // and SDD stay "N/A" — shown as a dash, not a badge).
+                      // Every other cadet leave type routes Troop -> Squadron ->
+                      // SDD (HOD stays "N/A" for those).
+                      <>
+                        <td>{statusOrDash(l.hodStatus)}</td>
+                        <td>{statusOrDash(l.troopStatus)}</td>
+                        <td>{statusOrDash(l.sqnStatus)}</td>
+                        <td>{statusOrDash(l.sddStatus)}</td>
+                      </>
                     ) : (
-                      isApproved(l) &&
-                      l.type === "Academic Leave" && (
-                        <span className="text-[10px] text-[var(--muted)]">Kept on file with Troop Commander</span>
-                      )
+                      <>
+                        <td>{statusOrDash(l.hodStatus)}</td>
+                        <td>{statusOrDash(l.troopStatus)}</td>
+                      </>
                     )}
-                  </td>
-                </tr>
-              ))
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <button
+                        onClick={() => setSelected(l)}
+                        className="rounded-md border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--sky)]"
+                      >
+                        View
+                      </button>
+                      {pdfSource ? (
+                        <button
+                          onClick={() => handleDownloadPdf(pdfSource)}
+                          className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
+                        >
+                          📥 PDF
+                        </button>
+                      ) : (
+                        isApproved(l) &&
+                        l.type === "Academic Leave" && (
+                          <span className="text-[10px] text-[var(--muted)]">Kept on file with Troop Commander</span>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -162,7 +180,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         <LeaveDetailModal
           leave={selected}
           onClose={() => setSelected(null)}
-          onDownloadPdf={isGateEligible(selected) ? () => handleDownloadPdf(selected) : undefined}
+          onDownloadPdf={(() => {
+            const companion = companionOf(selected);
+            const pdfSource = companion && isGateEligible(companion) ? companion : isGateEligible(selected) ? selected : null;
+            return pdfSource ? () => handleDownloadPdf(pdfSource) : undefined;
+          })()}
         />
       )}
     </div>
