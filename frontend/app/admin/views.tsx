@@ -167,7 +167,11 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
 
   async function handleDelete(intakeCode: string) {
     if (!confirm(`Delete Intake ${intakeCode}? This will not remove students already assigned to it.`)) return;
-    await removeIntake(intakeCode);
+    try {
+      await removeIntake(intakeCode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete intake");
+    }
   }
 
   return (
@@ -367,7 +371,11 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this student account?")) return;
-    await removeStudent(id);
+    try {
+      await removeStudent(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete student");
+    }
   }
 
   return (
@@ -633,7 +641,11 @@ export function StaffRole({
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this account?")) return;
-    await portal.removeStaff(role, id);
+    try {
+      await portal.removeStaff(role, id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete account");
+    }
   }
 
   return (
@@ -790,7 +802,11 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this account?")) return;
-    await removeTroop(id);
+    try {
+      await removeTroop(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete troop commander");
+    }
   }
 
   return (
@@ -945,7 +961,7 @@ export function PasswordChanges({ portal }: { portal: ReturnType<typeof useAdmin
                       <Button
                         variant="secondary"
                         className="!px-2.5 !py-1 !text-[11px]"
-                        onClick={() => markNotificationRead(n.id)}
+                        onClick={() => markNotificationRead(n.id).catch(() => {})}
                       >
                         Mark read
                       </Button>
@@ -966,12 +982,17 @@ const ROLE_OPTIONS = ["", "STUDENT", "HOD", "TROOP", "SQUADRAN", "SDD", "GATE", 
 export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const { audit, clearAuditLog } = portal;
   const [roleFilter, setRoleFilter] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const filtered = roleFilter ? audit.filter((a) => a.role === roleFilter) : audit;
 
   async function handleClear() {
     if (!confirm("Clear the entire audit log? This cannot be undone.")) return;
-    await clearAuditLog();
+    try {
+      await clearAuditLog();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear audit log");
+    }
   }
 
   return (
@@ -993,6 +1014,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
           Clear Log
         </Button>
       </div>
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
       <div className="overflow-x-auto">
         <table className={styles.table}>
           <thead>

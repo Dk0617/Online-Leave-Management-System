@@ -434,13 +434,21 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
       return;
     }
     if (!confirm("Remove your profile photo?")) return;
-    await updatePhoto(null);
-    setMessage("Photo removed.");
+    try {
+      await updatePhoto(null);
+      setMessage("Photo removed.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to remove photo");
+    }
   }
 
   async function handleSave() {
-    await updateProfile({ firstName, lastName, email, mobile });
-    setMessage("Profile saved!");
+    try {
+      await updateProfile({ firstName, lastName, email, mobile });
+      setMessage("Profile saved!");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to save profile");
+    }
   }
 
   return (

@@ -52,11 +52,39 @@ export function ApprovalActions({
   onApprove,
   onReject,
 }: {
-  onApprove: () => void;
-  onReject: (remarks: string) => void;
+  onApprove: () => Promise<void>;
+  onReject: (remarks: string) => Promise<void>;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [remarks, setRemarks] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleApprove() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onApprove();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReject() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onReject(remarks.trim());
+      setRejecting(false);
+      setRemarks("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (rejecting) {
     return (
@@ -69,29 +97,36 @@ export function ApprovalActions({
           className="w-full rounded-lg border border-[var(--border)] bg-[var(--card2)] px-2 py-1.5 text-xs text-[var(--white)] outline-none focus:border-[var(--sky)]"
         />
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setRejecting(false)}>
+          <Button
+            variant="secondary"
+            disabled={submitting}
+            onClick={() => {
+              setRejecting(false);
+              setError(null);
+            }}
+          >
             Cancel
           </Button>
-          <Button
-            variant="danger"
-            disabled={!remarks.trim()}
-            onClick={() => onReject(remarks.trim())}
-          >
-            Confirm Reject
+          <Button variant="danger" disabled={!remarks.trim() || submitting} onClick={handleReject}>
+            {submitting ? "Rejecting…" : "Confirm Reject"}
           </Button>
         </div>
+        {error && <p className="text-[11px] text-[var(--err)]">{error}</p>}
       </div>
     );
   }
 
   return (
-    <div className="flex gap-2">
-      <Button variant="danger" onClick={() => setRejecting(true)}>
-        Reject
-      </Button>
-      <Button variant="success" onClick={onApprove}>
-        Approve
-      </Button>
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-2">
+        <Button variant="danger" disabled={submitting} onClick={() => setRejecting(true)}>
+          Reject
+        </Button>
+        <Button variant="success" disabled={submitting} onClick={handleApprove}>
+          {submitting ? "Approving…" : "Approve"}
+        </Button>
+      </div>
+      {error && <p className="w-56 text-[11px] text-[var(--err)]">{error}</p>}
     </div>
   );
 }

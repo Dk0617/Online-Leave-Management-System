@@ -159,6 +159,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   const [loading, setLoading] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -180,10 +181,14 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   async function runVerify(rawQuery: string, viaMode: "code" | "index") {
     if (!rawQuery.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const res =
         viaMode === "code" ? await verifyByCode(rawQuery.trim()) : await verify(rawQuery.trim().toUpperCase());
       setResult(res);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof Error ? err.message : "Failed to verify");
     } finally {
       setLoading(false);
     }
@@ -203,8 +208,12 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   async function quickLog(direction: "Exit" | "Entry") {
     if (!result?.leave) return;
     const leave = result.leave as unknown as LeaveRequest;
-    await logMovement({ indexNumber: leave.indexNumber, direction, leaveId: leave.id, notes: "Verified at gate" });
-    await handleVerify();
+    try {
+      await logMovement({ indexNumber: leave.indexNumber, direction, leaveId: leave.id, notes: "Verified at gate" });
+      await handleVerify();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to log movement");
+    }
   }
 
   return (
@@ -264,6 +273,8 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
           🔍 Verify
         </Button>
       </div>
+
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
 
       {result && (
         <div
@@ -510,10 +521,15 @@ export function LogMovement({ portal }: { portal: ReturnType<typeof useGatePorta
 
 export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { movements, clearMovementLog } = portal;
+  const [error, setError] = useState<string | null>(null);
 
   async function handleClear() {
     if (!confirm("Clear all movement logs?")) return;
-    await clearMovementLog();
+    try {
+      await clearMovementLog();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear movement log");
+    }
   }
 
   return (
@@ -524,6 +540,7 @@ export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePorta
           Clear Log
         </Button>
       </div>
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
