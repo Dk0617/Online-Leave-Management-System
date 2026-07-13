@@ -16,6 +16,13 @@ function statusBadge(status: string) {
   return <Badge tone={tone}>{status}</Badge>;
 }
 
+// "N/A" means that actor isn't part of this leave's routing at all (e.g.
+// Troop/SDD for a cadet's Academic Leave) — shown as a plain dash instead
+// of a badge, so it reads as "not applicable" rather than "still pending".
+function statusOrDash(status: string) {
+  return status === "N/A" ? <span className="text-[var(--muted)]">—</span> : statusBadge(status);
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
   const { user } = useAuth();
   const { leaves, error, refresh } = portal;
@@ -71,6 +78,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
               <th>To</th>
               {isCadet ? (
                 <>
+                  <th>HOD</th>
                   <th>Troop Commander</th>
                   <th>Squadron Commander</th>
                   <th>Senior Deputy Dean</th>
@@ -87,7 +95,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
           <tbody>
             {leaves.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
+                <td colSpan={isCadet ? 9 : 7} className="py-8 text-center text-[var(--muted)]">
                   No applications yet.
                 </td>
               </tr>
@@ -106,30 +114,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   {isCadet ? (
-                    l.troopStatus === "N/A" ? (
-                      // Academic Leave for cadets: HOD -> Squadron only, Troop
-                      // and SDD are never involved — show HOD's status (the
-                      // real first stage) instead of a meaningless "N/A" where
-                      // Troop's column would otherwise be.
-                      <>
-                        <td>
-                          <div className="mb-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">HOD</div>
-                          {statusBadge(l.hodStatus)}
-                        </td>
-                        <td>{statusBadge(l.sqnStatus)}</td>
-                        <td className="text-[var(--muted)]">—</td>
-                      </>
-                    ) : (
-                      <>
-                        <td>{statusBadge(l.troopStatus)}</td>
-                        <td>{statusBadge(l.sqnStatus)}</td>
-                        <td>{statusBadge(l.sddStatus)}</td>
-                      </>
-                    )
+                    // Cadet Academic Leave routes HOD -> Squadron only (Troop
+                    // and SDD stay "N/A" — shown as a dash, not a badge).
+                    // Every other cadet leave type routes Troop -> Squadron ->
+                    // SDD (HOD stays "N/A" for those).
+                    <>
+                      <td>{statusOrDash(l.hodStatus)}</td>
+                      <td>{statusOrDash(l.troopStatus)}</td>
+                      <td>{statusOrDash(l.sqnStatus)}</td>
+                      <td>{statusOrDash(l.sddStatus)}</td>
+                    </>
                   ) : (
                     <>
-                      <td>{statusBadge(l.hodStatus)}</td>
-                      <td>{statusBadge(l.troopStatus)}</td>
+                      <td>{statusOrDash(l.hodStatus)}</td>
+                      <td>{statusOrDash(l.troopStatus)}</td>
                     </>
                   )}
                   <td className="space-x-1.5 whitespace-nowrap">

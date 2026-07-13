@@ -170,7 +170,10 @@ export const applyLeave = async (req, res) => {
 };
 
 export const myLeaves = async (req, res) => {
-  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: -1 });
+  // Ordered by the sequence they were actually applied in (oldest first),
+  // not newest-first — so the list reads top-to-bottom as a chronological
+  // history of applications rather than jumping around.
+  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: 1 });
   res.json(leaves);
 };
 
