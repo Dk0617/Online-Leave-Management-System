@@ -168,6 +168,7 @@ export const troopPendingDayScholar = async (req, res) => {
   const scope = await troopScopeFilter(req);
   const leaves = await Leave.find({
     ...scope,
+    ...HIDE_AUTO_PERSONAL,
     studentType: "DAY_SCHOLAR",
     hodStatus: "Approved",
     troopStatus: "Pending",
@@ -177,7 +178,7 @@ export const troopPendingDayScholar = async (req, res) => {
 
 export const troopPendingCadet = async (req, res) => {
   const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({ ...scope, studentType: "CADET", troopStatus: "Pending" });
+  const leaves = await Leave.find({ ...scope, ...HIDE_AUTO_PERSONAL, studentType: "CADET", troopStatus: "Pending" });
   res.json(sortByPriorityThenNewest(leaves));
 };
 
@@ -186,7 +187,10 @@ export const troopPending = async (req, res) => {
   const leaves = await Leave.find({
     ...scope,
     troopStatus: "Pending",
-    $or: [{ studentType: "CADET" }, { studentType: "DAY_SCHOLAR", hodStatus: "Approved" }],
+    $and: [
+      HIDE_AUTO_PERSONAL,
+      { $or: [{ studentType: "CADET" }, { studentType: "DAY_SCHOLAR", hodStatus: "Approved" }] },
+    ],
   });
   res.json(sortByPriorityThenNewest(leaves));
 };
@@ -194,7 +198,11 @@ export const troopPending = async (req, res) => {
 export const troopHistory = async (req, res) => {
   // No LeaveDetailModal on the History view — safe to drop the attachment.
   const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({ ...scope, troopStatus: { $in: ["Approved", "Rejected"] } })
+  const leaves = await Leave.find({
+    ...scope,
+    ...HIDE_AUTO_PERSONAL,
+    troopStatus: { $in: ["Approved", "Rejected"] },
+  })
     .select("-attachmentData")
     .sort({ createdAt: -1 });
   res.json(leaves);
