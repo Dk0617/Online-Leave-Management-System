@@ -71,10 +71,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         <div className="text-xl">{isCadet ? "🎖️" : "🏠"}</div>
         <div>
           <strong className="text-[var(--white)]">
-            {isCadet ? "Cadet Leave Flow:" : "Day Scholar Leave Flow:"}
+            {isCadet ? "Officer Cadet Leave Flow:" : "Day Scholar Leave Flow:"}
           </strong>{" "}
           {isCadet
-            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved. (Academic Leave is routed HOD → Squadron Commander instead — see the table below.)"
+            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved. (Academic Leave stops at Squadron Commander instead — see the table below.)"
             : "Your applications go → HOD → Troop Commander → PDF download available once both approve."}
         </div>
       </div>
@@ -120,12 +120,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             ) : (
               visibleLeaves.map((l) => {
                 const companion = companionOf(l);
-                // Prefer the linked Personal Leave's PDF once it's ready (the
-                // properly-routed one); fall back to this leave's own PDF as
-                // soon as the merged application is approved at all, so there
-                // is never a dead end with no PDF offered.
-                const pdfSource =
-                  companion && isGateEligible(companion) ? companion : isApproved(l) ? l : null;
+                // When there's a linked companion (Academic Leave), the PDF can
+                // only ever come from the Personal Leave companion once it's
+                // fully approved — Academic Leave itself is never gate-eligible,
+                // even once its own (shorter) Troop->Squadron chain finishes
+                // ahead of the companion's Troop->Squadron->SDD chain. Only
+                // fall back to the leave's own PDF when there's no companion at
+                // all (i.e. it isn't an Academic Leave to begin with).
+                const pdfSource = companion
+                  ? isGateEligible(companion)
+                    ? companion
+                    : null
+                  : isApproved(l)
+                  ? l
+                  : null;
                 return (
                   <tr key={l.id}>
                     <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
@@ -141,10 +149,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     <td>{l.startDate}</td>
                     <td>{l.endDate}</td>
                     {isCadet ? (
-                      // Cadet Academic Leave routes HOD -> Squadron only (Troop
-                      // and SDD stay "N/A" — shown as a dash, not a badge).
-                      // Every other cadet leave type routes Troop -> Squadron ->
-                      // SDD (HOD stays "N/A" for those).
+                      // Cadets never touch HOD (always "N/A" — shown as a dash).
+                      // Academic Leave routes Troop -> Squadron only (SDD stays
+                      // "N/A"); every other Cadet leave type routes Troop ->
+                      // Squadron -> SDD.
                       <>
                         <td>{statusOrDash(l.hodStatus)}</td>
                         <td>{statusOrDash(l.troopStatus)}</td>
@@ -187,8 +195,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
           onClose={() => setSelected(null)}
           onDownloadPdf={(() => {
             const companion = companionOf(selected);
-            const pdfSource =
-              companion && isGateEligible(companion) ? companion : isApproved(selected) ? selected : null;
+            const pdfSource = companion
+              ? isGateEligible(companion)
+                ? companion
+                : null
+              : isApproved(selected)
+              ? selected
+              : null;
             return pdfSource ? () => handleDownloadPdf(pdfSource, selected) : undefined;
           })()}
         />
@@ -279,6 +292,16 @@ export function ApplyLeave({
         );
         return;
       }
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const [endHour, endMinute] = endTime.split(":").map(Number);
+      if (startHour * 60 + startMinute < 6 * 60) {
+        setError("Leave start time must be 06.00 hrs or later — campus exit is only allowed from 06.00 hrs onward.");
+        return;
+      }
+      if (endHour * 60 + endMinute > 18 * 60) {
+        setError("Leave end time must be 18.00 hrs or earlier — campus entry must be logged by 18.00 hrs.");
+        return;
+      }
     }
     if (file && file.size > MAX_FILE_BYTES) {
       setError("File too large (max 2MB). Please choose a smaller file.");
@@ -325,7 +348,7 @@ export function ApplyLeave({
         <div>
           {isCadet ? (
             <>
-              <strong className="text-[var(--white)]">Cadet flow:</strong> Troop Commander → Squadron Commander → SDD.
+              <strong className="text-[var(--white)]">Officer Cadet flow:</strong> Troop Commander → Squadron Commander → SDD.
               PDF available after all 3 approve.
             </>
           ) : (
@@ -372,7 +395,7 @@ export function ApplyLeave({
               pass (it&apos;s kept on file with Troop Commander); the linked Personal Leave is what
               you&apos;ll use to exit/re-enter campus once approved.
               {isCadet
-                ? " For cadets, Academic Leave is approved by your HOD, then your Squadron Commander (no Troop Commander, no SDD)."
+                ? " For officer cadets, Academic Leave is approved by your Troop Commander, then your Squadron Commander (no SDD)."
                 : " For Day Scholars, Academic Leave still goes through HOD then Troop Commander as usual."}
             </div>
           )}

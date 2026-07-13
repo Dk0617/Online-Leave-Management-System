@@ -29,9 +29,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
         </div>
       )}
       <div className={styles.infoBanner}>
-        <strong>Final Authority — Cadet Leaves Only:</strong> Applications reach you only after <em>both</em>{" "}
-        the Troop Commander and Squadron Commander have approved. Your approval is the final step — the cadet
-        can then download an official leave pass PDF.
+        <strong>Final Authority — Officer Cadet Leaves Only:</strong> Applications reach you only after <em>both</em>{" "}
+        the Troop Commander and Squadron Commander have approved. Your approval is the final step — the officer
+        cadet can then download an official leave pass PDF.
       </div>
 
       <div className={styles.statGrid}>
@@ -42,7 +42,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
       </div>
 
       <div className="mb-4 flex items-center gap-2 rounded-lg border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-4 py-2.5 text-xs text-[var(--ok)]">
-        ⭐ Your approval grants the official leave pass. All 3 stages must be complete before a cadet can exit
+        ⭐ Your approval grants the official leave pass. All 3 stages must be complete before an officer cadet can exit
         campus.
       </div>
 
@@ -156,7 +156,7 @@ export function Overview({ portal }: { portal: ReturnType<typeof useSddPortal> }
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Full System Overview:</strong> All cadet leaves in the system across all stages.
+        <strong>Full System Overview:</strong> All officer cadet leaves in the system across all stages.
       </div>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
@@ -176,7 +176,7 @@ export function Overview({ portal }: { portal: ReturnType<typeof useSddPortal> }
             {overview.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  No cadet leave applications in system.
+                  No officer cadet leave applications in system.
                 </td>
               </tr>
             ) : (

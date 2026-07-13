@@ -34,14 +34,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       )}
       <div className={styles.infoBanner}>
         <strong>Dual Role:</strong> You approve <strong>Day Scholar</strong> leaves at <em>Stage 2</em> (after
-        HOD approval) and <strong>Cadet</strong> leaves at <em>Stage 1</em> (direct from student) — except
-        Cadet <strong>Academic Leave</strong>, which skips you entirely and goes HOD → Squadron Commander
-        instead. Only students from your assigned intake(s) appear here — {intakesText}.
+        HOD approval) and <strong>Officer Cadet</strong> leaves at <em>Stage 1</em> (direct from student) —
+        including Officer Cadet <strong>Academic Leave</strong>, which then goes to Squadron Commander only
+        (no SDD stage, unlike other Cadet leave types). Only students from your assigned intake(s) appear
+        here — {intakesText}.
       </div>
 
       <div className={styles.statGrid}>
         <StatTile label="DS Pending" value={dsPending} tone="amber" />
-        <StatTile label="Cadet Pending" value={cdPending} tone="amber" />
+        <StatTile label="Officer Cadet Pending" value={cdPending} tone="amber" />
         <StatTile label="Approved" value={approvedByMe} tone="green" />
         <StatTile label="Rejected" value={rejectedByMe} tone="red" />
       </div>
@@ -76,7 +77,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
                   </td>
                   <td>
                     <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
-                      {l.studentType === "CADET" ? "Cadet" : "Day Scholar"}
+                      {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
                     </Badge>
                   </td>
                   <td>
@@ -183,7 +184,7 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
+        <strong>Officer Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
       </div>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
@@ -201,7 +202,7 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
             {cadetPending.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                  No Cadet leaves awaiting approval.
+                  No Officer Cadet leaves awaiting approval.
                 </td>
               </tr>
             ) : (
@@ -317,7 +318,7 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
       <HistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-[var(--white)]">Cadet History</h2>
+        <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
         <div className="w-64">
           <input
             value={cdQuery}
@@ -327,7 +328,7 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
           />
         </div>
       </div>
-      <HistoryTable rows={cadetHistory} emptyMessage="No Cadet history." />
+      <HistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." />
     </div>
   );
 }
@@ -363,7 +364,7 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>All Records:</strong> Every leave application from every student — cadets and day scholars,
+        <strong>All Records:</strong> Every leave application from every student — officer cadets and day scholars,
         every leave type — kept here for reference regardless of who approves it. Read-only.
       </div>
 
@@ -424,7 +425,7 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
                     </td>
                     <td>
                       <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
-                        {l.studentType === "CADET" ? "Cadet" : "Day Scholar"}
+                        {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
                       </Badge>
                     </td>
                     <td>

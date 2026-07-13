@@ -20,6 +20,23 @@ function validity(l: { startDate: string; startTime: string; endDate: string; en
   return "valid" as const;
 }
 
+// Campus curfew: except Emergency Leave, students may only exit from 6:00 AM
+// onward and must re-enter by 6:00 PM. Mirrors the backend check in
+// gatecontrol.js logMovement — this is just a faster client-side echo of it
+// for a snappier UX; the backend remains the authoritative enforcement.
+function curfewBlockReason(direction: "Exit" | "Entry", leaveType: string): string | null {
+  if (leaveType === "Emergency Leave") return null;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  if (direction === "Exit" && nowMinutes < 6 * 60) {
+    return "Campus exit is only allowed from 6:00 AM onward.";
+  }
+  if (direction === "Entry" && nowMinutes > 18 * 60) {
+    return "Campus entry must be logged by 6:00 PM.";
+  }
+  return null;
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();
@@ -46,6 +63,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       <div className={styles.infoBanner}>
         <strong>Gate Staff Role:</strong> Verify student leave passes, log exits and entries, and monitor who
         is currently on leave. Students must have a fully approved leave pass before exiting campus.
+        <strong> Campus curfew:</strong> except Emergency Leave, exit is only allowed from 6:00 AM onward and
+        entry must be logged by 6:00 PM — the system blocks logging outside those hours.
       </div>
 
       <div className={styles.statGrid}>
@@ -86,7 +105,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
                       {l.studentName}
                       <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                     </td>
-                    <td>{l.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"}</td>
+                    <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
                     <td>{LEAVE_TYPE_LABELS[l.type]}</td>
                     <td className="font-mono text-xs">
                       {l.startDate} {l.startTime}
@@ -142,7 +161,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
                   <td className="font-mono text-xs">{new Date(m.timestamp).toLocaleTimeString()}</td>
                   <td>{m.studentName}</td>
                   <td className="text-xs">{m.indexNumber}</td>
-                  <td>{m.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"}</td>
+                  <td>{m.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
                   <td>
                     <Badge tone={m.direction === "Exit" ? "red" : "green"}>
                       {m.direction === "Exit" ? "🚪 Exit" : "🏫 Entry"}
@@ -216,6 +235,12 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   async function quickLog(direction: "Exit" | "Entry") {
     if (!result?.leave) return;
     const leave = result.leave as unknown as LeaveRequest;
+    const blockReason = curfewBlockReason(direction, leave.type);
+    if (blockReason) {
+      setError(blockReason);
+      return;
+    }
+    setError(null);
     try {
       await logMovement({ indexNumber: leave.indexNumber, direction, leaveId: leave.id, notes: "Verified at gate" });
       await handleVerify();
@@ -453,7 +478,7 @@ function VerifyRows({ leave, minimal, photo }: { leave: LeaveRequest; minimal?: 
       <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <Row label="Student" value={leave.studentName} />
         <Row label="Index" value={leave.indexNumber} />
-        {!minimal && <Row label="Type" value={leave.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"} />}
+        {!minimal && <Row label="Type" value={leave.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"} />}
         {!minimal && <Row label="Leave Type" value={LEAVE_TYPE_LABELS[leave.type]} />}
         <Row label="Valid From" value={`${leave.startDate} ${leave.startTime}`} />
         <Row label="Valid To" value={`${leave.endDate} ${leave.endTime}`} />
@@ -498,6 +523,9 @@ export function LogMovement({ portal }: { portal: ReturnType<typeof useGatePorta
   return (
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📝 Log Student Movement</h2>
+      <p className="mb-3.5 text-xs text-[var(--muted)]">
+        Campus curfew applies (except Emergency Leave): exit only from 6:00 AM onward, entry only until 6:00 PM.
+      </p>
       <div className="mb-3.5">
         <label className={styles.label}>Student Index Number</label>
         <input value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. SC/2021/001" className={styles.input} />
@@ -575,7 +603,7 @@ export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePorta
                   <td className="font-mono text-xs">{new Date(m.timestamp).toLocaleString()}</td>
                   <td>{m.studentName}</td>
                   <td className="text-xs">{m.indexNumber}</td>
-                  <td>{m.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"}</td>
+                  <td>{m.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
                   <td>
                     <Badge tone={m.direction === "Exit" ? "red" : "green"}>
                       {m.direction === "Exit" ? "🚪 Exit" : "🏫 Entry"}

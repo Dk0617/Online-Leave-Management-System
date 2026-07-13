@@ -171,17 +171,17 @@ export function LeaveDetailModal({
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
-  // Cadet Academic Leave routes HOD -> Squadron only (no Troop, no SDD) —
-  // identified by troopStatus permanently "N/A", same marker used by
-  // isApproved/isRejected. Everything else follows the normal 3-stage
-  // cadet chain (Troop -> Squadron -> SDD).
-  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  // Cadet Academic Leave routes Troop Commander -> Squadron Commander only
+  // (no SDD) — identified by sddStatus permanently "N/A", same marker used
+  // by isApproved/isRejected. Everything else follows the normal 3-stage
+  // cadet chain (Troop -> Squadron -> SDD). Cadets never touch HOD.
+  const isCadetAcademicOnly = isCadet && leave.sddStatus === "N/A";
 
   const steps: TimelineStep[] = isCadetAcademicOnly
     ? [
         { label: "Applied", status: "done" },
-        { label: "HOD", status: stepStatus(leave.hodStatus, true) },
-        { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.hodStatus === "Approved") },
+        { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, true) },
+        { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.troopStatus === "Approved") },
         { label: "Filed", status: approved ? "done" : "wait" },
       ]
     : isCadet

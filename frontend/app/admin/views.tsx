@@ -99,7 +99,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           ) : (
             <div className="space-y-2.5">
               <Breakdown label="Day Scholars" value={dayScholarCount} total={students.length} color="#2563b0" />
-              <Breakdown label="Cadets" value={cadetCount} total={students.length} color="#7c3aed" />
+              <Breakdown label="Officer Cadets" value={cadetCount} total={students.length} color="#7c3aed" />
             </div>
           )}
         </Card>
@@ -347,7 +347,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       return;
     }
     if (studentType === "CADET" && !sqnId) {
-      setError("Select a Squadron Commander for this Cadet.");
+      setError("Select a Squadron Commander for this Officer Cadet.");
       return;
     }
     setError(null);
@@ -450,7 +450,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
               className={styles.input}
             >
               <option value="DAY_SCHOLAR">Day Scholar</option>
-              <option value="CADET">Cadet</option>
+              <option value="CADET">Officer Cadet</option>
             </select>
           </div>
           {studentType === "DAY_SCHOLAR" ? (
@@ -467,7 +467,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
             </div>
           ) : (
             <div>
-              <label className={styles.label}>Squadron (Cadet)</label>
+              <label className={styles.label}>Squadron (Officer Cadet)</label>
               <select value={sqnId} onChange={(e) => setSqnId(e.target.value)} className={styles.input}>
                 <option value="">Select Squadron Commander…</option>
                 {squadrans.map((s) => (
@@ -552,7 +552,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
                     </td>
                     <td>
                       <Badge tone={s.studentType === "CADET" ? "purple" : "blue"}>
-                        {s.studentType === "CADET" ? "Cadet" : "Day Scholar"}
+                        {s.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
                       </Badge>
                     </td>
                     <td>{s.intake ? `Intake ${s.intake}` : ""}</td>

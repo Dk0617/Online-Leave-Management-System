@@ -246,7 +246,7 @@ export async function downloadLeavePassPdf(
   fieldRow(110, "Index Number", leave.indexNumber);
   y += 12;
   fieldRow(10, "Department", leave.department);
-  fieldRow(110, "Student Type", isCadet ? "Cadet" : "Day Scholar");
+  fieldRow(110, "Student Type", isCadet ? "Officer Cadet" : "Day Scholar");
   y += 14;
 
   sectionHeader("LEAVE DETAILS", ORANGE);
@@ -271,13 +271,14 @@ export async function downloadLeavePassPdf(
   y += 5.2 + reasonLines.length * 4.6 + 8;
 
   sectionHeader("APPROVAL RECORD", NAVY);
-  // Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
-  // Commander, no SDD) — identified by troopStatus permanently "N/A", same
-  // marker used everywhere else in the app for this special routing.
-  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  // Cadet Academic Leave routes Troop Commander -> Squadron Commander only
+  // (no SDD) — identified by sddStatus permanently "N/A", same marker used
+  // everywhere else in the app for this special routing. Cadets never touch
+  // HOD at all.
+  const isCadetAcademicOnly = isCadet && leave.sddStatus === "N/A";
   const rows = isCadetAcademicOnly
     ? [
-        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        ["Troop Commander", leave.troopStatus, leave.troopApprovedAt],
         ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],
       ]
     : isCadet

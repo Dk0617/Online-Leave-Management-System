@@ -2,16 +2,25 @@ import crypto from "crypto";
 import Student from "../models/Student.js";
 import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
-import Hod from "../models/HOD.js";
 import { writeAudit } from "../utils/audit.js";
 
-// Day Scholar attachment rule is unchanged. Cadets follow a different rule:
-// Medical + Personal are mandatory, Academic needs none (it's an academic
-// excuse, not a campus-exit reason), Other stays required for both.
-const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Academic Leave", "Other"];
+// Academic Leave never requires a supporting document, for either student
+// type — it's an academic excuse, not a campus-exit reason. Day Scholars
+// otherwise require Medical + Other; Cadets require Medical + Personal +
+// Other.
+const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Other"];
 const DOC_REQUIRED_TYPES_CADET = ["Medical Leave", "Personal Leave", "Other"];
 function requiresAttachment(type, studentType) {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES_DAY_SCHOLAR).includes(type);
+}
+
+// Campus curfew: except Emergency Leave, students may only exit from 06.00
+// hrs onward and must be back by 18.00 hrs.
+const CAMPUS_EXIT_EARLIEST_MINUTES = 6 * 60;
+const CAMPUS_ENTRY_LATEST_MINUTES = 18 * 60;
+function minutesFromTimeString(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
 // ~2MB of raw file becomes ~2.7MB once base64-encoded.
@@ -27,12 +36,14 @@ function generateVerifyCode() {
 
 // Academic Leave always requires a companion Personal Leave (same dates) —
 // for Day Scholars this is a standing policy; for Cadets it covers the
-// "going home during a lecture-day period" case. Academic Leave and its
-// linked Personal Leave are ONE approval procedure, not two: the Personal
-// Leave is routed through the exact same approvers, in the exact same
-// order, as the Academic Leave itself (HOD -> Squadron for Cadets, HOD ->
-// Troop for Day Scholars) — it does not go through the normal full chain
-// (Troop -> Squadron -> SDD) that a standalone Personal Leave would.
+// "going home during a lecture-day period" case. These are two separate
+// leave records, each with its own routing:
+//   - Cadet Academic Leave: Troop Commander -> Squadron Commander (no SDD).
+//     Cadet Personal Leave (this companion): Troop Commander -> Squadron
+//     Commander -> Senior Deputy Dean — the normal full Cadet chain.
+//   - Day Scholar Academic Leave: HOD -> Troop Commander. Day Scholar
+//     Personal Leave (this companion): HOD -> Troop Commander, same as the
+//     Academic Leave itself.
 // Exempt from its own attachment rule since there's no separate upload
 // step for it — it reuses whatever the student attached to the Academic
 // Leave, if any.
@@ -62,10 +73,10 @@ async function createLinkedPersonalLeave(primary, student, hodIdForLeave) {
     appliedDate: primary.appliedDate,
     verifyCode: generateVerifyCode(),
     linkedLeaveId: primary._id,
-    hodStatus: "Pending",
-    troopStatus: isCadet ? "N/A" : "Pending",
+    hodStatus: isCadet ? "N/A" : "Pending",
+    troopStatus: "Pending",
     sqnStatus: isCadet ? "Pending" : "N/A",
-    sddStatus: "N/A",
+    sddStatus: isCadet ? "Pending" : "N/A",
   });
   primary.linkedLeaveId = linked._id;
   await primary.save();
@@ -127,30 +138,26 @@ export const applyLeave = async (req, res) => {
           "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.",
       });
     }
+    if (minutesFromTimeString(startTime) < CAMPUS_EXIT_EARLIEST_MINUTES) {
+      return res.status(400).json({
+        message: "Leave start time must be 06.00 hrs or later — campus exit is only allowed from 06.00 hrs onward.",
+      });
+    }
+    if (minutesFromTimeString(endTime) > CAMPUS_ENTRY_LATEST_MINUTES) {
+      return res.status(400).json({
+        message: "Leave end time must be 18.00 hrs or earlier — campus entry must be logged by 18.00 hrs.",
+      });
+    }
   }
 
   const isCadet = student.studentType === "CADET";
   const isEmergency = type === "Emergency Leave";
   const isAcademic = type === "Academic Leave";
 
-  // Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
-  // Commander, no SDD) — the HOD is looked up by matching the cadet's
-  // department, since cadets normally have no HOD assigned at all. This is
-  // purely about who *approves* it; where the resulting record is later
-  // archived (Troop Commander's office, for every student and leave type)
-  // is a separate, unrelated concept — see the Troop "All Records" view.
-  let hodIdForLeave = isCadet ? undefined : student.hodId;
-  let skipTroop = false;
-  if (isCadet && isAcademic) {
-    const hod = await Hod.findOne({ department: student.department });
-    if (!hod) {
-      return res.status(400).json({
-        message: `No HOD found for department "${student.department || "—"}". Ask admin to check that department names match exactly.`,
-      });
-    }
-    hodIdForLeave = hod._id;
-    skipTroop = true;
-  }
+  // Cadets never have an HOD in their routing at all (Academic Leave routes
+  // Troop Commander -> Squadron Commander, every other type routes Troop ->
+  // Squadron -> SDD). HOD only applies to Day Scholars.
+  const hodIdForLeave = isCadet ? undefined : student.hodId;
 
   const leave = await Leave.create({
     studentId: student._id,
@@ -175,8 +182,8 @@ export const applyLeave = async (req, res) => {
     attachmentData: attachmentData || undefined,
     appliedDate: new Date().toISOString().split("T")[0],
     verifyCode: generateVerifyCode(),
-    hodStatus: isCadet ? (isAcademic ? "Pending" : "N/A") : "Pending",
-    troopStatus: skipTroop ? "N/A" : "Pending",
+    hodStatus: isCadet ? "N/A" : "Pending",
+    troopStatus: "Pending",
     sqnStatus: isCadet ? "Pending" : "N/A",
     sddStatus: isCadet && !isAcademic ? "Pending" : "N/A",
   });

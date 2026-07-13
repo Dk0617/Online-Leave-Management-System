@@ -12,6 +12,16 @@ function isCurrentlyValid(leave) {
   return now >= start && now <= end;
 }
 
+// Campus curfew: except Emergency Leave, students may only exit from 6:00 AM
+// onward and must re-enter by 6:00 PM. Checked against the actual moment of
+// the gate scan (not just the leave's own approved times) so it also catches
+// a movement being logged well outside those hours.
+const CAMPUS_EXIT_EARLIEST_MINUTES = 6 * 60;
+const CAMPUS_ENTRY_LATEST_MINUTES = 18 * 60;
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
 // Every fully-approved, gate-eligible leave — Academic Leave is excluded
 // even once approved (it's an academic excuse kept with the HOD, not an
 // exit permit; its auto-created companion Personal Leave is the real
@@ -74,10 +84,10 @@ export const verifyByCode = async (req, res) => {
 // the check has to live here too, not just in the Verify UI. Exit is
 // strictly confined to the approved leave's date/time window (applies to
 // both Day Scholar and Cadet passes) — a student can't be let out before
-// their leave starts, or after it has already ended. Entry is deliberately
-// not time-boxed: gate staff must always be able to record a student
-// returning (even late), so blocking that would only destroy the record,
-// not add safety.
+// their leave starts, or after it has already ended. On top of that, the
+// campus curfew (6:00 AM exit earliest, 6:00 PM entry latest) is enforced
+// against the actual moment of the scan for both Exit and Entry, except for
+// Emergency Leave.
 export const logMovement = async (req, res) => {
   const { indexNumber, direction, leaveId, notes } = req.body;
   if (!indexNumber || !["Exit", "Entry"].includes(direction)) {
@@ -103,6 +113,15 @@ export const logMovement = async (req, res) => {
     return res.status(403).json({
       message: `Exit is only allowed within the approved leave period (${leave.startDate} ${leave.startTime} to ${leave.endDate} ${leave.endTime}). It is currently outside that window.`,
     });
+  }
+  if (leave.type !== "Emergency Leave") {
+    const nowMinutes = minutesSinceMidnight(new Date());
+    if (direction === "Exit" && nowMinutes < CAMPUS_EXIT_EARLIEST_MINUTES) {
+      return res.status(403).json({ message: "Campus exit is only allowed from 6:00 AM onward." });
+    }
+    if (direction === "Entry" && nowMinutes > CAMPUS_ENTRY_LATEST_MINUTES) {
+      return res.status(403).json({ message: "Campus entry must be logged by 6:00 PM." });
+    }
   }
 
   const movement = await Movement.create({

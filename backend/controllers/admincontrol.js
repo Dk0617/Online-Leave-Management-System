@@ -106,7 +106,7 @@ export const createStudent = async (req, res) => {
   if (studentType === "CADET" && !sqnId) {
     return res
       .status(400)
-      .json({ message: "A Cadet must be assigned a Squadron Commander" });
+      .json({ message: "An Officer Cadet must be assigned a Squadron Commander" });
   }
 
   const existing = await Student.findOne({ username: indexNumber });

@@ -10,7 +10,7 @@ import { Dashboard, DayScholarQueue, CadetQueue, History, AllRecords } from "./v
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "dayscholar", label: "Day Scholar Queue", icon: "🏠" },
-  { key: "cadet", label: "Cadet Queue", icon: "🎖️" },
+  { key: "cadet", label: "Officer Cadet Queue", icon: "🎖️" },
   { key: "history", label: "History", icon: "📋" },
   { key: "records", label: "All Records", icon: "🗄️" },
   { key: "changePass", label: "Change Password", icon: "🔑" },
@@ -19,7 +19,7 @@ const NAV_ITEMS: NavItem[] = [
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
   dayscholar: "Day Scholar Queue",
-  cadet: "Cadet Queue",
+  cadet: "Officer Cadet Queue",
   history: "History",
   records: "All Records",
   changePass: "Change Password",

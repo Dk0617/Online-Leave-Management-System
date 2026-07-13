@@ -36,10 +36,13 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
   leave[atField] = new Date().toLocaleString();
   await leave.save();
 
-  // Academic Leave and its auto-created Personal Leave are one approval
-  // procedure, not two: they share the exact same routing (same approvers,
-  // same order), so a decision on either one applies automatically to the
-  // other too — the approver never has to act on both separately.
+  // Academic Leave and its auto-created Personal Leave share the same
+  // routing up through Troop Commander -> Squadron Commander (Day Scholar:
+  // HOD -> Troop Commander), so a decision at any of those shared stages
+  // applies automatically to both — the approver never has to act on both
+  // separately. They diverge after that for Cadets: Academic Leave stops
+  // at Squadron, while the Personal Leave continues on to SDD for its own
+  // separate final decision (see the sdd handler's hideAutoPersonal: false).
   if (leave.linkedLeaveId) {
     const linked = await Leave.findById(leave.linkedLeaveId);
     if (linked && linked[statusField] === "Pending") {
@@ -68,13 +71,32 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
 
 // Shared shape for HOD / Squadron / SDD — each owns exactly one status
 // field and (except SDD) scopes by an ownership id on the student/leave.
-function buildRoleHandlers({ role, statusField, commentField, atField, scopeFilter, pendingExtraFilter }) {
+//
+// hideAutoPersonal defaults to true: for HOD/Squadron, the Academic Leave
+// and its linked Personal Leave companion share the exact same routing at
+// that stage, so the companion is hidden and the cascade in decide() keeps
+// it in sync — the approver only ever needs to act on the Academic Leave.
+// SDD passes hideAutoPersonal: false, because for Cadets the companion
+// diverges at the SDD stage: Academic Leave stops at Squadron (sddStatus
+// stays "N/A", never reaches SDD), but the linked Personal Leave continues
+// on to SDD for its own final decision — hiding it here would leave it
+// stuck at "Pending" forever with nobody able to act on it.
+function buildRoleHandlers({
+  role,
+  statusField,
+  commentField,
+  atField,
+  scopeFilter,
+  pendingExtraFilter,
+  hideAutoPersonal = true,
+}) {
+  const autoPersonalFilter = hideAutoPersonal ? HIDE_AUTO_PERSONAL : {};
   return {
     pending: async (req, res) => {
       const scope = await scopeFilter(req);
       const leaves = await Leave.find({
         ...scope,
-        ...HIDE_AUTO_PERSONAL,
+        ...autoPersonalFilter,
         ...(pendingExtraFilter || {}),
         [statusField]: "Pending",
       });
@@ -85,7 +107,7 @@ function buildRoleHandlers({ role, statusField, commentField, atField, scopeFilt
       // only Pending does) — excluded since History grows forever, unlike
       // Pending which naturally stays small (items leave it once decided).
       const scope = await scopeFilter(req);
-      const leaves = await Leave.find({ ...scope, ...HIDE_AUTO_PERSONAL, [statusField]: { $ne: "Pending" } })
+      const leaves = await Leave.find({ ...scope, ...autoPersonalFilter, [statusField]: { $ne: "Pending" } })
         .select("-attachmentData")
         .sort({ createdAt: -1 });
       res.json(leaves);
@@ -106,11 +128,9 @@ export const hod = buildRoleHandlers({
   scopeFilter: async (req) => ({ hodId: req.user.id }),
 });
 
-// ── Squadron Commander — Cadet leaves. Normally only after Troop has
-// approved; Academic Leave skips Troop entirely and goes through HOD
-// instead (troopStatus stays "N/A", hodStatus carries the first-stage
-// decision for that routing) — either way, whichever field is actually
-// "in play" for this leave must be Approved before Squadron sees it.
+// ── Squadron Commander — Cadet leaves, stage 2, only after Troop
+// Commander has approved (troopStatus === "Approved"). hodStatus is
+// always "N/A" for Cadets (they have no HOD in their routing at all).
 export const squadran = buildRoleHandlers({
   role: "SQUADRAN",
   statusField: "sqnStatus",
@@ -118,8 +138,8 @@ export const squadran = buildRoleHandlers({
   atField: "sqnApprovedAt",
   scopeFilter: async (req) => ({ sqnId: req.user.id }),
   pendingExtraFilter: {
-    troopStatus: { $in: ["Approved", "N/A"] },
-    hodStatus: { $in: ["Approved", "N/A"] },
+    troopStatus: "Approved",
+    hodStatus: "N/A",
   },
 });
 
@@ -134,6 +154,7 @@ export const sdd = buildRoleHandlers({
   atField: "sddApprovedAt",
   scopeFilter: async () => ({ studentType: "CADET" }),
   pendingExtraFilter: { troopStatus: "Approved", sqnStatus: "Approved" },
+  hideAutoPersonal: false,
 });
 
 export const sddOverview = async (req, res) => {
@@ -146,7 +167,7 @@ export const sddOverview = async (req, res) => {
 };
 
 export const sddPipeline = async (req, res) => {
-  // sddStatus stays "N/A" for Cadet Academic Leave (HOD -> Squadron only,
+  // sddStatus stays "N/A" for Cadet Academic Leave (Troop -> Squadron only,
   // no SDD step) — excluded here so the "In Progress" count doesn't include
   // leaves that will never actually reach SDD.
   const leaves = await Leave.find({
