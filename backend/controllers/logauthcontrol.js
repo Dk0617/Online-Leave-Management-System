@@ -130,7 +130,11 @@ export const requestOtp = async (req, res) => {
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
-  await sendOtpEmail(email, code);
+  try {
+    await sendOtpEmail(email, code);
+  } catch (err) {
+    console.error(`[MAIL] Failed to send OTP to ${email}:`, err.message);
+  }
   await writeAudit(role, user.username, "otp_requested", "");
   res.json({ message: "A login code has been sent to your email." });
 };

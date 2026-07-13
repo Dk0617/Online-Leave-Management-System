@@ -122,7 +122,7 @@ export async function downloadLeavePassPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(245, 196, 90);
-  doc.text("OFFICIAL LEAVE PASS  /  EXIT PERMIT", 43, 34);
+  doc.text(`${leave.type.toUpperCase()}  /  OFFICIAL PASS`, 43, 34);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(210, 220, 245);
@@ -268,7 +268,16 @@ export async function downloadLeavePassPdf(
   y += 5.2 + reasonLines.length * 4.6 + 8;
 
   sectionHeader("APPROVAL RECORD", NAVY);
-  const rows = isCadet
+  // Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
+  // Commander, no SDD) — identified by troopStatus permanently "N/A", same
+  // marker used everywhere else in the app for this special routing.
+  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  const rows = isCadetAcademicOnly
+    ? [
+        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],
+      ]
+    : isCadet
     ? [
         ["Troop Commander", leave.troopStatus, leave.troopApprovedAt],
         ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],

@@ -44,9 +44,17 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
   const rejected = visibleLeaves.filter(isRejected).length;
   const pending = total - approved - rejected;
 
-  async function handleDownloadPdf(leave: LeaveRequest) {
-    const verification = await portal.getMovements(leave.id).catch(() => undefined);
-    await downloadLeavePassPdf(leave, portal.profile?.photo, verification);
+  // pdfSource carries the correct gate-verification data (its own verifyCode
+  // tied to its own Movement records), but when it's the linked companion of
+  // an Academic Leave application, the PDF should still say "Academic Leave"
+  // — that's what the student actually applied for — not "Personal Leave".
+  async function handleDownloadPdf(pdfSource: LeaveRequest, displayAs?: LeaveRequest) {
+    const verification = await portal.getMovements(pdfSource.id).catch(() => undefined);
+    const pdfLeave =
+      displayAs && displayAs.id !== pdfSource.id
+        ? { ...pdfSource, type: displayAs.type, reason: displayAs.reason }
+        : pdfSource;
+    await downloadLeavePassPdf(pdfLeave, portal.profile?.photo, verification);
   }
 
   return (
@@ -112,10 +120,12 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             ) : (
               visibleLeaves.map((l) => {
                 const companion = companionOf(l);
-                // The Academic Leave record itself never becomes gate-eligible
-                // (by design), but its linked Personal Leave does — that's the
-                // one whose PDF actually gets downloaded for this merged row.
-                const pdfSource = companion && isGateEligible(companion) ? companion : isGateEligible(l) ? l : null;
+                // Prefer the linked Personal Leave's PDF once it's ready (the
+                // properly-routed one); fall back to this leave's own PDF as
+                // soon as the merged application is approved at all, so there
+                // is never a dead end with no PDF offered.
+                const pdfSource =
+                  companion && isGateEligible(companion) ? companion : isApproved(l) ? l : null;
                 return (
                   <tr key={l.id}>
                     <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
@@ -154,18 +164,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                       >
                         View
                       </button>
-                      {pdfSource ? (
+                      {pdfSource && (
                         <button
-                          onClick={() => handleDownloadPdf(pdfSource)}
+                          onClick={() => handleDownloadPdf(pdfSource, l)}
                           className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
                         >
                           📥 PDF
                         </button>
-                      ) : (
-                        isApproved(l) &&
-                        l.type === "Academic Leave" && (
-                          <span className="text-[10px] text-[var(--muted)]">Kept on file with Troop Commander</span>
-                        )
                       )}
                     </td>
                   </tr>
@@ -182,8 +187,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
           onClose={() => setSelected(null)}
           onDownloadPdf={(() => {
             const companion = companionOf(selected);
-            const pdfSource = companion && isGateEligible(companion) ? companion : isGateEligible(selected) ? selected : null;
-            return pdfSource ? () => handleDownloadPdf(pdfSource) : undefined;
+            const pdfSource =
+              companion && isGateEligible(companion) ? companion : isApproved(selected) ? selected : null;
+            return pdfSource ? () => handleDownloadPdf(pdfSource, selected) : undefined;
           })()}
         />
       )}
