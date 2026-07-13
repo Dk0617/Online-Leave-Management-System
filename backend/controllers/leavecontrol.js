@@ -14,6 +14,14 @@ function sortByPriorityThenNewest(leaves) {
   });
 }
 
+// Excludes the auto-created Personal Leave companion from approver-facing
+// lists (a standalone Personal Leave, with no linkedLeaveId, still shows
+// normally) — since decide() below cascades a decision to both records
+// together, approvers only ever need to see and act on the Academic Leave;
+// showing the companion too would look like a second, redundant approval
+// step for what is really one procedure.
+const HIDE_AUTO_PERSONAL = { $or: [{ type: { $ne: "Personal Leave" } }, { linkedLeaveId: null }] };
+
 async function decide(req, res, { statusField, commentField, atField, role, decision, scopeFilter }) {
   const { comment } = req.body;
   const scope = await scopeFilter(req);
@@ -27,6 +35,20 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
   leave[commentField] = comment || "";
   leave[atField] = new Date().toLocaleString();
   await leave.save();
+
+  // Academic Leave and its auto-created Personal Leave are one approval
+  // procedure, not two: they share the exact same routing (same approvers,
+  // same order), so a decision on either one applies automatically to the
+  // other too — the approver never has to act on both separately.
+  if (leave.linkedLeaveId) {
+    const linked = await Leave.findById(leave.linkedLeaveId);
+    if (linked && linked[statusField] === "Pending") {
+      linked[statusField] = decision;
+      linked[commentField] = comment || "";
+      linked[atField] = leave[atField];
+      await linked.save();
+    }
+  }
 
   await writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
 
@@ -52,6 +74,7 @@ function buildRoleHandlers({ role, statusField, commentField, atField, scopeFilt
       const scope = await scopeFilter(req);
       const leaves = await Leave.find({
         ...scope,
+        ...HIDE_AUTO_PERSONAL,
         ...(pendingExtraFilter || {}),
         [statusField]: "Pending",
       });
@@ -62,7 +85,7 @@ function buildRoleHandlers({ role, statusField, commentField, atField, scopeFilt
       // only Pending does) — excluded since History grows forever, unlike
       // Pending which naturally stays small (items leave it once decided).
       const scope = await scopeFilter(req);
-      const leaves = await Leave.find({ ...scope, [statusField]: { $ne: "Pending" } })
+      const leaves = await Leave.find({ ...scope, ...HIDE_AUTO_PERSONAL, [statusField]: { $ne: "Pending" } })
         .select("-attachmentData")
         .sort({ createdAt: -1 });
       res.json(leaves);
@@ -116,7 +139,9 @@ export const sdd = buildRoleHandlers({
 export const sddOverview = async (req, res) => {
   // System-wide (every cadet leave) and never shows the attachment — no
   // LeaveDetailModal on this view.
-  const leaves = await Leave.find({ studentType: "CADET" }).select("-attachmentData").sort({ createdAt: -1 });
+  const leaves = await Leave.find({ studentType: "CADET", ...HIDE_AUTO_PERSONAL })
+    .select("-attachmentData")
+    .sort({ createdAt: -1 });
   res.json(leaves);
 };
 
