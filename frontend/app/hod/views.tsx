@@ -28,9 +28,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
         </div>
       )}
       <div className={styles.infoBanner}>
-        <strong>Your Role:</strong> You approve <strong>Day Scholar</strong> leave applications at Stage 1.
-        Only students assigned to your department appear here. After your approval, applications move to the
-        Troop Commander.
+        <strong>Your Role:</strong> You approve <strong>Day Scholar</strong> leave applications at Stage 1 —
+        after your approval, they move to the Troop Commander. You also approve <strong>Cadet Academic
+        Leave</strong> (matched to your department), which skips Troop Commander entirely and moves straight
+        to the Squadron Commander instead. Only students in your department appear here.
       </div>
 
       <div className={styles.statGrid}>
@@ -64,7 +65,12 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
             ) : (
               pending.map((l) => (
                 <tr key={l.id}>
-                  <td>{l.studentName}</td>
+                  <td>
+                    {l.studentName}
+                    <div className="text-[10px] text-[var(--muted)]">
+                      {l.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"}
+                    </div>
+                  </td>
                   <td>{l.indexNumber}</td>
                   <td>
                     {LEAVE_TYPE_LABELS[l.type]}
@@ -120,21 +126,38 @@ export function History({ portal }: { portal: ReturnType<typeof useHodPortal> })
               </td>
             </tr>
           ) : (
-            history.map((l) => (
-              <tr key={l.id}>
-                <td>{l.studentName}</td>
-                <td>{l.indexNumber}</td>
-                <td>{LEAVE_TYPE_LABELS[l.type]}</td>
-                <td>{l.startDate}</td>
-                <td>{l.endDate}</td>
-                <td>
-                  <Badge tone={tone(l.hodStatus)}>{l.hodStatus}</Badge>
-                </td>
-                <td className="text-[var(--muted)]">
-                  <Badge tone={tone(l.troopStatus)}>{l.troopStatus === "N/A" ? "Pending at Troop" : l.troopStatus}</Badge>
-                </td>
-              </tr>
-            ))
+            history.map((l) => {
+              // Cadet Academic Leave skips Troop Commander entirely (routed to
+              // Squadron instead) — troopStatus stays "N/A" forever for it,
+              // unlike a Day Scholar leave where "N/A" means "not reached yet".
+              const isCadetAcademic = l.studentType === "CADET";
+              return (
+                <tr key={l.id}>
+                  <td>
+                    {l.studentName}
+                    <div className="text-[10px] text-[var(--muted)]">
+                      {l.studentType === "CADET" ? "🎖️ Cadet" : "🏠 Day Scholar"}
+                    </div>
+                  </td>
+                  <td>{l.indexNumber}</td>
+                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td>{l.startDate}</td>
+                  <td>{l.endDate}</td>
+                  <td>
+                    <Badge tone={tone(l.hodStatus)}>{l.hodStatus}</Badge>
+                  </td>
+                  <td className="text-[var(--muted)]">
+                    {isCadetAcademic ? (
+                      <Badge tone={tone(l.sqnStatus)}>Squadron: {l.sqnStatus}</Badge>
+                    ) : (
+                      <Badge tone={tone(l.troopStatus)}>
+                        {l.troopStatus === "N/A" ? "Pending at Troop" : l.troopStatus}
+                      </Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

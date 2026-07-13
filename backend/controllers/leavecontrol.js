@@ -58,10 +58,13 @@ function buildRoleHandlers({ role, statusField, commentField, atField, scopeFilt
       res.json(sortByPriorityThenNewest(leaves));
     },
     history: async (req, res) => {
+      // History views never show the attachment (no LeaveDetailModal here,
+      // only Pending does) — excluded since History grows forever, unlike
+      // Pending which naturally stays small (items leave it once decided).
       const scope = await scopeFilter(req);
-      const leaves = await Leave.find({ ...scope, [statusField]: { $ne: "Pending" } }).sort({
-        createdAt: -1,
-      });
+      const leaves = await Leave.find({ ...scope, [statusField]: { $ne: "Pending" } })
+        .select("-attachmentData")
+        .sort({ createdAt: -1 });
       res.json(leaves);
     },
     approve: (req, res) =>
@@ -80,17 +83,21 @@ export const hod = buildRoleHandlers({
   scopeFilter: async (req) => ({ hodId: req.user.id }),
 });
 
-// ── Squadron Commander — Cadet leaves, only after Troop has approved.
-// Academic Leave never reaches Squadron at all (Troop Commander alone
-// decides it — sqnStatus sits permanently at "N/A" for it, so it never
-// matches the base "sqnStatus: Pending" filter below). ──────────────────
+// ── Squadron Commander — Cadet leaves. Normally only after Troop has
+// approved; Academic Leave skips Troop entirely and goes through HOD
+// instead (troopStatus stays "N/A", hodStatus carries the first-stage
+// decision for that routing) — either way, whichever field is actually
+// "in play" for this leave must be Approved before Squadron sees it.
 export const squadran = buildRoleHandlers({
   role: "SQUADRAN",
   statusField: "sqnStatus",
   commentField: "sqnComment",
   atField: "sqnApprovedAt",
   scopeFilter: async (req) => ({ sqnId: req.user.id }),
-  pendingExtraFilter: { troopStatus: "Approved" },
+  pendingExtraFilter: {
+    troopStatus: { $in: ["Approved", "N/A"] },
+    hodStatus: { $in: ["Approved", "N/A"] },
+  },
 });
 
 // ── Senior Deputy Dean — every Cadet, no per-SDD ownership. Scoped to
@@ -107,19 +114,21 @@ export const sdd = buildRoleHandlers({
 });
 
 export const sddOverview = async (req, res) => {
-  const leaves = await Leave.find({ studentType: "CADET" }).sort({ createdAt: -1 });
+  // System-wide (every cadet leave) and never shows the attachment — no
+  // LeaveDetailModal on this view.
+  const leaves = await Leave.find({ studentType: "CADET" }).select("-attachmentData").sort({ createdAt: -1 });
   res.json(leaves);
 };
 
 export const sddPipeline = async (req, res) => {
-  // sddStatus stays "N/A" for Cadet Academic Leave (Troop Commander alone
-  // decides it) — excluded here so the "In Progress" count doesn't include
+  // sddStatus stays "N/A" for Cadet Academic Leave (HOD -> Squadron only,
+  // no SDD step) — excluded here so the "In Progress" count doesn't include
   // leaves that will never actually reach SDD.
   const leaves = await Leave.find({
     studentType: "CADET",
     sddStatus: { $ne: "N/A" },
     $or: [{ troopStatus: "Pending" }, { sqnStatus: "Pending" }],
-  });
+  }).select("-attachmentData");
   res.json(leaves);
 };
 
@@ -158,10 +167,23 @@ export const troopPending = async (req, res) => {
 };
 
 export const troopHistory = async (req, res) => {
+  // No LeaveDetailModal on the History view — safe to drop the attachment.
   const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({ ...scope, troopStatus: { $in: ["Approved", "Rejected"] } }).sort({
-    createdAt: -1,
-  });
+  const leaves = await Leave.find({ ...scope, troopStatus: { $in: ["Approved", "Rejected"] } })
+    .select("-attachmentData")
+    .sort({ createdAt: -1 });
+  res.json(leaves);
+};
+
+// "All Records" archive — every leave from every student, cadet or day
+// scholar, any type, regardless of who approves it or whether Troop is
+// even part of that chain. Read-only reference view: all leave paperwork
+// is ultimately kept on file in the Troop Commander's office. Excludes
+// attachmentData since this is an unbounded, system-wide query — Troop
+// already has full document access via their own Pending/History tabs for
+// leaves they're actually part of approving.
+export const troopAllRecords = async (req, res) => {
+  const leaves = await Leave.find().select("-attachmentData").sort({ createdAt: -1 });
   res.json(leaves);
 };
 

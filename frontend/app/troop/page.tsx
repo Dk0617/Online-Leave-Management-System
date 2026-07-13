@@ -5,13 +5,14 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
-import { Dashboard, DayScholarQueue, CadetQueue, History } from "./views";
+import { Dashboard, DayScholarQueue, CadetQueue, History, AllRecords } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "dayscholar", label: "Day Scholar Queue", icon: "🏠" },
   { key: "cadet", label: "Cadet Queue", icon: "🎖️" },
   { key: "history", label: "History", icon: "📋" },
+  { key: "records", label: "All Records", icon: "🗄️" },
   { key: "changePass", label: "Change Password", icon: "🔑" },
 ];
 
@@ -20,6 +21,7 @@ const TITLES: Record<string, string> = {
   dayscholar: "Day Scholar Queue",
   cadet: "Cadet Queue",
   history: "History",
+  records: "All Records",
   changePass: "Change Password",
 };
 
@@ -45,6 +47,7 @@ export default function TroopPage() {
       {activeView === "dayscholar" && <DayScholarQueue portal={portal} />}
       {activeView === "cadet" && <CadetQueue portal={portal} />}
       {activeView === "history" && <History portal={portal} />}
+      {activeView === "records" && <AllRecords portal={portal} />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>
   );

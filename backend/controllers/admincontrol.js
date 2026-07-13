@@ -41,7 +41,10 @@ export const listUsers = async (req, res) => {
 };
 
 export const listAllLeaves = async (req, res) => {
-  const leaves = await Leave.find().sort({ createdAt: -1 });
+  // Admin's dashboard only shows aggregate stats from this list, never the
+  // attachment itself — excluding it avoids pulling every leave's base64
+  // document (up to ~2.7MB each) over the network on every admin page load.
+  const leaves = await Leave.find().select("-attachmentData").sort({ createdAt: -1 });
   res.json(leaves);
 };
 
@@ -138,8 +141,10 @@ export const createStudent = async (req, res) => {
 };
 
 export const listStudents = async (req, res) => {
+  // Admin's account list never displays the photo either — same reasoning
+  // as excluding attachmentData from leave lists.
   const students = await Student.find()
-    .select("-password")
+    .select("-password -photo")
     .populate("troopIds", "name")
     .populate("hodId", "name department")
     .populate("sqnId", "name")

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import Student from "../models/Student.js";
 import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
+import Hod from "../models/HOD.js";
 import { writeAudit } from "../utils/audit.js";
 
 // Day Scholar attachment rule is unchanged. Cadets follow a different rule:
@@ -108,11 +109,24 @@ export const applyLeave = async (req, res) => {
   const isEmergency = type === "Emergency Leave";
   const isAcademic = type === "Academic Leave";
 
-  // Cadet Academic Leave never touches HOD (HOD is Day Scholar-only) and is
-  // a single-stage approval by the Troop Commander alone — filed in the
-  // Troop Commander's office, the same role HOD plays for a Day Scholar's
-  // Academic Leave. Squadron and SDD never see it either.
-  const cadetAcademicOnly = isCadet && isAcademic;
+  // Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
+  // Commander, no SDD) — the HOD is looked up by matching the cadet's
+  // department, since cadets normally have no HOD assigned at all. This is
+  // purely about who *approves* it; where the resulting record is later
+  // archived (Troop Commander's office, for every student and leave type)
+  // is a separate, unrelated concept — see the Troop "All Records" view.
+  let hodIdForLeave = isCadet ? undefined : student.hodId;
+  let skipTroop = false;
+  if (isCadet && isAcademic) {
+    const hod = await Hod.findOne({ department: student.department });
+    if (!hod) {
+      return res.status(400).json({
+        message: `No HOD found for department "${student.department || "—"}". Ask admin to check that department names match exactly.`,
+      });
+    }
+    hodIdForLeave = hod._id;
+    skipTroop = true;
+  }
 
   const leave = await Leave.create({
     studentId: student._id,
@@ -121,7 +135,7 @@ export const applyLeave = async (req, res) => {
     department: student.department,
     studentType: student.studentType,
     intake: student.intake,
-    hodId: isCadet ? undefined : student.hodId,
+    hodId: hodIdForLeave,
     troopIds: student.troopIds,
     sqnId: isCadet ? student.sqnId : undefined,
     type,
@@ -135,10 +149,10 @@ export const applyLeave = async (req, res) => {
     attachmentData: attachmentData || undefined,
     appliedDate: new Date().toISOString().split("T")[0],
     verifyCode: generateVerifyCode(),
-    hodStatus: isCadet ? "N/A" : "Pending",
-    troopStatus: "Pending",
-    sqnStatus: isCadet && !cadetAcademicOnly ? "Pending" : "N/A",
-    sddStatus: isCadet && !cadetAcademicOnly ? "Pending" : "N/A",
+    hodStatus: isCadet ? (isAcademic ? "Pending" : "N/A") : "Pending",
+    troopStatus: skipTroop ? "N/A" : "Pending",
+    sqnStatus: isCadet ? "Pending" : "N/A",
+    sddStatus: isCadet && !isAcademic ? "Pending" : "N/A",
   });
 
   let linkedLeave = null;

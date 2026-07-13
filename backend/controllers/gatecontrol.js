@@ -19,13 +19,16 @@ function isCurrentlyValid(leave) {
 // exit-entry stats are computed client-side from this list plus the
 // movement log, mirroring gate_staff.html.
 export const approvedLeaves = async (req, res) => {
-  const leaves = await Leave.find();
+  // Gate never displays the attachment file — excluding it here avoids
+  // pulling every leave's base64 document (up to ~2.7MB each) over the
+  // network on every single gate dashboard load.
+  const leaves = await Leave.find().select("-attachmentData");
   res.json(leaves.filter(isGateEligible));
 };
 
 export const verifyByIndexNumber = async (req, res) => {
   const indexNumber = (req.params.indexNumber || "").toUpperCase();
-  const leaves = await Leave.find({ indexNumber });
+  const leaves = await Leave.find({ indexNumber }).select("-attachmentData");
   if (!leaves.length) {
     return res.json({ found: false });
   }
@@ -50,7 +53,7 @@ export const verifyByIndexNumber = async (req, res) => {
 // person physically presenting it.
 export const verifyByCode = async (req, res) => {
   const code = (req.params.code || "").toUpperCase().trim();
-  const leave = await Leave.findOne({ verifyCode: code });
+  const leave = await Leave.findOne({ verifyCode: code }).select("-attachmentData");
   if (!leave) return res.json({ found: false });
 
   const studentPhoto = (await Student.findOne({ indexNumber: leave.indexNumber }).select("photo"))?.photo;
@@ -85,9 +88,9 @@ export const logMovement = async (req, res) => {
 
   let leave;
   if (leaveId) {
-    leave = await Leave.findById(leaveId);
+    leave = await Leave.findById(leaveId).select("-attachmentData");
   } else {
-    const candidates = await Leave.find({ indexNumber: indexNumber.toUpperCase() });
+    const candidates = await Leave.find({ indexNumber: indexNumber.toUpperCase() }).select("-attachmentData");
     leave = candidates.find(isCurrentlyValid) || candidates.find(isGateEligible) || null;
   }
 

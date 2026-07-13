@@ -5,6 +5,7 @@ import {
   troopPendingCadet,
   troopPending,
   troopHistory,
+  troopAllRecords,
   troopApprove,
   troopReject,
 } from "../controllers/leavecontrol.js";
@@ -17,6 +18,7 @@ router.get("/leaves/pending", troopPending);
 router.get("/leaves/pending/dayscholar", troopPendingDayScholar);
 router.get("/leaves/pending/cadet", troopPendingCadet);
 router.get("/leaves/history", troopHistory);
+router.get("/leaves/records", troopAllRecords);
 router.patch("/leaves/:id/approve", troopApprove);
 router.patch("/leaves/:id/reject", troopReject);
 

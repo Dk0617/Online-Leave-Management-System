@@ -234,16 +234,14 @@ export function normalizeAudit(raw: Raw): AuditEntry {
 // Leave status helpers
 // ==================================================================
 
-// Cadet Academic Leave is a single-stage routing decided by Troop Commander
-// alone (no HOD, no Squadron, no SDD) — filed in the Troop Commander's
-// office, the same role HOD plays for a Day Scholar's Academic Leave.
-// Identified by sqnStatus === "N/A" on a CADET leave, since every other
-// cadet leave type always puts sqnStatus through Pending/Approved/Rejected,
-// never N/A.
+// Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
+// Commander, no SDD) — identified by troopStatus === "N/A" on a CADET
+// leave, since every other cadet leave type always puts troopStatus
+// through Pending/Approved/Rejected, never N/A.
 export function isApproved(leave: LeaveRequest): boolean {
   if (leave.studentType === "CADET") {
-    if (leave.sqnStatus === "N/A") {
-      return leave.troopStatus === "Approved";
+    if (leave.troopStatus === "N/A") {
+      return leave.hodStatus === "Approved" && leave.sqnStatus === "Approved";
     }
     return (
       leave.troopStatus === "Approved" &&
@@ -256,8 +254,8 @@ export function isApproved(leave: LeaveRequest): boolean {
 
 export function isRejected(leave: LeaveRequest): boolean {
   if (leave.studentType === "CADET") {
-    if (leave.sqnStatus === "N/A") {
-      return leave.troopStatus === "Rejected";
+    if (leave.troopStatus === "N/A") {
+      return leave.hodStatus === "Rejected" || leave.sqnStatus === "Rejected";
     }
     return (
       leave.troopStatus === "Rejected" ||
@@ -268,11 +266,11 @@ export function isRejected(leave: LeaveRequest): boolean {
   return leave.hodStatus === "Rejected" || leave.troopStatus === "Rejected";
 }
 
-// Academic Leave is an academic excuse kept on file (HOD for Day Scholars,
-// Troop Commander for Cadets), not an exit permit — it never produces a
-// gate pass or downloadable PDF, even once fully approved. Its auto-created
-// companion Personal Leave is the one students actually use to exit/
-// re-enter campus.
+// Academic Leave is an academic excuse kept on file with the approver (HOD
+// for Day Scholars, Squadron Commander for Cadets), not an exit permit — it
+// never produces a gate pass or downloadable PDF, even once fully approved.
+// Its auto-created companion Personal Leave is the one students actually
+// use to exit/re-enter campus.
 export function isGateEligible(leave: LeaveRequest): boolean {
   return isApproved(leave) && leave.type !== "Academic Leave";
 }

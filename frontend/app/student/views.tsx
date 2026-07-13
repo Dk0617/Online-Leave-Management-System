@@ -49,7 +49,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             {isCadet ? "Cadet Leave Flow:" : "Day Scholar Leave Flow:"}
           </strong>{" "}
           {isCadet
-            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved."
+            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved. (Academic Leave is routed HOD → Squadron Commander instead — see the table below.)"
             : "Your applications go → HOD → Troop Commander → PDF download available once both approve."}
         </div>
       </div>
@@ -106,11 +106,26 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   {isCadet ? (
-                    <>
-                      <td>{statusBadge(l.troopStatus)}</td>
-                      <td>{statusBadge(l.sqnStatus)}</td>
-                      <td>{statusBadge(l.sddStatus)}</td>
-                    </>
+                    l.troopStatus === "N/A" ? (
+                      // Academic Leave for cadets: HOD -> Squadron only, Troop
+                      // and SDD are never involved — show HOD's status (the
+                      // real first stage) instead of a meaningless "N/A" where
+                      // Troop's column would otherwise be.
+                      <>
+                        <td>
+                          <div className="mb-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">HOD</div>
+                          {statusBadge(l.hodStatus)}
+                        </td>
+                        <td>{statusBadge(l.sqnStatus)}</td>
+                        <td className="text-[var(--muted)]">—</td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{statusBadge(l.troopStatus)}</td>
+                        <td>{statusBadge(l.sqnStatus)}</td>
+                        <td>{statusBadge(l.sddStatus)}</td>
+                      </>
+                    )
                   ) : (
                     <>
                       <td>{statusBadge(l.hodStatus)}</td>
@@ -134,9 +149,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     ) : (
                       isApproved(l) &&
                       l.type === "Academic Leave" && (
-                        <span className="text-[10px] text-[var(--muted)]">
-                          Kept on file with {isCadet ? "Troop Commander" : "HOD"}
-                        </span>
+                        <span className="text-[10px] text-[var(--muted)]">Kept on file with Troop Commander</span>
                       )
                     )}
                   </td>
@@ -306,11 +319,11 @@ export function ApplyLeave({
           {isAcademic && (
             <div className="rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.1)] px-3.5 py-2.5 text-xs text-[var(--sky)]">
               ℹ️ <strong>Academic Leave</strong> automatically creates a linked <strong>Personal Leave</strong>{" "}
-              for the same dates — you only need to submit this one form. Academic Leave is kept on file
-              with your {isCadet ? "Troop Commander" : "HOD"} (no downloadable pass); the linked Personal
-              Leave is what you&apos;ll use to exit/re-enter campus once approved.
+              for the same dates — you only need to submit this one form. Academic Leave has no downloadable
+              pass (it&apos;s kept on file with Troop Commander); the linked Personal Leave is what
+              you&apos;ll use to exit/re-enter campus once approved.
               {isCadet
-                ? " For cadets, Academic Leave is approved by your Troop Commander alone (no Squadron, no SDD, no HOD)."
+                ? " For cadets, Academic Leave is approved by your HOD, then your Squadron Commander (no Troop Commander, no SDD)."
                 : " For Day Scholars, Academic Leave still goes through HOD then Troop Commander as usual."}
             </div>
           )}
@@ -416,7 +429,7 @@ function downscalePhoto(file: File): Promise<string> {
 }
 
 export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
-  const { profile, updateProfile, updatePhoto } = portal;
+  const { profile, updateProfile, updatePhoto, loading, error, refresh } = portal;
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -431,7 +444,19 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
     setMobile(profile.mobile ?? "");
   }, [profile]);
 
-  if (!profile) return null;
+  if (!profile) {
+    if (error) {
+      return (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-sm text-[var(--err)]">
+          <span>Couldn&apos;t load your profile: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return <div className="text-sm text-[var(--muted)]">{loading ? "Loading your profile…" : "No profile data."}</div>;
+  }
 
   const initials = `${profile.firstName[0] ?? ""}${profile.lastName[0] ?? ""}`.toUpperCase();
 

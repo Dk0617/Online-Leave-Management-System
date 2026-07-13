@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { useAuth } from "@/src/AuthContext";
@@ -34,10 +34,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       )}
       <div className={styles.infoBanner}>
         <strong>Dual Role:</strong> You approve <strong>Day Scholar</strong> leaves at <em>Stage 2</em> (after
-        HOD approval) and <strong>Cadet</strong> leaves at <em>Stage 1</em> (direct from student, moving on to
-        Squadron Commander next) — except Cadet <strong>Academic Leave</strong>, which you approve alone and
-        file in your own office (no Squadron/SDD step, and no HOD involved — that only applies to Day
-        Scholars). Only students from your assigned intake(s) appear here — {intakesText}.
+        HOD approval) and <strong>Cadet</strong> leaves at <em>Stage 1</em> (direct from student) — except
+        Cadet <strong>Academic Leave</strong>, which skips you entirely and goes HOD → Squadron Commander
+        instead. Only students from your assigned intake(s) appear here — {intakesText}.
       </div>
 
       <div className={styles.statGrid}>
@@ -91,11 +90,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td className="text-xs text-[var(--muted)]">
-                    {l.studentType === "DAY_SCHOLAR"
-                      ? "Stage 2 (Final)"
-                      : l.sqnStatus === "N/A"
-                      ? "Stage 1 (Final — Academic Leave)"
-                      : "Stage 1 of 3"}
+                    {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
@@ -188,9 +183,7 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander —
-        except <strong>Academic Leave</strong>, which you approve alone and file in your own office (no
-        further stages, no HOD involved).
+        <strong>Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
       </div>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
@@ -287,11 +280,7 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
                   <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
                 </td>
                 <td className="text-xs text-[var(--muted)]">
-                  {l.studentType === "DAY_SCHOLAR"
-                    ? "PDF Ready (if Approved)"
-                    : l.sqnStatus === "N/A"
-                    ? "Filed with you (Academic Leave, final)"
-                    : "Squadron Commander"}
+                  {l.studentType === "DAY_SCHOLAR" ? "PDF Ready (if Approved)" : "Squadron Commander"}
                 </td>
               </tr>
             ))
@@ -339,6 +328,134 @@ export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> 
         </div>
       </div>
       <HistoryTable rows={cadetHistory} emptyMessage="No Cadet history." />
+    </div>
+  );
+}
+
+function recordStatus(l: LeaveRequest): "Fully Approved" | "Rejected" | "In Progress" {
+  const statuses = [l.hodStatus, l.troopStatus, l.sqnStatus, l.sddStatus].filter((s) => s !== "N/A");
+  if (statuses.some((s) => s === "Rejected")) return "Rejected";
+  if (statuses.length > 0 && statuses.every((s) => s === "Approved")) return "Fully Approved";
+  return "In Progress";
+}
+
+// Read-only archive: every leave from every student — cadets and day
+// scholars, any type — regardless of who approves it. Matches the
+// real-world practice of all leave paperwork ultimately being kept on
+// file in the Troop Commander's office. Loaded on demand (not on every
+// dashboard visit) since it's a system-wide, unbounded query.
+export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
+  const { records, recordsLoading, recordsLoaded, recordsError, loadRecords } = portal;
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
+
+  useEffect(() => {
+    if (!recordsLoaded && !recordsLoading) loadRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filtered = records.filter((l) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return l.studentName.toLowerCase().includes(q) || l.indexNumber.toLowerCase().includes(q);
+  });
+
+  return (
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>All Records:</strong> Every leave application from every student — cadets and day scholars,
+        every leave type — kept here for reference regardless of who approves it. Read-only.
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="w-64">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="🔍 Search by name or index number..."
+            className={styles.input}
+          />
+        </div>
+        <Button variant="secondary" className="!text-xs" onClick={() => loadRecords()} disabled={recordsLoading}>
+          {recordsLoading ? "Loading…" : "🔄 Refresh"}
+        </Button>
+      </div>
+
+      {recordsError && (
+        <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          Couldn&apos;t load records: {recordsError}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Type</th>
+              <th>Leave Type</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recordsLoading && !recordsLoaded ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  Loading records…
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  No records found.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((l) => {
+                const status = recordStatus(l);
+                return (
+                  <tr key={l.id}>
+                    <td>
+                      {l.studentName}
+                      <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                    </td>
+                    <td>
+                      <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
+                        {l.studentType === "CADET" ? "Cadet" : "Day Scholar"}
+                      </Badge>
+                    </td>
+                    <td>
+                      {LEAVE_TYPE_LABELS[l.type]}
+                      {l.priority === "emergency" && (
+                        <span className="ml-1">
+                          <Badge tone="red">Emergency</Badge>
+                        </span>
+                      )}
+                    </td>
+                    <td>{l.startDate}</td>
+                    <td>{l.endDate}</td>
+                    <td>
+                      <Badge tone={status === "Fully Approved" ? "green" : status === "Rejected" ? "red" : "amber"}>
+                        {status}
+                      </Badge>
+                    </td>
+                    <td>
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                        View
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

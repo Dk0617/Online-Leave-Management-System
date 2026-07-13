@@ -171,16 +171,17 @@ export function LeaveDetailModal({
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
-  // Cadet Academic Leave is a single-stage routing (Troop Commander alone,
-  // no Squadron/SDD/HOD) — identified by sqnStatus permanently "N/A", same
-  // marker used by isApproved/isRejected. Everything else follows the
-  // normal 3-stage cadet chain.
-  const isCadetAcademicOnly = isCadet && leave.sqnStatus === "N/A";
+  // Cadet Academic Leave routes HOD -> Squadron only (no Troop, no SDD) —
+  // identified by troopStatus permanently "N/A", same marker used by
+  // isApproved/isRejected. Everything else follows the normal 3-stage
+  // cadet chain (Troop -> Squadron -> SDD).
+  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
 
   const steps: TimelineStep[] = isCadetAcademicOnly
     ? [
         { label: "Applied", status: "done" },
-        { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, true) },
+        { label: "HOD", status: stepStatus(leave.hodStatus, true) },
+        { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.hodStatus === "Approved") },
         { label: "Filed", status: approved ? "done" : "wait" },
       ]
     : isCadet
@@ -241,6 +242,10 @@ export function LeaveDetailModal({
                 <a href={leave.attachmentData} download={leave.attachmentName} className="text-[var(--sky)]">
                   📎 {leave.attachmentName}
                 </a>
+              ) : leave.attachmentName ? (
+                <span className="text-[var(--muted)]">
+                  📎 {leave.attachmentName} (view via the approval queue to open the file)
+                </span>
               ) : (
                 <span className="text-[var(--muted)]">None</span>
               )
