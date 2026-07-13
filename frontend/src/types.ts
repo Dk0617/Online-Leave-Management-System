@@ -123,6 +123,8 @@ export interface LeaveRequest {
   endDate: string;
   endTime: string;
   reason: string;
+  address: string;
+  contactNumber: string;
   attachmentName?: string;
   attachmentData?: string;
   appliedDate: string;

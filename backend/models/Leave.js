@@ -31,6 +31,8 @@ const leaveSchema = new mongoose.Schema(
     endDate: { type: String, required: true },
     endTime: { type: String, required: true },
     reason: { type: String, required: true },
+    address: { type: String, required: true },
+    contactNumber: { type: String, required: true },
     attachmentName: String,
     attachmentData: String, // base64, capped at 2MB client-side
     appliedDate: { type: String, required: true },

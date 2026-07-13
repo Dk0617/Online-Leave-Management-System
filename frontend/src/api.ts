@@ -174,6 +174,8 @@ export function normalizeLeave(raw: Raw): LeaveRequest {
     endDate: raw.endDate as string,
     endTime: raw.endTime as string,
     reason: raw.reason as string,
+    address: raw.address as string,
+    contactNumber: raw.contactNumber as string,
     attachmentName: raw.attachmentName as string | undefined,
     attachmentData: raw.attachmentData as string | undefined,
     appliedDate: raw.appliedDate as string,

@@ -235,6 +235,8 @@ export function LeaveDetailModal({
           <Row label="From" value={`${leave.startDate} ${leave.startTime}`} />
           <Row label="To" value={`${leave.endDate} ${leave.endTime}`} />
           <Row label="Reason" value={leave.reason} />
+          <Row label="Address" value={leave.address} />
+          <Row label="Contact Number" value={leave.contactNumber} />
           <Row
             label="Supporting Document"
             value={

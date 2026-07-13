@@ -256,6 +256,9 @@ export async function downloadLeavePassPdf(
   fieldRow(10, "From (Exit)", `${leave.startDate}  ${leave.startTime}`);
   fieldRow(110, "To (Entry)", `${leave.endDate}  ${leave.endTime}`);
   y += 12;
+  fieldRow(10, "Address", leave.address);
+  fieldRow(110, "Contact Number", leave.contactNumber);
+  y += 12;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);

@@ -55,6 +55,8 @@ async function createLinkedPersonalLeave(primary, student, hodIdForLeave) {
     endDate: primary.endDate,
     endTime: primary.endTime,
     reason: `Linked to Academic Leave (Ref LV-${primary._id}): ${primary.reason}`,
+    address: primary.address,
+    contactNumber: primary.contactNumber,
     attachmentName: primary.attachmentName,
     attachmentData: primary.attachmentData,
     appliedDate: primary.appliedDate,
@@ -81,6 +83,8 @@ export const applyLeave = async (req, res) => {
     endDate,
     endTime,
     reason,
+    address,
+    contactNumber,
     attachmentName,
     attachmentData,
   } = req.body;
@@ -92,6 +96,8 @@ export const applyLeave = async (req, res) => {
   if (!endDate) missing.push("End Date");
   if (!endTime) missing.push("End Time");
   if (!reason) missing.push("Reason");
+  if (!address || !address.trim()) missing.push("Address");
+  if (!contactNumber || !contactNumber.trim()) missing.push("Contact Number");
   if (requiresAttachment(type, student.studentType) && !attachmentData) {
     missing.push("Supporting Document");
   }
@@ -163,6 +169,8 @@ export const applyLeave = async (req, res) => {
     endDate,
     endTime,
     reason,
+    address: address.trim(),
+    contactNumber: contactNumber.trim(),
     attachmentName: attachmentName || undefined,
     attachmentData: attachmentData || undefined,
     appliedDate: new Date().toISOString().split("T")[0],

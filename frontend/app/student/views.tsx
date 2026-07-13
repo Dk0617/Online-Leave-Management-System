@@ -234,6 +234,8 @@ export function ApplyLeave({
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [reason, setReason] = useState("");
+  const [address, setAddress] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -252,6 +254,8 @@ export function ApplyLeave({
     if (!endDate) missing.push("End Date");
     if (!endTime) missing.push("End Time");
     if (!reason.trim()) missing.push("Reason");
+    if (!address.trim()) missing.push("Address");
+    if (!contactNumber.trim()) missing.push("Contact Number");
     if (docRequired && !file) missing.push("Supporting Document");
     if (missing.length) {
       setError(`Please complete: ${missing.join(", ")}`);
@@ -286,6 +290,8 @@ export function ApplyLeave({
         endDate,
         endTime,
         reason: reason.trim(),
+        address: address.trim(),
+        contactNumber: contactNumber.trim(),
         attachmentName: file?.name,
         attachmentData,
       });
@@ -295,6 +301,8 @@ export function ApplyLeave({
       setEndDate("");
       setEndTime("");
       setReason("");
+      setAddress("");
+      setContactNumber("");
       setFile(null);
       onDone();
     } catch (err) {
@@ -399,6 +407,32 @@ export function ApplyLeave({
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Describe your reason…"
+              className={styles.input}
+            />
+          </div>
+
+          <div>
+            <label className={styles.label}>
+              Address<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={2}
+              placeholder="Address while on leave…"
+              className={styles.input}
+            />
+          </div>
+
+          <div>
+            <label className={styles.label}>
+              Contact Number<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input
+              type="tel"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+              placeholder="e.g. 0771234567"
               className={styles.input}
             />
           </div>

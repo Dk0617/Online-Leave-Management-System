@@ -12,6 +12,8 @@ export interface NewLeaveInput {
   endDate: string;
   endTime: string;
   reason: string;
+  address: string;
+  contactNumber: string;
   attachmentName?: string;
   attachmentData?: string;
 }
