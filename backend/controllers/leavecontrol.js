@@ -241,29 +241,6 @@ async function troopScopeFilter(req) {
   return { intake: { $in: troop?.intakes || [] } };
 }
 
-export const troopPendingDayScholar = async (req, res) => {
-  const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({
-    ...scope,
-    ...HIDE_AUTO_PERSONAL,
-    studentType: "DAY_SCHOLAR",
-    hodStatus: "Approved",
-    troopStatus: "Pending",
-  });
-  res.json(sortByPriorityThenNewest(leaves));
-};
-
-export const troopPendingCadet = async (req, res) => {
-  const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({
-    ...scope,
-    ...HIDE_AUTO_PERSONAL_EXCEPT_CADET,
-    studentType: "CADET",
-    troopStatus: "Pending",
-  });
-  res.json(sortByPriorityThenNewest(leaves));
-};
-
 export const troopPending = async (req, res) => {
   const scope = await troopScopeFilter(req);
   const leaves = await Leave.find({

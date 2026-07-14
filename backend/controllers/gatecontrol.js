@@ -116,6 +116,22 @@ export const logMovement = async (req, res) => {
   // left yet, or a second Exit before they've returned) would silently
   // record a nonsensical movement instead of catching the mistake here.
   const lastMovement = await Movement.findOne({ indexNumber: indexNumber.toUpperCase() }).sort({ createdAt: -1 });
+
+  // Idempotency guard: a gate-staff double-click (or a duplicate request
+  // racing in before the first one committed) can otherwise slip past the
+  // sequence check below and log the same movement twice. If the most
+  // recent movement for this student is already this exact direction and
+  // happened moments ago, treat the repeat click as a no-op and just hand
+  // back the existing record instead of creating a duplicate row.
+  const DUPLICATE_WINDOW_MS = 5000;
+  if (
+    lastMovement &&
+    lastMovement.direction === direction &&
+    Date.now() - new Date(lastMovement.createdAt).getTime() < DUPLICATE_WINDOW_MS
+  ) {
+    return res.status(200).json(lastMovement);
+  }
+
   if (direction === "Entry" && (!lastMovement || lastMovement.direction !== "Exit")) {
     return res.status(403).json({
       message: `${indexNumber} has not exited campus yet — cannot log Entry before Exit. Did you mean to click Log Exit?`,

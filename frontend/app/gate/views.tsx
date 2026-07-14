@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
-import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function todayStr() {
@@ -56,6 +56,11 @@ function sequenceBlockReason(
   return null;
 }
 
+// Most time-critical for gate staff first; Academic Leave is never
+// gate-eligible (see backend isGateEligible) so it won't actually appear,
+// but is kept here in case that ever changes.
+const LEAVE_TYPE_ORDER: LeaveType[] = ["Emergency Leave", "Medical Leave", "Personal Leave", "Academic Leave"];
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();
@@ -69,11 +74,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
   const onLeaveNow = approvedLeaves.filter((l) => lastMovementFor(l.indexNumber, l.id)?.direction === "Exit");
 
-  // Closest exit date/time first (soonest to leave campus at the top),
-  // furthest out at the bottom.
-  const sortedLeaves = [...approvedLeaves].sort(
-    (a, b) => +new Date(`${a.startDate}T${a.startTime}`) - +new Date(`${b.startDate}T${b.startTime}`)
-  );
+  // Whichever departure time is closest to right now (whether it's a few
+  // minutes away or a few minutes ago) sits at the top; departures far in
+  // the past or far in the future sink toward the bottom.
+  const now = Date.now();
+  function byClosenessToNow(a: LeaveRequest, b: LeaveRequest) {
+    const aDist = Math.abs(+new Date(`${a.startDate}T${a.startTime}`) - now);
+    const bDist = Math.abs(+new Date(`${b.startDate}T${b.startTime}`) - now);
+    return aDist - bDist;
+  }
+
+  const leavesByType = LEAVE_TYPE_ORDER.map((type) => ({
+    type,
+    leaves: approvedLeaves.filter((l) => l.type === type).sort(byClosenessToNow),
+  })).filter((group) => group.leaves.length > 0);
 
   return (
     <div>
@@ -100,111 +114,86 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       </div>
 
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Leave Passes — Exit / Entry &amp; Validity Status</h2>
-      <div className="mb-6 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Type</th>
-              <th>Leave Type</th>
-              <th>From (Exit)</th>
-              <th>To (Entry)</th>
-              <th>Status</th>
-              <th>Validity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedLeaves.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No approved leave passes in system.
-                </td>
-              </tr>
-            ) : (
-              sortedLeaves.map((l) => {
-                const last = lastMovementFor(l.indexNumber, l.id);
-                const state = validity(l);
-                return (
-                  <tr key={l.id}>
-                    <td>
-                      {l.studentName}
-                      <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
-                    </td>
-                    <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
-                    <td>{LEAVE_TYPE_LABELS[l.type]}</td>
-                    <td className="font-mono text-xs">
-                      {l.startDate} {l.startTime}
-                    </td>
-                    <td className="font-mono text-xs">
-                      {l.endDate} {l.endTime}
-                    </td>
-                    <td>
-                      {!last ? (
-                        <Badge tone="gray">Not Yet Exited</Badge>
-                      ) : last.direction === "Exit" ? (
-                        <Badge tone="red">Exited (Out)</Badge>
-                      ) : (
-                        <Badge tone="green">Returned</Badge>
-                      )}
-                    </td>
-                    <td>
-                      <Badge tone={state === "valid" ? "green" : state === "upcoming" ? "amber" : "red"}>
-                        {state === "valid" ? "Valid" : state === "upcoming" ? "Upcoming" : "Expired"}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      {leavesByType.length === 0 ? (
+        <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
+          No approved leave passes in system.
+        </div>
+      ) : (
+        leavesByType.map((group) => (
+          <div key={group.type} className="mb-6">
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
+              {LEAVE_TYPE_LABELS[group.type]} ({group.leaves.length})
+            </h3>
+            <LeavePassTable leaves={group.leaves} lastMovementFor={lastMovementFor} />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Recent Movements</h2>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Type</th>
-              <th>Direction</th>
-              <th>Logged By</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                  No movements logged today.
+function LeavePassTable({
+  leaves,
+  lastMovementFor,
+}: {
+  leaves: LeaveRequest[];
+  lastMovementFor: (indexNumber: string, leaveId: string) => { direction: "Exit" | "Entry" } | null;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Type</th>
+            <th>From (Exit)</th>
+            <th>To (Entry)</th>
+            <th>Status</th>
+            <th>Validity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leaves.map((l) => {
+            const last = lastMovementFor(l.indexNumber, l.id);
+            const state = validity(l);
+            return (
+              <tr key={l.id}>
+                <td>
+                  {l.studentName}
+                  <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                </td>
+                <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
+                <td className="font-mono text-xs">
+                  {l.startDate} {l.startTime}
+                </td>
+                <td className="font-mono text-xs">
+                  {l.endDate} {l.endTime}
+                </td>
+                <td>
+                  {!last ? (
+                    <Badge tone="gray">Not Yet Exited</Badge>
+                  ) : last.direction === "Exit" ? (
+                    <Badge tone="red">Exited (Out)</Badge>
+                  ) : (
+                    <Badge tone="green">Returned</Badge>
+                  )}
+                </td>
+                <td>
+                  <Badge tone={state === "valid" ? "green" : state === "upcoming" ? "amber" : "red"}>
+                    {state === "valid" ? "Valid" : state === "upcoming" ? "Upcoming" : "Expired"}
+                  </Badge>
                 </td>
               </tr>
-            ) : (
-              movements.slice(0, 10).map((m) => (
-                <tr key={m.id}>
-                  <td className="font-mono text-xs">{new Date(m.timestamp).toLocaleTimeString()}</td>
-                  <td>{m.studentName}</td>
-                  <td className="text-xs">{m.indexNumber}</td>
-                  <td>{m.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
-                  <td>
-                    <Badge tone={m.direction === "Exit" ? "red" : "green"}>
-                      {m.direction === "Exit" ? "🚪 Exit" : "🏫 Entry"}
-                    </Badge>
-                  </td>
-                  <td className="text-xs text-[var(--muted)]">{m.loggedBy}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
-  const { verify, verifyByCode, logMovement } = portal;
+  const { verify, verifyByCode, logMovement, movements } = portal;
   const [mode, setMode] = useState<"code" | "index">("code");
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<VerifyResult | null>(null);
@@ -212,6 +201,11 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   const [scannerOpen, setScannerOpen] = useState(false);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loggingDirection, setLoggingDirection] = useState<"Exit" | "Entry" | null>(null);
+  // A ref (not state) so it's set synchronously on the very first click —
+  // state updates are batched/async and wouldn't block a same-tick second
+  // click from also passing the guard.
+  const loggingRef = useRef(false);
 
   useEffect(() => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -258,19 +252,25 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   }
 
   async function quickLog(direction: "Exit" | "Entry") {
-    if (!result?.leave) return;
+    if (!result?.leave || loggingRef.current) return;
     const leave = result.leave as unknown as LeaveRequest;
-    const blockReason = curfewBlockReason(direction, leave.type);
+    const blockReason =
+      sequenceBlockReason(direction, leave.indexNumber, movements) || curfewBlockReason(direction, leave.type);
     if (blockReason) {
       setError(blockReason);
       return;
     }
     setError(null);
+    loggingRef.current = true;
+    setLoggingDirection(direction);
     try {
       await logMovement({ indexNumber: leave.indexNumber, direction, leaveId: leave.id, notes: "Verified at gate" });
       await handleVerify();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log movement");
+    } finally {
+      loggingRef.current = false;
+      setLoggingDirection(null);
     }
   }
 
@@ -364,11 +364,21 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
               <div className="mb-3 text-lg font-bold text-[var(--ok)]">✅ Valid Leave Pass</div>
               <VerifyRows leave={result.leave as unknown as LeaveRequest} photo={result.studentPhoto} />
               <div className="mt-3 flex gap-2">
-                <Button variant="danger" className="!text-xs" onClick={() => quickLog("Exit")}>
-                  🚪 Log Exit
+                <Button
+                  variant="danger"
+                  className="!text-xs"
+                  disabled={loggingDirection !== null}
+                  onClick={() => quickLog("Exit")}
+                >
+                  {loggingDirection === "Exit" ? "Logging…" : "🚪 Log Exit"}
                 </Button>
-                <Button variant="success" className="!text-xs" onClick={() => quickLog("Entry")}>
-                  🏫 Log Entry
+                <Button
+                  variant="success"
+                  className="!text-xs"
+                  disabled={loggingDirection !== null}
+                  onClick={() => quickLog("Entry")}
+                >
+                  {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry"}
                 </Button>
               </div>
             </>
