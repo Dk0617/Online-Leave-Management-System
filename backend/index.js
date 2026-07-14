@@ -36,6 +36,20 @@ app.use("/api/squadran", squadranRoutes);
 app.use("/api/sdd", sddRoutes);
 app.use("/api/gate", gateRoutes);
 
+// Catches any error thrown in a route handler (Express 5 forwards async
+// throws here automatically, no manual try/catch needed per route) and
+// turns it into a JSON response with a real message — without this, an
+// unhandled error (e.g. saving a document that fails schema validation)
+// falls through to Express's default plain-text "Internal Server Error"
+// page, which the frontend can't show anything useful for.
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  if (err.name === "ValidationError") {
+    return res.status(400).json({ message: `Invalid data: ${err.message}` });
+  }
+  res.status(500).json({ message: "Something went wrong on the server. Please try again." });
+});
+
 // Start Server
 const startServer = async () => {
   await connectDB();

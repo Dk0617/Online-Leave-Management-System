@@ -61,17 +61,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
   const rejected = visibleLeaves.filter(isRejected).length;
   const pending = total - approved - rejected;
 
-  // pdfSource carries the correct gate-verification data (its own verifyCode
-  // tied to its own Movement records), but when it's the linked companion of
-  // an Academic Leave application, the PDF should still say "Academic Leave"
-  // — that's what the student actually applied for — not "Personal Leave".
-  async function handleDownloadPdf(pdfSource: LeaveRequest, displayAs?: LeaveRequest) {
-    const verification = await portal.getMovements(pdfSource.id).catch(() => undefined);
-    const pdfLeave =
-      displayAs && displayAs.id !== pdfSource.id
-        ? { ...pdfSource, type: displayAs.type, reason: displayAs.reason }
-        : pdfSource;
-    await downloadLeavePassPdf(pdfLeave, portal.profile?.photo, verification);
+  // Academic Leave and its linked Personal Leave are two separate, fully
+  // independent downloadable PDFs — each shows its own actual type, reason,
+  // and approval chain (Academic Leave's own PDF never has gate-verification
+  // data since it's not an exit permit; the Personal Leave's does once it's
+  // been used at the gate).
+  async function downloadPdfFor(leave: LeaveRequest) {
+    const verification = await portal.getMovements(leave.id).catch(() => undefined);
+    await downloadLeavePassPdf(leave, portal.profile?.photo, verification);
   }
 
   return (
@@ -137,20 +134,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             ) : (
               visibleLeaves.map((l) => {
                 const companion = companionOf(l);
-                // When there's a linked companion (Academic Leave), the PDF can
-                // only ever come from the Personal Leave companion once it's
-                // fully approved — Academic Leave itself is never gate-eligible,
-                // even once its own (shorter) Troop->Squadron chain finishes
-                // ahead of the companion's Troop->Squadron->SDD chain. Only
-                // fall back to the leave's own PDF when there's no companion at
-                // all (i.e. it isn't an Academic Leave to begin with).
-                const pdfSource = companion
-                  ? isGateEligible(companion)
-                    ? companion
-                    : null
-                  : isApproved(l)
-                  ? l
-                  : null;
+                // Academic Leave and its linked Personal Leave each get their
+                // own PDF, downloadable independently once each is approved —
+                // Academic Leave's own chain (HOD/Troop -> Squadron) is
+                // separate from the Personal Leave's (which is the actual
+                // gate pass, requiring isGateEligible rather than just
+                // isApproved). A standalone leave (no companion) just gets
+                // the one PDF, as before.
+                const academicPdfReady = companion ? isApproved(l) : false;
+                const personalOrStandalonePdfReady = companion ? isGateEligible(companion) : isApproved(l);
                 return (
                   <tr key={l.id}>
                     <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
@@ -192,12 +184,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                       >
                         View
                       </button>
-                      {pdfSource && (
+                      {academicPdfReady && (
                         <button
-                          onClick={() => handleDownloadPdf(pdfSource, l)}
+                          onClick={() => downloadPdfFor(l)}
                           className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
                         >
-                          📥 PDF
+                          📥 Academic PDF
+                        </button>
+                      )}
+                      {personalOrStandalonePdfReady && (
+                        <button
+                          onClick={() => downloadPdfFor(companion ?? l)}
+                          className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
+                        >
+                          📥 {companion ? "Personal PDF" : "PDF"}
                         </button>
                       )}
                     </td>
@@ -213,16 +213,20 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
         <LeaveDetailModal
           leave={selected}
           onClose={() => setSelected(null)}
-          onDownloadPdf={(() => {
+          pdfActions={(() => {
             const companion = companionOf(selected);
-            const pdfSource = companion
-              ? isGateEligible(companion)
-                ? companion
-                : null
-              : isApproved(selected)
-              ? selected
-              : null;
-            return pdfSource ? () => handleDownloadPdf(pdfSource, selected) : undefined;
+            const actions: { label: string; onClick: () => void }[] = [];
+            if (companion) {
+              if (isApproved(selected)) {
+                actions.push({ label: "Academic PDF", onClick: () => downloadPdfFor(selected) });
+              }
+              if (isGateEligible(companion)) {
+                actions.push({ label: "Personal PDF", onClick: () => downloadPdfFor(companion) });
+              }
+            } else if (isApproved(selected)) {
+              actions.push({ label: "Download PDF", onClick: () => downloadPdfFor(selected) });
+            }
+            return actions;
           })()}
         />
       )}
@@ -447,9 +451,9 @@ export function ApplyLeave({
           {isAcademic && (
             <div className="rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.1)] px-3.5 py-2.5 text-xs text-[var(--sky)]">
               ℹ️ <strong>Academic Leave</strong> always applies together with a linked <strong>Personal Leave</strong>{" "}
-              for the same dates — two separate applications, each with its own reason below. Academic Leave has
-              no downloadable pass; the linked Personal Leave is what you&apos;ll use to exit/re-enter campus
-              once approved.
+              for the same dates — two separate applications, each with its own reason below, and each downloadable
+              as its own PDF once approved. Academic Leave&apos;s PDF is not a gate pass; the linked Personal
+              Leave&apos;s is what you&apos;ll actually use to exit/re-enter campus.
               {isCadet
                 ? " For officer cadets, Academic Leave is approved by your HOD, then your Squadron Commander (no SDD). The linked Personal Leave goes through the normal Troop Commander → Squadron Commander → SDD chain."
                 : " For Day Scholars, both Academic Leave and the linked Personal Leave go through HOD then Troop Commander as usual."}

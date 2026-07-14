@@ -71,6 +71,13 @@ export async function downloadLeavePassPdf(
   verification?: PassVerification
 ) {
   const isCadet = leave.studentType === "CADET";
+  // Academic Leave's own PDF is a record copy, not a gate pass — it never
+  // shows the gate verification QR/code section, even though every leave
+  // (Academic Leave included) gets a verifyCode at creation. Gate itself
+  // already refuses to treat an Academic Leave as a valid pass regardless
+  // (isGateEligible excludes it), so showing gate-scan instructions on it
+  // would just be misleading.
+  const isAcademicType = leave.type === "Academic Leave";
   // Run independently — previously sequential, so a slow/failed logo load
   // (up to a 2s fallback timeout) delayed the QR code from even starting.
   const [crestData, qrData] = await Promise.all([
@@ -124,7 +131,7 @@ export async function downloadLeavePassPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(245, 196, 90);
-  doc.text(`${leave.type.toUpperCase()}  /  OFFICIAL PASS`, 43, 34);
+  doc.text(`${leave.type.toUpperCase()}  /  ${isAcademicType ? "RECORD COPY" : "OFFICIAL PASS"}`, 43, 34);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(210, 220, 245);
@@ -183,7 +190,8 @@ export async function downloadLeavePassPdf(
     doc.text("EMERGENCY LEAVE", 105, 55.1, { align: "center" });
   }
 
-  if (leave.verifyCode) {
+  const showVerifyBox = Boolean(leave.verifyCode) && !isAcademicType;
+  if (showVerifyBox) {
     const vY = 60.2;
     const boxH = qrData ? 20 : 9.5;
     doc.setFillColor(255, 247, 230);
@@ -206,7 +214,7 @@ export async function downloadLeavePassPdf(
     doc.text("GATE VERIFICATION CODE", textX, vY + 5);
     doc.setFontSize(13);
     doc.setTextColor(...ORANGE);
-    doc.text(leave.verifyCode, textX, vY + 10.5);
+    doc.text(leave.verifyCode ?? "—", textX, vY + 10.5);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.6);
     doc.setTextColor(...MUTED);
@@ -222,7 +230,7 @@ export async function downloadLeavePassPdf(
     );
   }
 
-  let y = leave.verifyCode ? (qrData ? 84 : 73) : 66;
+  let y = showVerifyBox ? (qrData ? 84 : 73) : 66;
   function sectionHeader(title: string, color: [number, number, number]) {
     doc.setFillColor(...color);
     doc.rect(6, y, pageW - 12, 7, "F");
@@ -466,8 +474,9 @@ export async function downloadLeavePassPdf(
   doc.setFont("helvetica", "italic");
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
-  const note =
-    "This is a computer-generated official document issued via the Online Leave Management System (OLMS), KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
+  const note = isAcademicType
+    ? "This is a computer-generated record copy issued via the Online Leave Management System (OLMS), KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
+    : "This is a computer-generated official document issued via the Online Leave Management System (OLMS), KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
   doc.text(doc.splitTextToSize(note, 190), 10, footY + 5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
@@ -478,5 +487,6 @@ export async function downloadLeavePassPdf(
     { align: "center" }
   );
 
-  doc.save(`LeavePass_${leave.indexNumber}_${leave.startDate}.pdf`);
+  const fileTypeTag = leave.type.replace(/\s+/g, "");
+  doc.save(`LeavePass_${leave.indexNumber}_${fileTypeTag}_${leave.startDate}.pdf`);
 }

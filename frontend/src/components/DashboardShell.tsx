@@ -20,6 +20,83 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
+// A small live analog clock face, replacing the old digital-time pill.
+// Hover shows the exact digital time as a tooltip for anyone who wants it.
+function RoundClock({ now }: { now: Date }) {
+  const seconds = now.getSeconds();
+  const minutes = now.getMinutes();
+  const hours = now.getHours() % 12;
+  const secDeg = seconds * 6;
+  const minDeg = minutes * 6 + seconds * 0.1;
+  const hourDeg = hours * 30 + minutes * 0.5;
+
+  const ticks = Array.from({ length: 12 }, (_, i) => {
+    const angle = i * 30 * (Math.PI / 180);
+    const outer = 44;
+    const inner = i % 3 === 0 ? 36 : 39;
+    return {
+      x1: 50 + outer * Math.sin(angle),
+      y1: 50 - outer * Math.cos(angle),
+      x2: 50 + inner * Math.sin(angle),
+      y2: 50 - inner * Math.cos(angle),
+    };
+  });
+
+  return (
+    <div
+      title={now.toLocaleTimeString()}
+      className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[#152569] to-[#0a1435] shadow-[0_2px_10px_rgba(0,0,0,0.35)] sm:flex"
+    >
+      <svg viewBox="0 0 100 100" className="h-8 w-8">
+        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(245,147,50,0.35)" strokeWidth="2" />
+        {ticks.map((t, i) => (
+          <line
+            key={i}
+            x1={t.x1}
+            y1={t.y1}
+            x2={t.x2}
+            y2={t.y2}
+            stroke="#f59332"
+            strokeWidth={i % 3 === 0 ? 3 : 1.5}
+            strokeLinecap="round"
+          />
+        ))}
+        <line
+          x1="50"
+          y1="50"
+          x2="50"
+          y2="26"
+          stroke="#f5f7fa"
+          strokeWidth="4"
+          strokeLinecap="round"
+          transform={`rotate(${hourDeg} 50 50)`}
+        />
+        <line
+          x1="50"
+          y1="50"
+          x2="50"
+          y2="16"
+          stroke="#f5f7fa"
+          strokeWidth="3"
+          strokeLinecap="round"
+          transform={`rotate(${minDeg} 50 50)`}
+        />
+        <line
+          x1="50"
+          y1="56"
+          x2="50"
+          y2="12"
+          stroke="#d4a017"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          transform={`rotate(${secDeg} 50 50)`}
+        />
+        <circle cx="50" cy="50" r="4" fill="#d4a017" />
+      </svg>
+    </div>
+  );
+}
+
 export function DashboardShell({
   role,
   title,
@@ -41,7 +118,7 @@ export function DashboardShell({
 }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const [clock, setClock] = useState("");
+  const [now, setNow] = useState(new Date());
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -71,9 +148,7 @@ export function DashboardShell({
   }, [loading, user, role, router]);
 
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString());
-    tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -163,9 +238,7 @@ export function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-lg border border-[rgba(224,123,32,0.2)] bg-[rgba(224,123,32,0.1)] px-3 py-1 font-mono text-xs font-semibold tracking-wide text-[var(--orange2)] sm:inline">
-              {clock}
-            </span>
+            <RoundClock now={now} />
             <span className="rounded-lg border border-[rgba(37,99,176,0.3)] bg-[rgba(37,99,176,0.15)] px-3 py-1 font-mono text-xs text-[var(--sky)]">
               {user.username}
             </span>

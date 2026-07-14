@@ -181,11 +181,14 @@ function LocationPinCard({ address }: { address: string }) {
 export function LeaveDetailModal({
   leave,
   onClose,
-  onDownloadPdf,
+  pdfActions,
 }: {
   leave: LeaveRequest;
   onClose: () => void;
-  onDownloadPdf?: () => void;
+  // A leave applied together with a linked one (Academic + Personal Leave)
+  // can have two independently-downloadable PDFs once each is approved —
+  // the caller decides which are currently valid and passes them here.
+  pdfActions?: { label: string; onClick: () => void }[];
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
@@ -365,11 +368,11 @@ export function LeaveDetailModal({
             <Button variant="ghost" onClick={onClose}>
               Close
             </Button>
-            {approved && onDownloadPdf && (
-              <Button variant="accent" onClick={onDownloadPdf}>
-                📥 Download PDF
+            {pdfActions?.map((action) => (
+              <Button key={action.label} variant="accent" onClick={action.onClick}>
+                📥 {action.label}
               </Button>
-            )}
+            ))}
           </div>
         </div>
       </div>
