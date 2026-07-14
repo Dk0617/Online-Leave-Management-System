@@ -37,6 +37,25 @@ function curfewBlockReason(direction: "Exit" | "Entry", leaveType: string): stri
   return null;
 }
 
+// A student is either on campus or out on leave — Exit/Entry must
+// alternate. Mirrors the backend check in gatecontrol.js logMovement.
+function sequenceBlockReason(
+  direction: "Exit" | "Entry",
+  indexNumber: string,
+  movements: { indexNumber: string; direction: "Exit" | "Entry"; timestamp: string }[]
+): string | null {
+  const last = [...movements]
+    .filter((m) => m.indexNumber === indexNumber)
+    .sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))[0];
+  if (direction === "Entry" && (!last || last.direction !== "Exit")) {
+    return `${indexNumber} has not exited campus yet — cannot log Entry before Exit. Did you mean to click Log Exit?`;
+  }
+  if (direction === "Exit" && last?.direction === "Exit") {
+    return `${indexNumber} has already exited and not yet returned — cannot log another Exit. Did you mean to click Log Entry?`;
+  }
+  return null;
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();

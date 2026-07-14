@@ -130,13 +130,15 @@ export const requestOtp = async (req, res) => {
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
-  try {
-    await sendOtpEmail(email, code);
-  } catch (err) {
-    console.error(`[MAIL] Failed to send OTP to ${email}:`, err.message);
-  }
   await writeAudit(role, user.username, "otp_requested", "");
   res.json({ message: "A login code has been sent to your email." });
+
+  // Fire-and-forget, same reason as the approval email in leavecontrol.js —
+  // don't make the user wait on an SMTP round-trip before they even see the
+  // "check your email" screen.
+  sendOtpEmail(email, code).catch((err) => {
+    console.error(`[MAIL] Failed to send OTP to ${email}:`, err.message);
+  });
 };
 
 export const verifyOtp = async (req, res) => {

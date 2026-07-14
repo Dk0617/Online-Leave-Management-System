@@ -109,6 +109,24 @@ export const logMovement = async (req, res) => {
       message: `${indexNumber} does not have a fully approved, currently gate-eligible leave pass.`,
     });
   }
+
+  // A student can only be in one physical state at a time — either on
+  // campus or out on leave — so Exit/Entry must alternate. Without this
+  // check, clicking the wrong button (e.g. Entry for someone who hasn't
+  // left yet, or a second Exit before they've returned) would silently
+  // record a nonsensical movement instead of catching the mistake here.
+  const lastMovement = await Movement.findOne({ indexNumber: indexNumber.toUpperCase() }).sort({ createdAt: -1 });
+  if (direction === "Entry" && (!lastMovement || lastMovement.direction !== "Exit")) {
+    return res.status(403).json({
+      message: `${indexNumber} has not exited campus yet — cannot log Entry before Exit. Did you mean to click Log Exit?`,
+    });
+  }
+  if (direction === "Exit" && lastMovement && lastMovement.direction === "Exit") {
+    return res.status(403).json({
+      message: `${indexNumber} has already exited and not yet returned — cannot log another Exit. Did you mean to click Log Entry?`,
+    });
+  }
+
   if (direction === "Exit" && !isCurrentlyValid(leave)) {
     return res.status(403).json({
       message: `Exit is only allowed within the approved leave period (${leave.startDate} ${leave.startTime} to ${leave.endDate} ${leave.endTime}). It is currently outside that window.`,

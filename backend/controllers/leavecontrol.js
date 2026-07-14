@@ -103,18 +103,24 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
 
   await writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
 
-  if (decision === "Approved" && isApproved(leave)) {
-    try {
-      const student = await Student.findById(leave.studentId);
-      if (student?.email) {
-        await sendApprovalEmail(student.email, student.name, leave);
-      }
-    } catch (err) {
-      console.error("Failed to send approval email:", err.message);
-    }
-  }
-
   res.json(leave);
+
+  // Fire-and-forget: sent after the response so the approver's click
+  // doesn't sit there waiting on an SMTP round-trip (which can take several
+  // seconds) before the UI updates. A failed send is only logged, never
+  // surfaced to the approver — they've already gotten their success response.
+  if (decision === "Approved" && isApproved(leave)) {
+    (async () => {
+      try {
+        const student = await Student.findById(leave.studentId);
+        if (student?.email) {
+          await sendApprovalEmail(student.email, student.name, leave);
+        }
+      } catch (err) {
+        console.error("Failed to send approval email:", err.message);
+      }
+    })();
+  }
 }
 
 // Shared shape for HOD / Squadron / SDD — each owns exactly one status
