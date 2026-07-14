@@ -160,6 +160,24 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function LocationPinCard({ address }: { address: string }) {
+  return (
+    <div className="my-2.5 flex items-start gap-3 rounded-xl border border-[rgba(74,144,217,0.3)] bg-[rgba(74,144,217,0.08)] p-3.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--sky)] text-lg shadow-[0_2px_8px_rgba(74,144,217,0.4)]">
+        📍
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--sky)]">
+          Where You&apos;ll Be Staying
+        </div>
+        <div className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-[var(--white)]">
+          {address}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LeaveDetailModal({
   leave,
   onClose,
@@ -171,17 +189,17 @@ export function LeaveDetailModal({
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
-  // Cadet Academic Leave routes Troop Commander -> Squadron Commander only
-  // (no SDD) — identified by sddStatus permanently "N/A", same marker used
-  // by isApproved/isRejected. Everything else follows the normal 3-stage
-  // cadet chain (Troop -> Squadron -> SDD). Cadets never touch HOD.
-  const isCadetAcademicOnly = isCadet && leave.sddStatus === "N/A";
+  // Cadet Academic Leave routes HOD -> Squadron only (no Troop, no SDD) —
+  // identified by troopStatus permanently "N/A", same marker used by
+  // isApproved/isRejected. Everything else follows the normal 3-stage
+  // cadet chain (Troop -> Squadron -> SDD).
+  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
 
   const steps: TimelineStep[] = isCadetAcademicOnly
     ? [
         { label: "Applied", status: "done" },
-        { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, true) },
-        { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.troopStatus === "Approved") },
+        { label: "HOD", status: stepStatus(leave.hodStatus, true) },
+        { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.hodStatus === "Approved") },
         { label: "Filed", status: approved ? "done" : "wait" },
       ]
     : isCadet
@@ -235,25 +253,58 @@ export function LeaveDetailModal({
           <Row label="From" value={`${leave.startDate} ${leave.startTime}`} />
           <Row label="To" value={`${leave.endDate} ${leave.endTime}`} />
           <Row label="Reason" value={leave.reason} />
-          <Row label="Address" value={leave.address} />
+          <LocationPinCard address={leave.address} />
           <Row label="Contact Number" value={leave.contactNumber} />
           <Row
             label="Supporting Document"
             value={
               leave.attachmentData ? (
-                <a href={leave.attachmentData} download={leave.attachmentName} className="text-[var(--sky)]">
-                  📎 {leave.attachmentName}
+                <a
+                  href={leave.attachmentData}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--sky)]"
+                >
+                  📎 View {leave.attachmentName}
                 </a>
               ) : leave.attachmentName ? (
                 <span className="text-[var(--muted)]">
                   📎 {leave.attachmentName} (view via the approval queue to open the file)
                 </span>
               ) : (
-                <span className="text-[var(--muted)]">None</span>
+                <span className="text-[var(--muted)]">
+                  None — not required for this leave type
+                </span>
               )
             }
           />
           <Row label="Applied On" value={leave.appliedDate} />
+
+          {leave.linkedLeave && (
+            <>
+              <div className="mb-1 mt-3 text-[10px] font-bold uppercase tracking-wide text-[var(--sky)]">
+                Linked {LEAVE_TYPE_LABELS[leave.linkedLeave.type]} — applied together with this leave
+              </div>
+              <Row label="Reason" value={leave.linkedLeave.reason} />
+              <Row
+                label="Supporting Document"
+                value={
+                  leave.linkedLeave.attachmentData ? (
+                    <a
+                      href={leave.linkedLeave.attachmentData}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--sky)]"
+                    >
+                      📎 View {leave.linkedLeave.attachmentName}
+                    </a>
+                  ) : (
+                    <span className="text-[var(--muted)]">None — not required for this leave type</span>
+                  )
+                }
+              />
+            </>
+          )}
 
           {!isCadet ? (
             <>
@@ -282,6 +333,19 @@ export function LeaveDetailModal({
             </>
           ) : (
             <>
+              {isCadetAcademicOnly && (
+                <Row
+                  label="HOD"
+                  value={
+                    <>
+                      <Badge tone={statusTone(leave.hodStatus)}>{leave.hodStatus}</Badge>
+                      {leave.hodComment && (
+                        <em className="ml-2 text-xs text-[var(--muted)]">{leave.hodComment}</em>
+                      )}
+                    </>
+                  }
+                />
+              )}
               <Row
                 label="Troop Commander"
                 value={<Badge tone={statusTone(leave.troopStatus)}>{leave.troopStatus}</Badge>}

@@ -22,6 +22,50 @@ function sortByPriorityThenNewest(leaves) {
 // step for what is really one procedure.
 const HIDE_AUTO_PERSONAL = { $or: [{ type: { $ne: "Personal Leave" } }, { linkedLeaveId: null }] };
 
+// Troop-specific variant: for Cadets, the linked Personal Leave companion's
+// troopStatus never cascades from the Academic Leave (whose troopStatus
+// stays permanently "N/A" under the HOD -> Squadron routing) — Troop is
+// never part of the Academic Leave's own routing at all, so this stage can
+// only ever be decided directly on the companion. For Day Scholars the
+// companion's troopStatus is identical to (and cascades from) the Academic
+// Leave's, so it stays hidden there, same as every other role.
+const HIDE_AUTO_PERSONAL_EXCEPT_CADET = {
+  $or: [{ type: { $ne: "Personal Leave" } }, { linkedLeaveId: null }, { studentType: "CADET" }],
+};
+
+// A decision on a leave with a linkedLeaveId cascades to the linked leave
+// wherever they share a status field (see decide() below), but the two
+// records still have their own independent Reason and Supporting Document
+// — HOD approving an Academic Leave, for instance, never actually sees the
+// linked Personal Leave's own document even though their decision cascades
+// to approve it too. Attaches a lightweight `linkedLeave` summary (just
+// reason/attachment, not the full record) to each leave that has one, so
+// the approver can review both sides of the pair from a single leave's
+// detail view. Only used for Pending — History has no detail view to show
+// it in, and attachmentData is heavy enough to be worth not fetching twice.
+async function attachLinkedInfo(leaves) {
+  const linkedIds = leaves.map((l) => l.linkedLeaveId).filter(Boolean);
+  if (!linkedIds.length) return leaves;
+  const linkedDocs = await Leave.find({ _id: { $in: linkedIds } })
+    .select("reason attachmentName attachmentData type")
+    .lean();
+  const byId = new Map(linkedDocs.map((d) => [String(d._id), d]));
+  for (const leave of leaves) {
+    if (leave.linkedLeaveId) {
+      const linked = byId.get(String(leave.linkedLeaveId));
+      if (linked) {
+        leave.linkedLeave = {
+          type: linked.type,
+          reason: linked.reason,
+          attachmentName: linked.attachmentName,
+          attachmentData: linked.attachmentData,
+        };
+      }
+    }
+  }
+  return leaves;
+}
+
 async function decide(req, res, { statusField, commentField, atField, role, decision, scopeFilter }) {
   const { comment } = req.body;
   const scope = await scopeFilter(req);
@@ -36,13 +80,17 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
   leave[atField] = new Date().toLocaleString();
   await leave.save();
 
-  // Academic Leave and its auto-created Personal Leave share the same
-  // routing up through Troop Commander -> Squadron Commander (Day Scholar:
-  // HOD -> Troop Commander), so a decision at any of those shared stages
-  // applies automatically to both — the approver never has to act on both
-  // separately. They diverge after that for Cadets: Academic Leave stops
-  // at Squadron, while the Personal Leave continues on to SDD for its own
-  // separate final decision (see the sdd handler's hideAutoPersonal: false).
+  // Academic Leave and its auto-created Personal Leave cascade a decision
+  // between them wherever they share the same status field. For Day
+  // Scholars that's both stages (HOD -> Troop Commander for each), so a
+  // decision on either leave applies to both automatically. For Cadets the
+  // two routes only share the Squadron Commander stage (Academic Leave:
+  // HOD -> Squadron; Personal Leave: Troop -> Squadron -> SDD) — HOD and
+  // Troop Commander each only ever decide on one side of the pair, and
+  // never cascade across, so they see and decide on the linked Personal
+  // Leave directly for Cadets (see troopPendingCadet/troopPending/
+  // troopHistory's cadetVisibleFilter, and the sdd handler's
+  // hideAutoPersonal: false).
   if (leave.linkedLeaveId) {
     const linked = await Leave.findById(leave.linkedLeaveId);
     if (linked && linked[statusField] === "Pending") {
@@ -99,8 +147,8 @@ function buildRoleHandlers({
         ...autoPersonalFilter,
         ...(pendingExtraFilter || {}),
         [statusField]: "Pending",
-      });
-      res.json(sortByPriorityThenNewest(leaves));
+      }).lean();
+      res.json(sortByPriorityThenNewest(await attachLinkedInfo(leaves)));
     },
     history: async (req, res) => {
       // History views never show the attachment (no LeaveDetailModal here,
@@ -128,9 +176,11 @@ export const hod = buildRoleHandlers({
   scopeFilter: async (req) => ({ hodId: req.user.id }),
 });
 
-// ── Squadron Commander — Cadet leaves, stage 2, only after Troop
-// Commander has approved (troopStatus === "Approved"). hodStatus is
-// always "N/A" for Cadets (they have no HOD in their routing at all).
+// ── Squadron Commander — Cadet leaves. Normally only after Troop has
+// approved; Academic Leave skips Troop entirely and goes through HOD
+// instead (troopStatus stays "N/A", hodStatus carries the first-stage
+// decision for that routing) — either way, whichever field is actually
+// "in play" for this leave must be Approved before Squadron sees it.
 export const squadran = buildRoleHandlers({
   role: "SQUADRAN",
   statusField: "sqnStatus",
@@ -138,8 +188,8 @@ export const squadran = buildRoleHandlers({
   atField: "sqnApprovedAt",
   scopeFilter: async (req) => ({ sqnId: req.user.id }),
   pendingExtraFilter: {
-    troopStatus: "Approved",
-    hodStatus: "N/A",
+    troopStatus: { $in: ["Approved", "N/A"] },
+    hodStatus: { $in: ["Approved", "N/A"] },
   },
 });
 
@@ -167,7 +217,7 @@ export const sddOverview = async (req, res) => {
 };
 
 export const sddPipeline = async (req, res) => {
-  // sddStatus stays "N/A" for Cadet Academic Leave (Troop -> Squadron only,
+  // sddStatus stays "N/A" for Cadet Academic Leave (HOD -> Squadron only,
   // no SDD step) — excluded here so the "In Progress" count doesn't include
   // leaves that will never actually reach SDD.
   const leaves = await Leave.find({
@@ -199,7 +249,12 @@ export const troopPendingDayScholar = async (req, res) => {
 
 export const troopPendingCadet = async (req, res) => {
   const scope = await troopScopeFilter(req);
-  const leaves = await Leave.find({ ...scope, ...HIDE_AUTO_PERSONAL, studentType: "CADET", troopStatus: "Pending" });
+  const leaves = await Leave.find({
+    ...scope,
+    ...HIDE_AUTO_PERSONAL_EXCEPT_CADET,
+    studentType: "CADET",
+    troopStatus: "Pending",
+  });
   res.json(sortByPriorityThenNewest(leaves));
 };
 
@@ -209,7 +264,7 @@ export const troopPending = async (req, res) => {
     ...scope,
     troopStatus: "Pending",
     $and: [
-      HIDE_AUTO_PERSONAL,
+      HIDE_AUTO_PERSONAL_EXCEPT_CADET,
       { $or: [{ studentType: "CADET" }, { studentType: "DAY_SCHOLAR", hodStatus: "Approved" }] },
     ],
   });
@@ -221,7 +276,7 @@ export const troopHistory = async (req, res) => {
   const scope = await troopScopeFilter(req);
   const leaves = await Leave.find({
     ...scope,
-    ...HIDE_AUTO_PERSONAL,
+    ...HIDE_AUTO_PERSONAL_EXCEPT_CADET,
     troopStatus: { $in: ["Approved", "Rejected"] },
   })
     .select("-attachmentData")

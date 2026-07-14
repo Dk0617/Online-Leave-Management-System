@@ -7,6 +7,18 @@ import { isApproved, isRejected } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType } from "@/src/types";
 import styles from "./admin.module.css";
 
+const PASSWORD_POLICY_MESSAGE =
+  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+function isValidPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
+
 function Breakdown({
   label,
   value,
@@ -281,9 +293,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [mobile, setMobile] = useState("");
   const [intake, setIntake] = useState("");
   const [studentType, setStudentType] = useState<StudentType>("DAY_SCHOLAR");
-  const [hodId, setHodId] = useState("");
   const [sqnId, setSqnId] = useState("");
-  const [troopIds, setTroopIds] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -291,13 +301,16 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
     new Set(hods.map((h) => h.department).filter((d): d is string => !!d))
   ).sort();
 
-  function toggleTroop(id: string) {
-    setTroopIds((prev) => {
-      if (prev.includes(id)) return prev.filter((t) => t !== id);
-      if (prev.length >= 2) return prev;
-      return [...prev, id];
-    });
-  }
+  // HOD and Troop Commander(s) are never picked directly — each Day
+  // Scholar's HOD is already fully determined by their Department (every
+  // HOD account owns exactly one department), and each student's Troop
+  // Commander(s) are already fully determined by their Intake (Troop
+  // accounts are assigned specific intakes). Re-picking either one
+  // manually would just be re-entering the same fact a second time and
+  // risking it disagreeing with the first, so both are derived here
+  // instead.
+  const derivedHod = department ? hods.find((h) => h.department === department) : undefined;
+  const derivedTroops = intake ? troops.filter((t) => (t.intakes ?? []).includes(intake)) : [];
 
   function resetForm() {
     setEditingId(null);
@@ -309,10 +322,8 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setMobile("");
     setIntake("");
     setStudentType("DAY_SCHOLAR");
-    setHodId("");
     setSqnId("");
     setPassword("");
-    setTroopIds([]);
   }
 
   function startEdit(id: string) {
@@ -327,27 +338,57 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setMobile(s.mobile ?? "");
     setIntake(s.intake ?? "");
     setStudentType(s.studentType);
-    setHodId(refId(s.hodId));
     setSqnId(refId(s.sqnId));
-    setTroopIds(s.troopIds.map(refId).filter(Boolean));
     setPassword("");
   }
 
   async function handleSubmit() {
-    if (!indexNumber.trim() || !firstName.trim() || !lastName.trim()) {
+    if (!editingId) {
+      if (
+        !indexNumber.trim() ||
+        !firstName.trim() ||
+        !lastName.trim() ||
+        !department ||
+        !email.trim() ||
+        !mobile.trim() ||
+        !intake ||
+        !password.trim()
+      ) {
+        setError("All fields are required to create a student account.");
+        return;
+      }
+    } else if (!indexNumber.trim() || !firstName.trim() || !lastName.trim()) {
       setError("Index number, first and last name are required.");
       return;
     }
-    if (!troopIds.length) {
-      setError("Assign at least one Troop Commander (up to 2).");
+    if (!intake) {
+      setError("Select an Intake.");
       return;
     }
-    if (studentType === "DAY_SCHOLAR" && !hodId) {
-      setError("Select an HOD for this Day Scholar.");
+    if (!derivedTroops.length) {
+      setError(`No Troop Commander is assigned to Intake ${intake} yet — assign one under Troop Commanders first.`);
       return;
+    }
+    if (studentType === "DAY_SCHOLAR") {
+      if (!department) {
+        setError("Select a Department for this Day Scholar.");
+        return;
+      }
+      if (!derivedHod) {
+        setError(`No HOD is assigned to department "${department}" yet — add one under HOD accounts first.`);
+        return;
+      }
     }
     if (studentType === "CADET" && !sqnId) {
       setError("Select a Squadron Commander for this Officer Cadet.");
+      return;
+    }
+    if (mobile.trim() && !/^\d{10}$/.test(mobile.trim())) {
+      setError("Mobile number must be exactly 10 digits, numbers only.");
+      return;
+    }
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -360,8 +401,8 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       mobile: mobile.trim() || undefined,
       studentType,
       intake,
-      troopIds,
-      hodId: studentType === "DAY_SCHOLAR" ? hodId : undefined,
+      troopIds: derivedTroops.map((t) => t.id),
+      hodId: studentType === "DAY_SCHOLAR" ? derivedHod?.id : undefined,
       sqnId: studentType === "CADET" ? sqnId : undefined,
       password: password.trim() || undefined,
     };
@@ -390,28 +431,51 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
     <div>
       <Card className="mb-5 p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
-          {editingId ? "✏️ Edit Student Account" : "➕ Create Student Account"}
+          {editingId ? "✏️ Edit Student Account" : "Create Student Account"}
         </h2>
 
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
-            <label className={styles.label}>Index Number (used as Username)</label>
-            <input value={indexNumber} onChange={(e) => setIndexNumber(e.target.value)} placeholder="e.g. SC/2024/045" className={styles.input} />
+            <label className={styles.label}>
+              Index Number (used as Username)<span className="ml-0.5 text-[var(--err)]">*</span>
+              {editingId && <span className="ml-1 text-[var(--muted)]">(cannot be changed)</span>}
+            </label>
+            <input
+              value={indexNumber}
+              onChange={(e) => setIndexNumber(e.target.value)}
+              placeholder="e.g. SC/2024/045"
+              disabled={!!editingId}
+              className={styles.input}
+              style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+            />
           </div>
           <div>
-            <label className={styles.label}>First Name</label>
+            <label className={styles.label}>
+              First Name<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={styles.input} />
           </div>
           <div>
-            <label className={styles.label}>Last Name</label>
+            <label className={styles.label}>
+              Last Name<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={styles.input} />
           </div>
         </div>
 
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
-            <label className={styles.label}>Department / Section</label>
-            <select value={department} onChange={(e) => setDepartment(e.target.value)} className={styles.input}>
+            <label className={styles.label}>
+              Department / Section<span className="ml-0.5 text-[var(--err)]">*</span>
+              {editingId && <span className="ml-1 text-[var(--muted)]">(cannot be changed)</span>}
+            </label>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              disabled={!!editingId}
+              className={styles.input}
+              style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+            >
               <option value="">{departmentOptions.length ? "Select department…" : "No departments — add an HOD first"}</option>
               {departmentOptions.map((d) => (
                 <option key={d} value={d}>
@@ -421,19 +485,39 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
             </select>
           </div>
           <div>
-            <label className={styles.label}>Email</label>
+            <label className={styles.label}>
+              Email<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@kdu.ac.lk" className={styles.input} />
           </div>
           <div>
-            <label className={styles.label}>Mobile</label>
-            <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="07XXXXXXXX" className={styles.input} />
+            <label className={styles.label}>
+              Mobile<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="07XXXXXXXX"
+              inputMode="numeric"
+              maxLength={10}
+              className={styles.input}
+            />
           </div>
         </div>
 
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
-            <label className={styles.label}>Intake</label>
-            <select value={intake} onChange={(e) => setIntake(e.target.value)} className={styles.input}>
+            <label className={styles.label}>
+              Intake<span className="ml-0.5 text-[var(--err)]">*</span>
+              {editingId && <span className="ml-1 text-[var(--muted)]">(cannot be changed)</span>}
+            </label>
+            <select
+              value={intake}
+              onChange={(e) => setIntake(e.target.value)}
+              disabled={!!editingId}
+              className={styles.input}
+              style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+            >
               <option value="">{intakes.length ? "Select intake…" : "No intakes — add one first"}</option>
               {intakes.map((i) => (
                 <option key={i.id} value={i.code}>
@@ -443,11 +527,16 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
             </select>
           </div>
           <div>
-            <label className={styles.label}>Student Type</label>
+            <label className={styles.label}>
+              Student Type
+              {editingId && <span className="ml-1 text-[var(--muted)]">(cannot be changed)</span>}
+            </label>
             <select
               value={studentType}
               onChange={(e) => setStudentType(e.target.value as StudentType)}
+              disabled={!!editingId}
               className={styles.input}
+              style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
             >
               <option value="DAY_SCHOLAR">Day Scholar</option>
               <option value="CADET">Officer Cadet</option>
@@ -455,15 +544,16 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
           </div>
           {studentType === "DAY_SCHOLAR" ? (
             <div>
-              <label className={styles.label}>HOD (Day Scholar)</label>
-              <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
-                <option value="">Select HOD…</option>
-                {hods.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.department} ({h.name})
-                  </option>
-                ))}
-              </select>
+              <label className={styles.label}>HOD (auto-assigned from Department)</label>
+              <div className={styles.input} style={{ display: "flex", alignItems: "center", opacity: 0.85 }}>
+                {derivedHod ? (
+                  `${derivedHod.department} (${derivedHod.name})`
+                ) : department ? (
+                  <span className="text-[var(--err)]">No HOD found for &quot;{department}&quot;</span>
+                ) : (
+                  <span className="text-[var(--muted)]">Select a department first</span>
+                )}
+              </div>
             </div>
           ) : (
             <div>
@@ -481,30 +571,28 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
         </div>
 
         <div className="mb-3.5">
-          <label className={styles.label}>
-            Troop Commander(s) — choose 1 or 2
-          </label>
-          <div className={styles.chkGroup}>
-            {troops.length === 0 ? (
-              <span className="text-xs text-[var(--muted)]">No Troop Commanders exist yet — create one first.</span>
+          <label className={styles.label}>Troop Commander(s) (auto-assigned from Intake)</label>
+          <div className={styles.input} style={{ display: "flex", alignItems: "center", minHeight: "2.5rem", opacity: 0.85 }}>
+            {derivedTroops.length ? (
+              derivedTroops.map((t) => t.name).join(", ")
+            ) : intake ? (
+              <span className="text-[var(--err)]">No Troop Commander assigned to Intake {intake}</span>
             ) : (
-              troops.map((t) => (
-                <label key={t.id} className={styles.chkPill}>
-                  <input type="checkbox" checked={troopIds.includes(t.id)} onChange={() => toggleTroop(t.id)} />
-                  {t.name}
-                </label>
-              ))
+              <span className="text-[var(--muted)]">Select an intake first</span>
             )}
           </div>
         </div>
 
         <div className="mb-4">
           <label className={styles.label}>
-            Password {editingId ? "(leave blank to keep current)" : "(defaults to Department name — override if needed)"}
+            Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
           </label>
           <div className="flex gap-2">
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={styles.input} />
           </div>
+          <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+          </p>
         </div>
 
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
@@ -623,8 +711,17 @@ export function StaffRole({
   }
 
   async function handleSubmit() {
-    if (!username.trim() || !name.trim() || (extraLabel && !extra.trim())) {
+    if (!editingId) {
+      if (!username.trim() || !name.trim() || (extraLabel && !extra.trim()) || !email.trim() || !password.trim()) {
+        setError("All fields are required to create an account.");
+        return;
+      }
+    } else if (!username.trim() || !name.trim() || (extraLabel && !extra.trim())) {
       setError("Please fill in all fields.");
+      return;
+    }
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -665,20 +762,27 @@ export function StaffRole({
     <div>
       <Card className="mb-5 p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
-          {editingId ? `✏️ Edit ${title}` : `➕ Create ${title} Account`}
+          {editingId ? `✏️ Edit ${title}` : `Create ${title} Account`}
         </h2>
         <div className={`${extraLabel ? styles.formGrid3 : styles.formGrid2} mb-4`}>
           <div>
-            <label className={styles.label}>Username</label>
+            <label className={styles.label}>
+              Username<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} className={styles.input} />
           </div>
           <div>
-            <label className={styles.label}>Full Name</label>
+            <label className={styles.label}>
+              Full Name<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={name} onChange={(e) => setName(e.target.value)} className={styles.input} />
           </div>
           {extraLabel && (
             <div>
-              <label className={styles.label}>{extraLabel}</label>
+              <label className={styles.label}>
+                {extraLabel}
+                <span className="ml-0.5 text-[var(--err)]">*</span>
+              </label>
               <input
                 value={extra}
                 onChange={(e) => setExtra(e.target.value)}
@@ -689,7 +793,9 @@ export function StaffRole({
           )}
         </div>
         <div className="mb-4">
-          <label className={styles.label}>Email (optional — enables login by email code)</label>
+          <label className={styles.label}>
+            Email (enables login by email code)<span className="ml-0.5 text-[var(--err)]">*</span>
+          </label>
           <input
             type="email"
             value={email}
@@ -699,8 +805,13 @@ export function StaffRole({
           />
         </div>
         <div className="mb-4">
-          <label className={styles.label}>Password {editingId ? "(leave blank to keep current)" : "(leave blank to auto-generate)"}</label>
+          <label className={styles.label}>
+            Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
+          </label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
+          <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+          </p>
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         <div className="flex gap-2">
@@ -797,12 +908,21 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
   }
 
   async function handleSubmit() {
-    if (!username.trim() || !name.trim()) {
+    if (!editingId) {
+      if (!username.trim() || !name.trim() || !email.trim() || !password.trim()) {
+        setError("All fields are required to create an account.");
+        return;
+      }
+    } else if (!username.trim() || !name.trim()) {
       setError("Please fill in username and name.");
       return;
     }
     if (!selectedIntakes.length) {
       setError("Assign at least one intake to this troop officer.");
+      return;
+    }
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -843,24 +963,35 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
     <div>
       <Card className="mb-5 p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
-          {editingId ? "✏️ Edit Troop Commander" : "➕ Create Troop Commander Account"}
+          {editingId ? "✏️ Edit Troop Commander" : "Create Troop Commander Account"}
         </h2>
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
-            <label className={styles.label}>Username</label>
+            <label className={styles.label}>
+              Username<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. troop4" className={styles.input} />
           </div>
           <div>
-            <label className={styles.label}>Full Name</label>
+            <label className={styles.label}>
+              Full Name<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lt. Cmdr. Full Name" className={styles.input} />
           </div>
           <div>
-            <label className={styles.label}>Password {editingId && "(leave blank to keep current)"}</label>
+            <label className={styles.label}>
+              Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
+            </label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
+            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+              Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+            </p>
           </div>
         </div>
         <div className="mb-3.5">
-          <label className={styles.label}>Email (optional — enables login by email code)</label>
+          <label className={styles.label}>
+            Email (enables login by email code)<span className="ml-0.5 text-[var(--err)]">*</span>
+          </label>
           <input
             type="email"
             value={email}

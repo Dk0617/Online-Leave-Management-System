@@ -16,6 +16,11 @@ export interface NewLeaveInput {
   contactNumber: string;
   attachmentName?: string;
   attachmentData?: string;
+  // Only used when type === "Academic Leave" — the linked Personal Leave
+  // applied together with it has its own independent reason/attachment.
+  personalReason?: string;
+  personalAttachmentName?: string;
+  personalAttachmentData?: string;
 }
 
 export interface ProfileInput {

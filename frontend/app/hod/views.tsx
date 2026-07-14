@@ -29,8 +29,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
       )}
       <div className={styles.infoBanner}>
         <strong>Your Role:</strong> You approve <strong>Day Scholar</strong> leave applications at Stage 1 —
-        after your approval, they move to the Troop Commander. Officer Cadets never route through HOD (their
-        leaves go straight to Troop Commander). Only students in your department appear here.
+        after your approval, they move to the Troop Commander. You also approve <strong>Officer Cadet Academic
+        Leave</strong> (matched to your department), which skips Troop Commander entirely and moves straight
+        to the Squadron Commander instead. Only students in your department appear here.
       </div>
 
       <div className={styles.statGrid}>
@@ -131,21 +132,33 @@ function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; empt
               </td>
             </tr>
           ) : (
-            rows.map((l) => (
-              <tr key={l.id}>
-                <td>{l.studentName}</td>
-                <td>{l.indexNumber}</td>
-                <td>{LEAVE_TYPE_LABELS[l.type]}</td>
-                <td>{l.startDate}</td>
-                <td>{l.endDate}</td>
-                <td>
-                  <Badge tone={tone(l.hodStatus)}>{l.hodStatus}</Badge>
-                </td>
-                <td className="text-[var(--muted)]">
-                  <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
-                </td>
-              </tr>
-            ))
+            rows.map((l) => {
+              // Cadet Academic Leave skips Troop Commander entirely (routed to
+              // Squadron instead) — troopStatus stays "N/A" forever for it,
+              // unlike a Day Scholar leave where "N/A" means "not reached yet".
+              const isCadetAcademic = l.studentType === "CADET";
+              return (
+                <tr key={l.id}>
+                  <td>{l.studentName}</td>
+                  <td>{l.indexNumber}</td>
+                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td>{l.startDate}</td>
+                  <td>{l.endDate}</td>
+                  <td>
+                    <Badge tone={tone(l.hodStatus)}>{l.hodStatus}</Badge>
+                  </td>
+                  <td className="text-[var(--muted)]">
+                    {isCadetAcademic ? (
+                      <Badge tone={tone(l.sqnStatus)}>Squadron: {l.sqnStatus}</Badge>
+                    ) : (
+                      <Badge tone={tone(l.troopStatus)}>
+                        {l.troopStatus === "N/A" ? "Pending at Troop" : l.troopStatus}
+                      </Badge>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
@@ -155,11 +168,13 @@ function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; empt
 
 export function History({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
   const { history } = portal;
-  const [query, setQuery] = useState("");
+  const [dsQuery, setDsQuery] = useState("");
+  const [cdQuery, setCdQuery] = useState("");
 
-  // HOD is scoped to hodId, which is only ever set for Day Scholars — Officer
-  // Cadets never route through HOD, so this list is Day Scholars only.
-  const filtered = history.filter((l) => matchesSearch(l, query));
+  const dayScholarHistory = history.filter(
+    (l) => l.studentType === "DAY_SCHOLAR" && matchesSearch(l, dsQuery)
+  );
+  const cadetHistory = history.filter((l) => l.studentType === "CADET" && matchesSearch(l, cdQuery));
 
   return (
     <div>
@@ -167,14 +182,27 @@ export function History({ portal }: { portal: ReturnType<typeof useHodPortal> })
         <h2 className="text-sm font-bold text-[var(--white)]">Day Scholar History</h2>
         <div className="w-64">
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={dsQuery}
+            onChange={(e) => setDsQuery(e.target.value)}
             placeholder="🔍 Search by name or index number..."
             className={styles.input}
           />
         </div>
       </div>
-      <HodHistoryTable rows={filtered} emptyMessage="No Day Scholar history." />
+      <HodHistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
+
+      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
+        <div className="w-64">
+          <input
+            value={cdQuery}
+            onChange={(e) => setCdQuery(e.target.value)}
+            placeholder="🔍 Search by name or index number..."
+            className={styles.input}
+          />
+        </div>
+      </div>
+      <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." />
     </div>
   );
 }

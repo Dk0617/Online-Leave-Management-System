@@ -9,9 +9,7 @@ export type LeaveStatus = "Pending" | "Approved" | "Rejected" | "N/A";
 export type LeaveType =
   | "Medical Leave"
   | "Personal Leave"
-  | "Family Emergency"
   | "Academic Leave"
-  | "Other"
   | "Emergency Leave";
 
 export type Priority = "normal" | "emergency";
@@ -31,17 +29,15 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   "Medical Leave": "Medical Leave",
   "Personal Leave": "Personal Leave",
-  "Family Emergency": "Family Emergency",
   "Academic Leave": "Academic Leave",
-  Other: "Other",
   "Emergency Leave": "🚨 Emergency Leave",
 };
 
 // Leave types that require a supporting document attachment. Academic Leave
 // never requires one, for either student type. See requiresAttachment in
 // api.ts, kept in sync with backend/controllers/studentcontrol.js.
-export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave", "Other"];
-export const DOC_REQUIRED_TYPES_CADET: LeaveType[] = ["Medical Leave", "Personal Leave", "Other"];
+export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave"];
+export const DOC_REQUIRED_TYPES_CADET: LeaveType[] = ["Medical Leave", "Personal Leave"];
 
 // ── Auth / session ────────────────────────────────────────────────
 export interface AuthUser {
@@ -130,6 +126,16 @@ export interface LeaveRequest {
   appliedDate: string;
   verifyCode?: string;
   linkedLeaveId?: string;
+  // Lightweight summary of the linked leave's own reason/attachment (only
+  // populated on Pending queue responses) — lets an approver reviewing an
+  // Academic Leave also see the linked Personal Leave's own document,
+  // since their decision cascades to approve it too but never shows it.
+  linkedLeave?: {
+    type: LeaveType;
+    reason: string;
+    attachmentName?: string;
+    attachmentData?: string;
+  };
 
   hodStatus: LeaveStatus;
   troopStatus: LeaveStatus;

@@ -88,22 +88,31 @@ export function DashboardShell({
   return (
     <div className="flex min-h-screen flex-1 bg-[var(--bg)]">
       <aside className="fixed left-0 top-0 flex h-screen w-64 flex-col border-r border-[var(--border)] bg-gradient-to-b from-[var(--navy)] to-[#0a1435] shadow-[4px_0_24px_rgba(0,0,0,0.3)]">
-        <div className="flex items-center gap-3 border-b border-[var(--border)] p-5">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] shadow-[0_0_0_2px_var(--gold),0_4px_10px_rgba(0,0,0,0.35)]">
-            <img
-              src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
-              alt="KDU logo"
-              className="h-full w-full object-contain"
-            />
-          </div>
-          <div>
-            <div className="text-[15px] font-extrabold tracking-wide text-white">
-              OLMS
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] shadow-[0_0_0_2px_var(--gold),0_4px_10px_rgba(0,0,0,0.35)]">
+              <img
+                src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
+                alt="KDU logo"
+                className="h-full w-full object-contain"
+              />
             </div>
-            <div className="text-[10px] font-semibold tracking-widest text-[var(--orange2)]">
-              KDU SOUTHERN CAMPUS
+            <div>
+              <div className="text-[15px] font-extrabold tracking-wide text-white">
+                OLMS
+              </div>
+              <div className="text-[10px] font-semibold tracking-widest text-[var(--orange2)]">
+                KDU SOUTHERN CAMPUS
+              </div>
             </div>
           </div>
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[rgba(255,255,255,0.06)] text-sm hover:bg-[rgba(74,144,217,0.18)]"
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
 
         <div className="mx-4 mt-4 rounded-lg border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.08)] p-3.5">
@@ -154,13 +163,6 @@ export function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--card2)] text-sm hover:bg-[rgba(74,144,217,0.12)]"
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
             <span className="hidden rounded-lg border border-[rgba(224,123,32,0.2)] bg-[rgba(224,123,32,0.1)] px-3 py-1 font-mono text-xs font-semibold tracking-wide text-[var(--orange2)] sm:inline">
               {clock}
             </span>

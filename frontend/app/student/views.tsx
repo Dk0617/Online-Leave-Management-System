@@ -23,6 +23,23 @@ function statusOrDash(status: string) {
   return status === "N/A" ? <span className="text-[var(--muted)]">—</span> : statusBadge(status);
 }
 
+// The dashboard shows one merged row per Academic Leave + linked Personal
+// Leave pair. For Cadets the two routes only overlap at Squadron — Academic
+// Leave's own troopStatus/sddStatus stay "N/A" forever (it never reaches
+// Troop or SDD), even though the linked Personal Leave genuinely does go
+// Troop -> Squadron -> SDD. Falling back to the companion's value whenever
+// the primary's own is "N/A" shows that real progress instead of a
+// permanent dash — Day Scholars are unaffected, since HOD/Troop are never
+// "N/A" on their own Academic Leave to begin with.
+function mergedStatus(
+  primary: LeaveRequest,
+  companion: LeaveRequest | undefined,
+  field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus"
+): string {
+  if (primary[field] !== "N/A") return primary[field];
+  return companion?.[field] ?? "N/A";
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
   const { user } = useAuth();
   const { leaves, error, refresh } = portal;
@@ -74,7 +91,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
             {isCadet ? "Officer Cadet Leave Flow:" : "Day Scholar Leave Flow:"}
           </strong>{" "}
           {isCadet
-            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved. (Academic Leave stops at Squadron Commander instead — see the table below.)"
+            ? "Applications go → Troop Commander → Squadron Commander → Senior Deputy Dean → PDF download when fully approved. (Academic Leave instead goes HOD → Squadron Commander — see the table below.)"
             : "Your applications go → HOD → Troop Commander → PDF download available once both approve."}
         </div>
       </div>
@@ -149,20 +166,23 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     <td>{l.startDate}</td>
                     <td>{l.endDate}</td>
                     {isCadet ? (
-                      // Cadets never touch HOD (always "N/A" — shown as a dash).
-                      // Academic Leave routes Troop -> Squadron only (SDD stays
-                      // "N/A"); every other Cadet leave type routes Troop ->
-                      // Squadron -> SDD.
+                      // Cadet Academic Leave routes HOD -> Squadron only (Troop
+                      // and SDD stay "N/A" on the Academic Leave itself) — merged
+                      // with the linked Personal Leave's own Troop/SDD progress
+                      // so this row reflects the real exit-permit chain, not just
+                      // the Academic Leave's shorter one. Every other cadet leave
+                      // type routes Troop -> Squadron -> SDD directly (HOD stays
+                      // "N/A" for those, no companion to merge from).
                       <>
-                        <td>{statusOrDash(l.hodStatus)}</td>
-                        <td>{statusOrDash(l.troopStatus)}</td>
-                        <td>{statusOrDash(l.sqnStatus)}</td>
-                        <td>{statusOrDash(l.sddStatus)}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "sqnStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "sddStatus"))}</td>
                       </>
                     ) : (
                       <>
-                        <td>{statusOrDash(l.hodStatus)}</td>
-                        <td>{statusOrDash(l.troopStatus)}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"))}</td>
                       </>
                     )}
                     <td className="space-x-1.5 whitespace-nowrap">
@@ -213,9 +233,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
 const LEAVE_TYPES: LeaveType[] = [
   "Medical Leave",
   "Personal Leave",
-  "Family Emergency",
   "Academic Leave",
-  "Other",
   "Emergency Leave",
 ];
 
@@ -250,8 +268,21 @@ export function ApplyLeave({
   const [address, setAddress] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  // Academic Leave always applies together with a linked Personal Leave —
+  // two separate leave records, each with its own reason/attachment.
+  const [personalReason, setPersonalReason] = useState("");
+  const [personalFile, setPersonalFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Auto-fill from the student's own profile so it doesn't need to be
+  // retyped every time — still editable in case the contact number for
+  // this particular leave differs.
+  useEffect(() => {
+    if (portal.profile?.mobile) {
+      setContactNumber((prev) => prev || portal.profile!.mobile!);
+    }
+  }, [portal.profile]);
 
   const isEmergency = type === "Emergency Leave";
   const isAcademic = type === "Academic Leave";
@@ -272,8 +303,19 @@ export function ApplyLeave({
     if (!address.trim()) missing.push("Address");
     if (!contactNumber.trim()) missing.push("Contact Number");
     if (docRequired && !file) missing.push("Supporting Document");
+    if (isAcademic && !personalReason.trim()) missing.push("Personal Leave Reason");
     if (missing.length) {
       setError(`Please complete: ${missing.join(", ")}`);
+      return;
+    }
+    if (!/^\d{10}$/.test(contactNumber.trim())) {
+      setError("Contact number must be exactly 10 digits, numbers only.");
+      return;
+    }
+    const startMinutePart = Number(startTime.split(":")[1]);
+    const endMinutePart = Number(endTime.split(":")[1]);
+    if ((startMinutePart !== 0 && startMinutePart !== 30) || (endMinutePart !== 0 && endMinutePart !== 30)) {
+      setError("Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).");
       return;
     }
    if (!isEmergency && startDate && startDate < minStartDate) {
@@ -307,11 +349,16 @@ export function ApplyLeave({
       setError("File too large (max 2MB). Please choose a smaller file.");
       return;
     }
+    if (personalFile && personalFile.size > MAX_FILE_BYTES) {
+      setError("Personal Leave file too large (max 2MB). Please choose a smaller file.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
     try {
       const attachmentData = file ? await fileToDataUrl(file) : undefined;
+      const personalAttachmentData = personalFile ? await fileToDataUrl(personalFile) : undefined;
       await portal.applyLeave({
         type: type as LeaveType,
         startDate,
@@ -323,6 +370,13 @@ export function ApplyLeave({
         contactNumber: contactNumber.trim(),
         attachmentName: file?.name,
         attachmentData,
+        ...(isAcademic
+          ? {
+              personalReason: personalReason.trim(),
+              personalAttachmentName: personalFile?.name,
+              personalAttachmentData,
+            }
+          : {}),
       });
       setType("");
       setStartDate("");
@@ -333,6 +387,8 @@ export function ApplyLeave({
       setAddress("");
       setContactNumber("");
       setFile(null);
+      setPersonalReason("");
+      setPersonalFile(null);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit leave application");
@@ -390,13 +446,13 @@ export function ApplyLeave({
 
           {isAcademic && (
             <div className="rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.1)] px-3.5 py-2.5 text-xs text-[var(--sky)]">
-              ℹ️ <strong>Academic Leave</strong> automatically creates a linked <strong>Personal Leave</strong>{" "}
-              for the same dates — you only need to submit this one form. Academic Leave has no downloadable
-              pass (it&apos;s kept on file with Troop Commander); the linked Personal Leave is what
-              you&apos;ll use to exit/re-enter campus once approved.
+              ℹ️ <strong>Academic Leave</strong> always applies together with a linked <strong>Personal Leave</strong>{" "}
+              for the same dates — two separate applications, each with its own reason below. Academic Leave has
+              no downloadable pass; the linked Personal Leave is what you&apos;ll use to exit/re-enter campus
+              once approved.
               {isCadet
-                ? " For officer cadets, Academic Leave is approved by your Troop Commander, then your Squadron Commander (no SDD)."
-                : " For Day Scholars, Academic Leave still goes through HOD then Troop Commander as usual."}
+                ? " For officer cadets, Academic Leave is approved by your HOD, then your Squadron Commander (no SDD). The linked Personal Leave goes through the normal Troop Commander → Squadron Commander → SDD chain."
+                : " For Day Scholars, both Academic Leave and the linked Personal Leave go through HOD then Troop Commander as usual."}
             </div>
           )}
 
@@ -414,6 +470,7 @@ export function ApplyLeave({
               <input
                 type="time"
                 lang="en-GB"
+                step={1800}
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className={styles.input}
@@ -432,6 +489,7 @@ export function ApplyLeave({
               <input
                 type="time"
                 lang="en-GB"
+                step={1800}
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 className={styles.input}
@@ -439,22 +497,86 @@ export function ApplyLeave({
             </div>
           </div>
 
-          <div>
-            <label className={styles.label}>
-              Reason<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              placeholder="Describe your reason…"
-              className={styles.input}
-            />
-          </div>
+          {isAcademic ? (
+            <div className="relative overflow-hidden rounded-lg border border-[rgba(74,144,217,0.3)] bg-[rgba(74,144,217,0.05)] py-4 pl-6 pr-4">
+              <div className="absolute inset-y-0 left-0 w-1.5 bg-[var(--sky)]" />
+
+              <div className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--sky)]">
+                🎓 Academic Leave
+              </div>
+              <label className={styles.label}>
+                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="Describe your academic reason…"
+                className={styles.input}
+              />
+              <div className="mt-2 flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                  📎 Upload Document
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.png,.doc,.docx"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                </label>
+                <span className="truncate text-xs text-[var(--muted)]">{file ? file.name : "No file chosen"}</span>
+                <Badge tone="gray">Optional</Badge>
+              </div>
+
+              <div className="my-4 border-t border-[rgba(74,144,217,0.2)]" />
+
+              <div className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--sky)]">
+                🧳 Personal Leave (linked)
+              </div>
+              <label className={styles.label}>
+                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
+              </label>
+              <textarea
+                value={personalReason}
+                onChange={(e) => setPersonalReason(e.target.value)}
+                rows={3}
+                placeholder="Describe your reason for leaving campus…"
+                className={styles.input}
+              />
+              <div className="mt-2 flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                  📎 Upload Document
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.png,.doc,.docx"
+                    onChange={(e) => setPersonalFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                </label>
+                <span className="truncate text-xs text-[var(--muted)]">
+                  {personalFile ? personalFile.name : "No file chosen"}
+                </span>
+                <Badge tone="gray">Optional</Badge>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className={styles.label}>
+                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="Describe your reason…"
+                className={styles.input}
+              />
+            </div>
+          )}
 
           <div>
             <label className={styles.label}>
-              Address<span className="ml-0.5 text-[var(--err)]">*</span>
+              Current Address During Leave<span className="ml-0.5 text-[var(--err)]">*</span>
             </label>
             <textarea
               value={address}
@@ -472,34 +594,38 @@ export function ApplyLeave({
             <input
               type="tel"
               value={contactNumber}
-              onChange={(e) => setContactNumber(e.target.value)}
+              onChange={(e) => setContactNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
               placeholder="e.g. 0771234567"
+              inputMode="numeric"
+              maxLength={10}
               className={styles.input}
             />
           </div>
 
-          <div>
-            <div className="mb-1.5 flex items-center gap-2">
-              <label className={styles.label} style={{ marginBottom: 0 }}>
-                Supporting Document
-              </label>
-              <Badge tone={docRequired ? "red" : "gray"}>{docRequired ? "Required" : "Optional"}</Badge>
+          {!isAcademic && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-2">
+                <label className={styles.label} style={{ marginBottom: 0 }}>
+                  Supporting Document
+                </label>
+                <Badge tone={docRequired ? "red" : "gray"}>{docRequired ? "Required" : "Optional"}</Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                  📎 Upload Document
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.png,.doc,.docx"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                </label>
+                <span className="truncate text-xs text-[var(--muted)]">
+                  {file ? file.name : "No file chosen"}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
-                📎 Upload Document
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.png,.doc,.docx"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="hidden"
-                />
-              </label>
-              <span className="truncate text-xs text-[var(--muted)]">
-                {file ? file.name : "No file chosen"}
-              </span>
-            </div>
-          </div>
+          )}
 
           {error && <p className="text-sm text-[var(--err)]">{error}</p>}
 
@@ -606,6 +732,10 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
   }
 
   async function handleSave() {
+    if (mobile.trim() && !/^\d{10}$/.test(mobile.trim())) {
+      setMessage("Mobile number must be exactly 10 digits, numbers only.");
+      return;
+    }
     try {
       await updateProfile({ firstName, lastName, email, mobile });
       setMessage("Profile saved!");
@@ -655,7 +785,13 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
         </div>
         <div>
           <label className={styles.label}>Mobile</label>
-          <input value={mobile} onChange={(e) => setMobile(e.target.value)} className={styles.input} />
+          <input
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            inputMode="numeric"
+            maxLength={10}
+            className={styles.input}
+          />
         </div>
         <div>
           <label className={styles.label}>Index Number</label>

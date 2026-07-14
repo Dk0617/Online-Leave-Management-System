@@ -9,6 +9,8 @@ const MUTED: [number, number, number] = [100, 116, 139];
 const DARK: [number, number, number] = [30, 41, 59];
 const LIGHT: [number, number, number] = [245, 247, 250];
 const BORDER: [number, number, number] = [226, 232, 240];
+const SKY: [number, number, number] = [74, 144, 217];
+const SKY_LIGHT: [number, number, number] = [232, 241, 250];
 
 interface PillColor {
   bg: [number, number, number];
@@ -256,9 +258,38 @@ export async function downloadLeavePassPdf(
   fieldRow(10, "From (Exit)", `${leave.startDate}  ${leave.startTime}`);
   fieldRow(110, "To (Entry)", `${leave.endDate}  ${leave.endTime}`);
   y += 12;
-  fieldRow(10, "Address", leave.address);
-  fieldRow(110, "Contact Number", leave.contactNumber);
+  fieldRow(10, "Contact Number", leave.contactNumber);
   y += 12;
+
+  // Location Pin Card — same visual used for the address in the web app's
+  // leave detail modal. Drawn with vector shapes (circle + triangle), not
+  // the 📍 emoji, since jsPDF's base Helvetica font can't render emoji.
+  const addressLines = doc.splitTextToSize(String(leave.address || "—"), 158);
+  const addressCardH = Math.max(18, 10 + addressLines.length * 4.6);
+  doc.setFillColor(...SKY_LIGHT);
+  doc.roundedRect(10, y, 190, addressCardH, 2.5, 2.5, "F");
+  doc.setDrawColor(...SKY);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(10, y, 190, addressCardH, 2.5, 2.5, "S");
+
+  const pinCx = 21,
+    pinCy = y + 9;
+  doc.setFillColor(...SKY);
+  doc.circle(pinCx, pinCy - 1, 3.2, "F");
+  doc.triangle(pinCx - 2.2, pinCy + 0.5, pinCx + 2.2, pinCy + 0.5, pinCx, pinCy + 4.2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.circle(pinCx, pinCy - 1, 1.2, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...SKY);
+  doc.text("WHERE YOU'LL BE STAYING", 30, y + 6.5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...DARK);
+  doc.text(addressLines, 30, y + 12);
+  y += addressCardH + 8;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
@@ -271,14 +302,13 @@ export async function downloadLeavePassPdf(
   y += 5.2 + reasonLines.length * 4.6 + 8;
 
   sectionHeader("APPROVAL RECORD", NAVY);
-  // Cadet Academic Leave routes Troop Commander -> Squadron Commander only
-  // (no SDD) — identified by sddStatus permanently "N/A", same marker used
-  // everywhere else in the app for this special routing. Cadets never touch
-  // HOD at all.
-  const isCadetAcademicOnly = isCadet && leave.sddStatus === "N/A";
+  // Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
+  // Commander, no SDD) — identified by troopStatus permanently "N/A", same
+  // marker used everywhere else in the app for this special routing.
+  const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
   const rows = isCadetAcademicOnly
     ? [
-        ["Troop Commander", leave.troopStatus, leave.troopApprovedAt],
+        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
         ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],
       ]
     : isCadet

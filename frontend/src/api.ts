@@ -181,6 +181,14 @@ export function normalizeLeave(raw: Raw): LeaveRequest {
     appliedDate: raw.appliedDate as string,
     verifyCode: raw.verifyCode as string | undefined,
     linkedLeaveId: raw.linkedLeaveId ? String(raw.linkedLeaveId) : undefined,
+    linkedLeave: raw.linkedLeave
+      ? (raw.linkedLeave as {
+          type: LeaveRequest["type"];
+          reason: string;
+          attachmentName?: string;
+          attachmentData?: string;
+        })
+      : undefined,
     hodStatus: raw.hodStatus as LeaveRequest["hodStatus"],
     troopStatus: raw.troopStatus as LeaveRequest["troopStatus"],
     sqnStatus: raw.sqnStatus as LeaveRequest["sqnStatus"],
@@ -236,16 +244,14 @@ export function normalizeAudit(raw: Raw): AuditEntry {
 // Leave status helpers
 // ==================================================================
 
-// Cadets never touch hodStatus (always "N/A") — every Cadet leave routes
-// Troop Commander -> Squadron Commander. Cadet Academic Leave stops there
-// (sddStatus stays "N/A"); every other Cadet leave type continues on to
-// Senior Deputy Dean — identified by sddStatus === "N/A" on a CADET leave,
-// since every non-Academic Cadet leave type always puts sddStatus through
-// Pending/Approved/Rejected, never N/A.
+// Cadet Academic Leave routes HOD -> Squadron Commander only (no Troop
+// Commander, no SDD) — identified by troopStatus === "N/A" on a CADET
+// leave, since every other cadet leave type always puts troopStatus
+// through Pending/Approved/Rejected, never N/A.
 export function isApproved(leave: LeaveRequest): boolean {
   if (leave.studentType === "CADET") {
-    if (leave.sddStatus === "N/A") {
-      return leave.troopStatus === "Approved" && leave.sqnStatus === "Approved";
+    if (leave.troopStatus === "N/A") {
+      return leave.hodStatus === "Approved" && leave.sqnStatus === "Approved";
     }
     return (
       leave.troopStatus === "Approved" &&
@@ -258,8 +264,8 @@ export function isApproved(leave: LeaveRequest): boolean {
 
 export function isRejected(leave: LeaveRequest): boolean {
   if (leave.studentType === "CADET") {
-    if (leave.sddStatus === "N/A") {
-      return leave.troopStatus === "Rejected" || leave.sqnStatus === "Rejected";
+    if (leave.troopStatus === "N/A") {
+      return leave.hodStatus === "Rejected" || leave.sqnStatus === "Rejected";
     }
     return (
       leave.troopStatus === "Rejected" ||

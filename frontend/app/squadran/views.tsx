@@ -28,10 +28,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         </div>
       )}
       <div className={styles.infoBanner}>
-        <strong>Your Role:</strong> You review <strong>Officer Cadet</strong> leave applications at Stage 2,
-        always after the Troop Commander approves. Most then move to the Senior Deputy Dean (SDD) for final
-        clearance. <strong>Academic Leave</strong> is an exception — your approval is the final step for it,
-        with no SDD stage after.
+        <strong>Your Role:</strong> You review <strong>Officer Cadet</strong> leave applications at Stage 2. Most
+        applications arrive here after the Troop Commander approves, then move to the Senior Deputy Dean
+        (SDD) for final clearance. <strong>Academic Leave</strong> is an exception — it skips Troop Commander
+        entirely (routed via HOD instead) and your approval is the final step, with no SDD stage after.
       </div>
 
       <div className={styles.statGrid}>
@@ -63,31 +63,34 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
                 </td>
               </tr>
             ) : (
-              pending.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.studentName}</td>
-                  <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  <td>
-                    <Badge tone="green">Troop Approved</Badge>
-                  </td>
-                  <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                  </td>
-                </tr>
-              ))
+              pending.map((l) => {
+                const isAcademicViaHod = l.troopStatus === "N/A";
+                return (
+                  <tr key={l.id}>
+                    <td>{l.studentName}</td>
+                    <td>{l.indexNumber}</td>
+                    <td>
+                      {LEAVE_TYPE_LABELS[l.type]}
+                      {l.priority === "emergency" && (
+                        <span className="ml-1">
+                          <Badge tone="red">Emergency</Badge>
+                        </span>
+                      )}
+                    </td>
+                    <td>{l.startDate}</td>
+                    <td>{l.endDate}</td>
+                    <td>
+                      <Badge tone="green">{isAcademicViaHod ? "HOD Approved" : "Troop Approved"}</Badge>
+                    </td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                        View
+                      </Button>
+                      <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

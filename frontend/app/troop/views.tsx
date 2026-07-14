@@ -35,9 +35,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       <div className={styles.infoBanner}>
         <strong>Dual Role:</strong> You approve <strong>Day Scholar</strong> leaves at <em>Stage 2</em> (after
         HOD approval) and <strong>Officer Cadet</strong> leaves at <em>Stage 1</em> (direct from student) —
-        including Officer Cadet <strong>Academic Leave</strong>, which then goes to Squadron Commander only
-        (no SDD stage, unlike other Cadet leave types). Only students from your assigned intake(s) appear
-        here — {intakesText}.
+        except Officer Cadet <strong>Academic Leave</strong> itself, which skips you entirely and routes
+        HOD → Squadron Commander instead. You&apos;ll still see its linked <strong>Personal Leave</strong> as
+        its own separate application, since that one always comes to you first. Only students from your
+        assigned intake(s) appear here — {intakesText}.
       </div>
 
       <div className={styles.statGrid}>

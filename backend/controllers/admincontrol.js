@@ -11,11 +11,23 @@ import Notification from "../models/Notification.js";
 import AuditEntry from "../models/AuditEntry.js";
 import { writeAudit } from "../utils/audit.js";
 
-function genPassword() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  let out = "";
-  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+function isValidMobile(mobile) {
+  return /^\d{10}$/.test(mobile);
+}
+
+// At least 8 characters, one uppercase, one lowercase, one digit, and one
+// special character — required for every password an admin sets by hand.
+const PASSWORD_POLICY_MESSAGE =
+  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+function isValidPassword(password) {
+  return (
+    typeof password === "string" &&
+    password.length >= 8 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
 }
 
 // Email-code login looks a user up by email across every role, so the same
@@ -87,10 +99,8 @@ export const createStudent = async (req, res) => {
     password,
   } = req.body;
 
-  if (!indexNumber || !firstName || !lastName) {
-    return res
-      .status(400)
-      .json({ message: "Index number, first and last name are required" });
+  if (!indexNumber || !firstName || !lastName || !department || !email || !mobile || !intake || !password) {
+    return res.status(400).json({ message: "All fields are required to create a student account" });
   }
   if (!studentType || !["DAY_SCHOLAR", "CADET"].includes(studentType)) {
     return res.status(400).json({ message: "A valid student type is required" });
@@ -99,6 +109,12 @@ export const createStudent = async (req, res) => {
     return res
       .status(400)
       .json({ message: "Assign 1 or 2 Troop Commanders to this student" });
+  }
+  if (!isValidMobile(mobile)) {
+    return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
+  }
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
   }
   if (studentType === "DAY_SCHOLAR" && !hodId) {
     return res.status(400).json({ message: "A Day Scholar must be assigned an HOD" });
@@ -132,7 +148,7 @@ export const createStudent = async (req, res) => {
     troopIds,
     hodId: studentType === "DAY_SCHOLAR" ? hodId : undefined,
     sqnId: studentType === "CADET" ? sqnId : undefined,
-    password: password || department || genPassword(),
+    password,
   });
 
   await writeAudit("ADMIN", req.user.name, "account_created", `student ${indexNumber}`);
@@ -153,50 +169,38 @@ export const listStudents = async (req, res) => {
 };
 
 export const updateStudent = async (req, res) => {
-  const {
-    indexNumber,
-    firstName,
-    lastName,
-    department,
-    email,
-    mobile,
-    studentType,
-    intake,
-    troopIds,
-    hodId,
-    sqnId,
-    password,
-  } = req.body;
+  const { firstName, lastName, email, mobile, troopIds, hodId, sqnId, password } = req.body;
 
   const student = await Student.findById(req.params.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
 
-  if (indexNumber && indexNumber !== student.indexNumber) {
-    const clash = await Student.findOne({ indexNumber, _id: { $ne: student._id } });
-    if (clash) {
-      return res
-        .status(409)
-        .json({ message: "A student with that index number already exists" });
-    }
-    student.indexNumber = indexNumber;
-    student.username = indexNumber;
-  }
+  // Index Number, Department, Intake, and Student Type are fixed at
+  // creation and can never be changed afterwards — they're the identifiers
+  // everything else (HOD/Troop/Squadron assignment, routing, historical
+  // leave records) is keyed on, so editing them after the fact would silently
+  // desync past records from the student's current assignment. Deliberately
+  // not read from req.body here, so even a direct API call can't change them.
   if (firstName) student.firstName = firstName;
   if (lastName) student.lastName = lastName;
-  if (department !== undefined) student.department = department;
   if (email && email !== student.email && (await isEmailTaken(email, student._id))) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
   if (email !== undefined) student.email = email;
-  if (mobile !== undefined) student.mobile = mobile;
-  if (intake !== undefined) student.intake = intake;
-  if (Array.isArray(troopIds)) student.troopIds = troopIds;
-  if (studentType) {
-    student.studentType = studentType;
-    student.hodId = studentType === "DAY_SCHOLAR" ? hodId || undefined : undefined;
-    student.sqnId = studentType === "CADET" ? sqnId || undefined : undefined;
+  if (mobile) {
+    if (!isValidMobile(mobile)) {
+      return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
+    }
+    student.mobile = mobile;
+  } else if (mobile !== undefined) {
+    student.mobile = mobile;
   }
+  if (Array.isArray(troopIds)) student.troopIds = troopIds;
+  if (student.studentType === "DAY_SCHOLAR" && hodId) student.hodId = hodId;
+  if (student.studentType === "CADET" && sqnId) student.sqnId = sqnId;
   if (password) {
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    }
     student.password = password;
     student.mustChangePassword = true;
   }
@@ -232,19 +236,23 @@ export const createStaff = async (req, res) => {
   const { role, Model } = resolved;
 
   const { username, name, password, extra, email } = req.body;
-  if (!username || !name) {
-    return res.status(400).json({ message: "Username and name are required" });
+  const extraField = STAFF_EXTRA_FIELD[role];
+  if (!username || !name || !email || !password || (extraField && !extra)) {
+    return res.status(400).json({ message: "All fields are required to create an account" });
+  }
+
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
   }
 
   const existing = await Model.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
-  if (email && (await isEmailTaken(email))) {
+  if (await isEmailTaken(email)) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
-  const doc = { username, name, password: password || genPassword(), email: email || undefined };
-  const extraField = STAFF_EXTRA_FIELD[role];
-  if (extraField && extra) doc[extraField] = extra;
+  const doc = { username, name, password, email };
+  if (extraField) doc[extraField] = extra;
 
   const created = await Model.create(doc);
   await writeAudit("ADMIN", req.user.name, "account_created", `${role.toLowerCase()} ${username}`);
@@ -280,6 +288,9 @@ export const updateStaff = async (req, res) => {
   const extraField = STAFF_EXTRA_FIELD[role];
   if (extraField && extra !== undefined) staff[extraField] = extra;
   if (password) {
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    }
     staff.password = password;
     staff.mustChangePassword = true;
   }
@@ -290,35 +301,67 @@ export const updateStaff = async (req, res) => {
   res.json(safe);
 };
 
+// Maps each staff role onto the Student field and Leave status field that
+// reference it, so deletion can be blocked while students/leaves still
+// depend on the account — deleting out from under them silently orphans
+// the reference (Leave.hodId/sqnId keeps pointing at a document that no
+// longer exists), leaving that leave stuck "Pending" at that stage forever
+// with nobody able to log in and decide on it. SDD and Gate have no
+// per-student assignment (SDD scopes globally by studentType: "CADET",
+// Gate isn't referenced by students at all), so they're always safe to
+// delete.
+const STAFF_DEPENDENT_FIELDS = {
+  HOD: { studentField: "hodId", leaveStatusField: "hodStatus" },
+  SQUADRAN: { studentField: "sqnId", leaveStatusField: "sqnStatus" },
+};
+
 export const deleteStaff = async (req, res) => {
   const resolved = staffModelFor(req, res);
   if (!resolved) return;
-  await resolved.Model.findByIdAndDelete(req.params.id);
+  const { role, Model } = resolved;
+
+  const dep = STAFF_DEPENDENT_FIELDS[role];
+  if (dep) {
+    const [studentCount, pendingLeaveCount] = await Promise.all([
+      Student.countDocuments({ [dep.studentField]: req.params.id }),
+      Leave.countDocuments({ [dep.studentField]: req.params.id, [dep.leaveStatusField]: "Pending" }),
+    ]);
+    if (studentCount > 0 || pendingLeaveCount > 0) {
+      return res.status(409).json({
+        message: `Can't delete — ${studentCount} student(s) and ${pendingLeaveCount} pending leave(s) are still assigned to this account. Those need to be moved to a different account or resolved before this one can be deleted.`,
+      });
+    }
+  }
+
+  await Model.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
 };
 
 // ── Troop (extra: intakes[] + edit) ────────────────────────────────
 export const createTroop = async (req, res) => {
   const { username, name, password, intakes, email } = req.body;
-  if (!username || !name) {
-    return res.status(400).json({ message: "Username and name are required" });
+  if (!username || !name || !email || !password) {
+    return res.status(400).json({ message: "All fields are required to create an account" });
   }
   if (!Array.isArray(intakes) || !intakes.length) {
     return res.status(400).json({ message: "Assign at least one intake to this officer" });
   }
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+  }
 
   const existing = await Troop.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
-  if (email && (await isEmailTaken(email))) {
+  if (await isEmailTaken(email)) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
   const created = await Troop.create({
     username,
     name,
-    password: password || genPassword(),
+    password,
     intakes,
-    email: email || undefined,
+    email,
   });
   await writeAudit("ADMIN", req.user.name, "account_created", `troop ${username}`);
   const { password: _pw, ...safe } = created.toObject();
@@ -346,6 +389,9 @@ export const updateTroop = async (req, res) => {
   if (email !== undefined) troop.email = email;
   if (Array.isArray(intakes)) troop.intakes = intakes;
   if (password) {
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    }
     troop.password = password;
     troop.mustChangePassword = true;
   }
@@ -356,6 +402,15 @@ export const updateTroop = async (req, res) => {
 };
 
 export const deleteTroop = async (req, res) => {
+  const [studentCount, pendingLeaveCount] = await Promise.all([
+    Student.countDocuments({ troopIds: req.params.id }),
+    Leave.countDocuments({ troopIds: req.params.id, troopStatus: "Pending" }),
+  ]);
+  if (studentCount > 0 || pendingLeaveCount > 0) {
+    return res.status(409).json({
+      message: `Can't delete — ${studentCount} student(s) and ${pendingLeaveCount} pending leave(s) are still assigned to this account. Those need to be moved to a different account or resolved before this one can be deleted.`,
+    });
+  }
   await Troop.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
 };
