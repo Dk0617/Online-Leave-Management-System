@@ -14,6 +14,7 @@ const leaveSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Student",
       required: true,
+      index: true,
     },
     studentName: { type: String, required: true },
     indexNumber: { type: String, required: true },
@@ -64,5 +65,17 @@ const leaveSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Every list/history/pending query in leavecontrol.js and studentcontrol.js
+// filters on one of these (scope id + that role's status field), and none of
+// them were indexed — each query was a full collection scan on Atlas. These
+// compound indexes match the actual query shapes so Mongo can seek instead
+// of scanning as the Leave collection grows.
+leaveSchema.index({ studentId: 1, createdAt: -1 }); // myLeaves
+leaveSchema.index({ hodId: 1, hodStatus: 1 }); // hod pending/history
+leaveSchema.index({ sqnId: 1, sqnStatus: 1 }); // squadran pending/history
+leaveSchema.index({ intake: 1, troopStatus: 1 }); // troop pending/history (scoped by intake)
+leaveSchema.index({ studentType: 1, sddStatus: 1 }); // sdd pending/history
+leaveSchema.index({ createdAt: -1 }); // troopAllRecords / sddOverview (unbounded, sorted)
 
 export default mongoose.model("Leave", leaveSchema);

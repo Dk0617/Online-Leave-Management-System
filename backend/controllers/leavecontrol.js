@@ -101,7 +101,10 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
     }
   }
 
-  await writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
+  // Not awaited: writeAudit already swallows its own errors and the
+  // approver's click has nothing left to wait on once the decision itself
+  // is saved — same reasoning as the fire-and-forget email send below.
+  writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
 
   res.json(leave);
 

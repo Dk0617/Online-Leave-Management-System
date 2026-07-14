@@ -187,9 +187,15 @@ export const applyLeave = async (req, res) => {
   // existing student records. Squadron Commander has no equivalent
   // derivation (Squadron accounts aren't tied to a department or intake),
   // so it's still the student's directly-assigned sqnId.
+  // These two lookups don't depend on each other — running them concurrently
+  // instead of one after another halves this part of the request's latency.
+  const [hod, troops] = await Promise.all([
+    needsHod ? Hod.findOne({ department: student.department }) : Promise.resolve(null),
+    Troop.find({ intakes: student.intake }).select("_id"),
+  ]);
+
   let hodIdForLeave;
   if (needsHod) {
-    const hod = await Hod.findOne({ department: student.department });
     if (!hod) {
       return res.status(400).json({
         message: `No HOD found for department "${student.department || "—"}". Ask admin to check that department names match exactly.`,
@@ -198,7 +204,6 @@ export const applyLeave = async (req, res) => {
     hodIdForLeave = hod._id;
   }
 
-  const troops = await Troop.find({ intakes: student.intake }).select("_id");
   if (!troops.length && !skipTroop) {
     return res.status(400).json({
       message: `No Troop Commander is assigned to Intake ${student.intake || "—"}. Ask admin to assign one first.`,
@@ -248,7 +253,9 @@ export const applyLeave = async (req, res) => {
     );
   }
 
-  await writeAudit(
+  // Not awaited: writeAudit already swallows its own errors, so there's no
+  // reason for the student's submit click to wait on this write too.
+  writeAudit(
     "STUDENT",
     student.username,
     "leave_submitted",
