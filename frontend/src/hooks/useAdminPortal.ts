@@ -9,6 +9,7 @@ import {
   normalizeNotification,
   normalizeStaff,
   normalizeStudent,
+  normalizeSubstitute,
 } from "@/src/api";
 import {
   AuditEntry,
@@ -17,6 +18,7 @@ import {
   NotificationEntry,
   StaffAccount,
   Student,
+  SubstituteAssignment,
 } from "@/src/types";
 
 export type StaffRole = "HOD" | "SQUADRAN" | "SDD" | "GATE";
@@ -63,6 +65,7 @@ export function useAdminPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [substitutes, setSubstitutes] = useState<SubstituteAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,19 +73,31 @@ export function useAdminPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [studentsRaw, hodsRaw, troopsRaw, sqnRaw, sddRaw, gateRaw, intakesRaw, leavesRaw, notifsRaw, auditRaw] =
-        await Promise.all([
-          api.get<Record<string, unknown>[]>("/admin/students"),
-          api.get<Record<string, unknown>[]>("/admin/staff/hod"),
-          api.get<Record<string, unknown>[]>("/admin/troop"),
-          api.get<Record<string, unknown>[]>("/admin/staff/squadran"),
-          api.get<Record<string, unknown>[]>("/admin/staff/sdd"),
-          api.get<Record<string, unknown>[]>("/admin/staff/gate"),
-          api.get<Record<string, unknown>[]>("/admin/intakes"),
-          api.get<Record<string, unknown>[]>("/admin/leaves"),
-          api.get<Record<string, unknown>[]>("/admin/notifications"),
-          api.get<Record<string, unknown>[]>("/admin/audit"),
-        ]);
+      const [
+        studentsRaw,
+        hodsRaw,
+        troopsRaw,
+        sqnRaw,
+        sddRaw,
+        gateRaw,
+        intakesRaw,
+        leavesRaw,
+        notifsRaw,
+        auditRaw,
+        substitutesRaw,
+      ] = await Promise.all([
+        api.get<Record<string, unknown>[]>("/admin/students"),
+        api.get<Record<string, unknown>[]>("/admin/staff/hod"),
+        api.get<Record<string, unknown>[]>("/admin/troop"),
+        api.get<Record<string, unknown>[]>("/admin/staff/squadran"),
+        api.get<Record<string, unknown>[]>("/admin/staff/sdd"),
+        api.get<Record<string, unknown>[]>("/admin/staff/gate"),
+        api.get<Record<string, unknown>[]>("/admin/intakes"),
+        api.get<Record<string, unknown>[]>("/admin/leaves"),
+        api.get<Record<string, unknown>[]>("/admin/notifications"),
+        api.get<Record<string, unknown>[]>("/admin/audit"),
+        api.get<Record<string, unknown>[]>("/admin/substitutes"),
+      ]);
       setStudents(studentsRaw.map(normalizeStudent));
       setHods(hodsRaw.map(normalizeStaff));
       setTroops(troopsRaw.map(normalizeStaff));
@@ -93,6 +108,7 @@ export function useAdminPortal() {
       setLeaves(leavesRaw.map(normalizeLeave));
       setNotifications(notifsRaw.map(normalizeNotification));
       setAudit(auditRaw.map(normalizeAudit));
+      setSubstitutes(substitutesRaw.map(normalizeSubstitute));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
     } finally {
@@ -166,6 +182,22 @@ export function useAdminPortal() {
     await refresh();
   }
 
+  // ── HOD substitutes ─────────────────────────────────────────────
+  async function addSubstitute(input: {
+    hodId: string;
+    substituteHodId: string;
+    fromDate: string;
+    toDate: string;
+    reason?: string;
+  }) {
+    await api.post("/admin/substitutes", input);
+    await refresh();
+  }
+  async function removeSubstitute(id: string) {
+    await api.delete(`/admin/substitutes/${id}`);
+    await refresh();
+  }
+
   return {
     students,
     hods,
@@ -177,6 +209,7 @@ export function useAdminPortal() {
     leaves,
     notifications,
     audit,
+    substitutes,
     loading,
     error,
     refresh,
@@ -193,5 +226,7 @@ export function useAdminPortal() {
     removeTroop,
     markNotificationRead,
     clearAuditLog,
+    addSubstitute,
+    removeSubstitute,
   };
 }

@@ -135,7 +135,7 @@ export async function downloadLeavePassPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(210, 220, 245);
-  doc.text("Online Leave Management System (OLMS)", 43, 40);
+  doc.text("Student Leave Management System (SLMS)", 43, 40);
 
   const boxX = 170,
     boxY = 9,
@@ -221,8 +221,8 @@ export async function downloadLeavePassPdf(
     doc.text(
       doc.splitTextToSize(
         qrData
-          ? "Gate staff: scan this QR with the OLMS Gate portal's camera scanner, or type the code above, to view the student's photo on file and confirm identity. Do not allow exit/entry without a photo match."
-          : "Gate staff: enter this code in the OLMS Gate portal to view the student's photo on file and confirm identity. Do not allow exit/entry on this pass without a photo match.",
+          ? "Gate staff: scan this QR with the SLMS Gate portal's camera scanner, or type the code above, to view the student's photo on file and confirm identity. Do not allow exit/entry without a photo match."
+          : "Gate staff: enter this code in the SLMS Gate portal to view the student's photo on file and confirm identity. Do not allow exit/entry on this pass without a photo match.",
         pageW - 12 - (textX - 6) - 4
       ),
       textX,
@@ -475,13 +475,13 @@ export async function downloadLeavePassPdf(
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
   const note = isAcademicType
-    ? "This is a computer-generated record copy issued via the Online Leave Management System (OLMS), KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
-    : "This is a computer-generated official document issued via the Online Leave Management System (OLMS), KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
+    ? "This is a computer-generated record copy issued via the Student Leave Management System (SLMS), KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
+    : "This is a computer-generated official document issued via the Student Leave Management System (SLMS), KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
   doc.text(doc.splitTextToSize(note, 190), 10, footY + 5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text(
-    `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   OLMS © KDU Southern Campus`,
+    `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   SLMS © KDU Southern Campus`,
     105,
     pageH - 9,
     { align: "center" }

@@ -4,9 +4,10 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
+import { RoundClock } from "@/src/components/DashboardShell";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { isApproved, isGateEligible, isRejected, requiresAttachment } from "@/src/api";
+import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
 import { downloadLeavePassPdf } from "@/src/pdf";
 import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "./student.module.css";
@@ -19,8 +20,13 @@ function statusBadge(status: string) {
 // "N/A" means that actor isn't part of this leave's routing at all (e.g.
 // Troop/SDD for a cadet's Academic Leave) — shown as a plain dash instead
 // of a badge, so it reads as "not applicable" rather than "still pending".
-function statusOrDash(status: string) {
-  return status === "N/A" ? <span className="text-[var(--muted)]">—</span> : statusBadge(status);
+// "moot" means the actor IS part of the routing but will never see it
+// because an earlier stage already rejected the leave — shown as "Not
+// Reached" instead of a stale "Pending" badge.
+function statusOrDash(status: string, moot: boolean) {
+  if (status === "N/A") return <span className="text-[var(--muted)]">—</span>;
+  if (moot) return <Badge tone="gray">Not Reached</Badge>;
+  return statusBadge(status);
 }
 
 // The dashboard shows one merged row per Academic Leave + linked Personal
@@ -38,6 +44,17 @@ function mergedStatus(
 ): string {
   if (primary[field] !== "N/A") return primary[field];
   return companion?.[field] ?? "N/A";
+}
+
+// Mirrors mergedStatus's primary-vs-companion fallback so the "moot" check
+// runs against whichever leave the displayed status actually came from.
+function mergedIsMoot(
+  primary: LeaveRequest,
+  companion: LeaveRequest | undefined,
+  field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus"
+): boolean {
+  if (primary[field] !== "N/A") return isStageMoot(primary, field);
+  return companion ? isStageMoot(companion, field) : false;
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
@@ -166,15 +183,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                       // type routes Troop -> Squadron -> SDD directly (HOD stays
                       // "N/A" for those, no companion to merge from).
                       <>
-                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"))}</td>
-                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"))}</td>
-                        <td>{statusOrDash(mergedStatus(l, companion, "sqnStatus"))}</td>
-                        <td>{statusOrDash(mergedStatus(l, companion, "sddStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"), mergedIsMoot(l, companion, "hodStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"), mergedIsMoot(l, companion, "troopStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "sqnStatus"), mergedIsMoot(l, companion, "sqnStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "sddStatus"), mergedIsMoot(l, companion, "sddStatus"))}</td>
                       </>
                     ) : (
                       <>
-                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"))}</td>
-                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "hodStatus"), mergedIsMoot(l, companion, "hodStatus"))}</td>
+                        <td>{statusOrDash(mergedStatus(l, companion, "troopStatus"), mergedIsMoot(l, companion, "troopStatus"))}</td>
                       </>
                     )}
                     <td className="space-x-1.5 whitespace-nowrap">
@@ -422,6 +439,29 @@ export function ApplyLeave({
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📋 Leave Details</h2>
+
+        <div className="mb-4 flex items-center gap-4 rounded-xl border border-[rgba(74,144,217,0.2)] bg-[rgba(74,144,217,0.06)] p-3.5">
+          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-[var(--orange)]">
+            {portal.profile?.photo ? (
+              <img src={portal.profile.photo} alt="Your photo" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-[var(--card2)] text-center text-[9px] text-[var(--muted)]">
+                No Photo
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-[var(--white)]">{user?.name}</div>
+            <div className="mt-0.5 flex items-center gap-1 text-xs text-[var(--muted)]">
+              📍{" "}
+              <span className="truncate">
+                {address.trim() || "Enter your address below to preview it here"}
+              </span>
+            </div>
+          </div>
+          <RoundClock />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={styles.label}>

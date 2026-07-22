@@ -20,9 +20,19 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-// A small live analog clock face, replacing the old digital-time pill.
-// Hover shows the exact digital time as a tooltip for anyone who wants it.
-function RoundClock({ now }: { now: Date }) {
+// A small live analog clock face. Self-ticking so it can be dropped in
+// anywhere without the caller wiring up its own interval — used only on
+// the student's Apply for Leave form (see student/views.tsx ApplyLeave) to
+// help with picking exact start/end times; every portal's shared header
+// used to show one too, but that was just clutter for roles that never
+// need to reference the clock while working. Hover shows the exact digital
+// time as a tooltip for anyone who wants it.
+export function RoundClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
   const seconds = now.getSeconds();
   const minutes = now.getMinutes();
   const hours = now.getHours() % 12;
@@ -118,7 +128,6 @@ export function DashboardShell({
 }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const [now, setNow] = useState(new Date());
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -147,11 +156,6 @@ export function DashboardShell({
     }
   }, [loading, user, role, router]);
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
   if (loading || !user || user.role !== role) {
     return (
       <div className="flex flex-1 items-center justify-center bg-[var(--bg)] text-sm text-[var(--muted)]">
@@ -174,7 +178,7 @@ export function DashboardShell({
             </div>
             <div>
               <div className="text-[15px] font-extrabold tracking-wide text-white">
-                OLMS
+                SLMS
               </div>
               <div className="text-[10px] font-semibold tracking-widest text-[var(--orange2)]">
                 KDU SOUTHERN CAMPUS
@@ -238,7 +242,6 @@ export function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <RoundClock now={now} />
             <span className="rounded-lg border border-[rgba(37,99,176,0.3)] bg-[rgba(37,99,176,0.15)] px-3 py-1 font-mono text-xs text-[var(--sky)]">
               {user.username}
             </span>

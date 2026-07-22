@@ -95,6 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/");
   }
 
+  useEffect(() => {
+    function handleUnauthorized() {
+      setUser(null);
+      setToken(null);
+      window.localStorage.removeItem(USER_KEY);
+      router.push("/");
+    }
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
+  }, [router]);
+
   async function changePassword(currentPassword: string, newPassword: string) {
     await api.post("/auth/change-password", { currentPassword, newPassword });
     if (user) {

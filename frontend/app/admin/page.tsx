@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { useAdminPortal } from "@/src/hooks/useAdminPortal";
-import { Dashboard, Intakes, Students, StaffRole, Troop, PasswordChanges, AuditLog } from "./views";
+import { Dashboard, Intakes, Students, StaffRole, Troop, PasswordChanges, AuditLog, Substitutes } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "intakes", label: "Intakes", icon: "🗓️" },
   { key: "students", label: "Students", icon: "🎓" },
   { key: "hod", label: "HODs", icon: "🏛️" },
+  { key: "substitutes", label: "HOD Substitutes", icon: "🔄" },
   { key: "troop", label: "Troop Commanders", icon: "🎖️" },
   { key: "squadran", label: "Squadron Commander", icon: "⚔️" },
   { key: "sdd", label: "Senior Deputy Dean", icon: "⭐" },
@@ -23,6 +24,7 @@ const TITLES: Record<string, string> = {
   intakes: "Intakes",
   students: "Students",
   hod: "HODs",
+  substitutes: "HOD Substitutes",
   troop: "Troop Commanders",
   squadran: "Squadron Commander",
   sdd: "Senior Deputy Dean",
@@ -47,6 +49,7 @@ export default function AdminPage() {
       {view === "intakes" && <Intakes portal={portal} />}
       {view === "students" && <Students portal={portal} />}
       {view === "hod" && <StaffRole portal={portal} role="HOD" title="HOD" extraLabel="Department" />}
+      {view === "substitutes" && <Substitutes portal={portal} />}
       {view === "squadran" && <StaffRole portal={portal} role="SQUADRAN" title="Squadron Commander" />}
       {view === "sdd" && (
         <StaffRole portal={portal} role="SDD" title="Senior Deputy Dean" extraLabel="Title" extraPlaceholder="e.g. Senior Deputy Dean" />

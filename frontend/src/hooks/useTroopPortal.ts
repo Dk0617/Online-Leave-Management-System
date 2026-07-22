@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave } from "@/src/api";
-import { LeaveRequest } from "@/src/types";
+import { api, normalizeLeave, normalizeMovement } from "@/src/api";
+import { LeaveRequest, Movement } from "@/src/types";
 
 export function useTroopPortal() {
   const [allPending, setAllPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
   const [records, setRecords] = useState<LeaveRequest[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsLoaded, setRecordsLoaded] = useState(false);
@@ -26,12 +27,14 @@ export function useTroopPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [all, hist] = await Promise.all([
+      const [all, hist, mov] = await Promise.all([
         api.get<Record<string, unknown>[]>("/troop/leaves/pending"),
         api.get<Record<string, unknown>[]>("/troop/leaves/history"),
+        api.get<Record<string, unknown>[]>("/troop/movements"),
       ]);
       setAllPending(all.map(normalizeLeave));
       setHistory(hist.map(normalizeLeave));
+      setMovements(mov.map(normalizeMovement));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Troop data");
     } finally {
@@ -75,6 +78,7 @@ export function useTroopPortal() {
     dayScholarPending,
     cadetPending,
     history,
+    movements,
     records,
     recordsLoading,
     recordsLoaded,

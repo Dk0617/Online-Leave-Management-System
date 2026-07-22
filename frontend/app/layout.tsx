@@ -16,8 +16,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Online Leave System",
-  description: "Online Leave Management System for students and staff",
+  title: "SLMS — KDU Southern Campus",
+  description: "Student Leave Management System for KDU Southern Campus",
 };
 
 export default function RootLayout({

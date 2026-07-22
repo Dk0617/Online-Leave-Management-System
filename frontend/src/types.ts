@@ -1,4 +1,4 @@
-// Core domain types for the Online Leave Management System.
+// Core domain types for the Student Leave Management System.
 
 export type Role = "ADMIN" | "STUDENT" | "HOD" | "TROOP" | "SQUADRAN" | "SDD" | "GATE";
 
@@ -164,6 +164,10 @@ export interface Movement {
   notes?: string;
   loggedBy: string;
   timestamp: string; // createdAt
+  // Only present on the Troop/Squadron-scoped /movements endpoints (see
+  // backend/controllers/movementcontrol.js) — joined in from Student since
+  // Movement itself doesn't store it.
+  department?: string;
 }
 
 // ── Admin: password-change notifications & audit log ─────────────────
@@ -183,4 +187,26 @@ export interface AuditEntry {
   action: string;
   details?: string;
   time: string; // createdAt
+}
+
+// A mandatory-attendance day an HOD marks on their calendar (e.g. a
+// workshop) — see backend/models/EventDay.js.
+export interface EventDay {
+  id: string;
+  date: string; // "YYYY-MM-DD"
+  title: string;
+}
+
+// Admin-assigned HOD cover — see backend/models/Substitute.js.
+export interface SubstituteAssignment {
+  id: string;
+  hodId: string;
+  hodName: string;
+  hodDepartment?: string;
+  substituteHodId: string;
+  substituteHodName: string;
+  substituteHodDepartment?: string;
+  fromDate: string; // "YYYY-MM-DD"
+  toDate: string; // "YYYY-MM-DD"
+  reason?: string;
 }

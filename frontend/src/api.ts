@@ -7,6 +7,7 @@ import {
   AuthUser,
   DOC_REQUIRED_TYPES,
   DOC_REQUIRED_TYPES_CADET,
+  EventDay,
   Intake,
   LeaveRequest,
   Movement,
@@ -15,6 +16,7 @@ import {
   Role,
   StaffAccount,
   Student,
+  SubstituteAssignment,
 } from "@/src/types";
 
 // ==================================================================
@@ -58,6 +60,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const body = isJson ? await res.json().catch(() => null) : null;
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("auth:unauthorized"));
+    }
     throw new ApiError(body?.message ?? res.statusText, res.status);
   }
   return body as T;
@@ -215,6 +220,7 @@ export function normalizeMovement(raw: Raw): Movement {
     notes: raw.notes as string | undefined,
     loggedBy: raw.loggedBy as string,
     timestamp: raw.createdAt as string,
+    department: raw.department as string | undefined,
   };
 }
 
@@ -237,6 +243,31 @@ export function normalizeAudit(raw: Raw): AuditEntry {
     action: raw.action as string,
     details: raw.details as string | undefined,
     time: raw.createdAt as string,
+  };
+}
+
+export function normalizeEventDay(raw: Raw): EventDay {
+  return {
+    id: String(raw._id ?? raw.id),
+    date: raw.date as string,
+    title: raw.title as string,
+  };
+}
+
+export function normalizeSubstitute(raw: Raw): SubstituteAssignment {
+  const hod = raw.hodId as Raw;
+  const sub = raw.substituteHodId as Raw;
+  return {
+    id: String(raw._id ?? raw.id),
+    hodId: String(hod?._id ?? hod),
+    hodName: (hod?.name as string) ?? "Unknown",
+    hodDepartment: hod?.department as string | undefined,
+    substituteHodId: String(sub?._id ?? sub),
+    substituteHodName: (sub?.name as string) ?? "Unknown",
+    substituteHodDepartment: sub?.department as string | undefined,
+    fromDate: raw.fromDate as string,
+    toDate: raw.toDate as string,
+    reason: raw.reason as string | undefined,
   };
 }
 
@@ -274,6 +305,20 @@ export function isRejected(leave: LeaveRequest): boolean {
     );
   }
   return leave.hodStatus === "Rejected" || leave.troopStatus === "Rejected";
+}
+
+// A stage's raw status can be stuck at "Pending" even though the leave as a
+// whole is already Rejected — an earlier stage rejected it, so this later
+// stage will never actually be reached or decided (the pending-queue
+// queries in backend/controllers/leavecontrol.js already gate on the
+// earlier stage's status, so downstream approvers never see it). Callers
+// use this to avoid displaying a misleading "Pending" badge for a stage
+// that is never coming.
+export function isStageMoot(
+  leave: LeaveRequest,
+  field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus"
+): boolean {
+  return leave[field] === "Pending" && isRejected(leave);
 }
 
 // Academic Leave is an academic excuse kept on file with the approver (HOD

@@ -1,9 +1,10 @@
 import Leave from "../models/Leave.js";
 import Troop from "../models/Troop.js";
 import Student from "../models/Student.js";
+import Substitute from "../models/Substitute.js";
 import { writeAudit } from "../utils/audit.js";
 import { isApproved } from "../utils/leaveStatus.js";
-import { sendApprovalEmail } from "../utils/mailer.js";
+import { sendApprovalEmail, sendRejectionEmail } from "../utils/mailer.js";
 
 function sortByPriorityThenNewest(leaves) {
   return leaves.sort((a, b) => {
@@ -66,15 +67,17 @@ async function attachLinkedInfo(leaves) {
   return leaves;
 }
 
-async function decide(req, res, { statusField, commentField, atField, role, decision, scopeFilter }) {
-  const { comment } = req.body;
-  const scope = await scopeFilter(req);
-  const leave = await Leave.findOne({ _id: req.params.id, ...scope });
-  if (!leave) return res.status(404).json({ message: "Leave not found" });
-  if (leave[statusField] !== "Pending") {
-    return res.status(403).json({ message: "This leave is not pending your decision" });
-  }
-
+// Applies a single-stage decision to a leave: saves the status/comment/
+// timestamp, cascades to a linked Academic+Personal Leave pair, writes the
+// audit entry, and fires the student-facing email. Shared by decide()
+// (one leave at a time, from the approver clicking Approve/Reject) and
+// eventcontrol.js's rejectOverlapping (many leaves at once, from an HOD
+// bulk-rejecting everyone booked against a mandatory event day) so both
+// paths stay in sync.
+export async function applyDecision(
+  leave,
+  { statusField, commentField, atField, role, decision, comment, actorName }
+) {
   leave[statusField] = decision;
   leave[commentField] = comment || "";
   leave[atField] = new Date().toLocaleString();
@@ -101,17 +104,15 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
     }
   }
 
-  // Not awaited: writeAudit already swallows its own errors and the
-  // approver's click has nothing left to wait on once the decision itself
-  // is saved — same reasoning as the fire-and-forget email send below.
-  writeAudit(role, req.user.name, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
+  // Not awaited: writeAudit already swallows its own errors and the caller
+  // has nothing left to wait on once the decision itself is saved — same
+  // reasoning as the fire-and-forget email send below.
+  writeAudit(role, actorName, `leave_${decision.toLowerCase()}`, `leave id=${leave._id}`);
 
-  res.json(leave);
-
-  // Fire-and-forget: sent after the response so the approver's click
-  // doesn't sit there waiting on an SMTP round-trip (which can take several
-  // seconds) before the UI updates. A failed send is only logged, never
-  // surfaced to the approver — they've already gotten their success response.
+  // Fire-and-forget: not awaited, so the caller's response isn't held up on
+  // an SMTP round-trip (which can take several seconds). A failed send is
+  // only logged, never surfaced — the approver already got their success
+  // response by the time this could fail.
   if (decision === "Approved" && isApproved(leave)) {
     (async () => {
       try {
@@ -124,6 +125,46 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
       }
     })();
   }
+
+  if (decision === "Rejected") {
+    (async () => {
+      try {
+        const student = await Student.findById(leave.studentId);
+        if (student?.email) {
+          await sendRejectionEmail(student.email, student.name, leave, role, leave[commentField]);
+        }
+      } catch (err) {
+        console.error("Failed to send rejection email:", err.message);
+      }
+    })();
+  }
+
+  return leave;
+}
+
+async function decide(req, res, { statusField, commentField, atField, role, decision, scopeFilter }) {
+  const { comment } = req.body;
+  if (decision === "Rejected" && !comment?.trim()) {
+    return res.status(400).json({ message: "A reason is required to reject a leave" });
+  }
+  const scope = await scopeFilter(req);
+  const leave = await Leave.findOne({ _id: req.params.id, ...scope });
+  if (!leave) return res.status(404).json({ message: "Leave not found" });
+  if (leave[statusField] !== "Pending") {
+    return res.status(403).json({ message: "This leave is not pending your decision" });
+  }
+
+  await applyDecision(leave, {
+    statusField,
+    commentField,
+    atField,
+    role,
+    decision,
+    comment,
+    actorName: req.user.name,
+  });
+
+  res.json(leave);
 }
 
 // Shared shape for HOD / Squadron / SDD — each owns exactly one status
@@ -177,12 +218,28 @@ function buildRoleHandlers({
 }
 
 // ── HOD — Day Scholar leaves assigned to this HOD ───────────────────
+// Widens the plain "hodId: req.user.id" scope to also include any HOD
+// whose queue this HOD is currently covering, admin-assigned via
+// substitutecontrol.js (e.g. the covered HOD is on leave themselves). A
+// substitution only applies while today's date falls within its
+// [fromDate, toDate] window.
+async function hodScopeFilter(req) {
+  const today = new Date().toISOString().split("T")[0];
+  const activeSubs = await Substitute.find({
+    substituteHodId: req.user.id,
+    fromDate: { $lte: today },
+    toDate: { $gte: today },
+  }).select("hodId");
+  const hodIds = [req.user.id, ...activeSubs.map((s) => String(s.hodId))];
+  return { hodId: { $in: hodIds } };
+}
+
 export const hod = buildRoleHandlers({
   role: "HOD",
   statusField: "hodStatus",
   commentField: "hodComment",
   atField: "hodApprovedAt",
-  scopeFilter: async (req) => ({ hodId: req.user.id }),
+  scopeFilter: hodScopeFilter,
 });
 
 // ── Squadron Commander — Cadet leaves. Normally only after Troop has

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* KDU Southern Campus OLMS palette (matches the reference HTML mockups) */
+  /* KDU Southern Campus SLMS palette (matches the reference HTML mockups) */
   --navy: #0d1b5e;
   --navy2: #162070;
   --blue: #2563b0;

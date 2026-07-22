@@ -13,6 +13,19 @@ function generateOtp() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// A self-chosen password (via Change Password, typically the forced change
+// on first login) is held to a real bar since the account holder picks and
+// remembers it themselves — at least 8 characters with at least one
+// uppercase letter. Deliberately lighter than admincontrol.js's staff
+// password policy (no digit/symbol requirement needed here): this is meant
+// to be a low-friction step up from an admin-issued starter password, not a
+// second wall to get through.
+const SELF_SET_PASSWORD_MESSAGE =
+  "New password must be at least 8 characters long and contain at least one uppercase letter.";
+function isValidSelfSetPassword(password) {
+  return typeof password === "string" && password.length >= 8 && /[A-Z]/.test(password);
+}
+
 function signToken(user, role) {
   return jwt.sign({ id: user._id, role, name: user.name }, process.env.JWT_SECRET, {
     expiresIn: "1d",
@@ -66,10 +79,8 @@ export const changePassword = async (req, res) => {
       .status(400)
       .json({ message: "Current and new password are required" });
   }
-  if (newPassword.length < 4) {
-    return res
-      .status(400)
-      .json({ message: "New password must be at least 4 characters" });
+  if (!isValidSelfSetPassword(newPassword)) {
+    return res.status(400).json({ message: SELF_SET_PASSWORD_MESSAGE });
   }
   if (newPassword === currentPassword) {
     return res

@@ -7,6 +7,9 @@ import { isApproved, isRejected } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType } from "@/src/types";
 import styles from "./admin.module.css";
 
+// Required for staff accounts (HOD/Squadron/SDD/Gate/Troop) — see
+// backend/controllers/admincontrol.js isValidPassword for why staff and
+// student passwords are held to different bars.
 const PASSWORD_POLICY_MESSAGE =
   "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
 function isValidPassword(password: string): boolean {
@@ -17,6 +20,14 @@ function isValidPassword(password: string): boolean {
     /\d/.test(password) &&
     /[^A-Za-z0-9]/.test(password)
   );
+}
+
+// A student's initial password is handed to them on paper/verbally, so it's
+// deliberately not held to the staff complexity policy above — see
+// backend/controllers/admincontrol.js isValidSimplePassword.
+const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
+function isValidSimplePassword(password: string): boolean {
+  return password.length >= 4;
 }
 
 function Breakdown({
@@ -68,7 +79,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
         <div>
           <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>
           <p className="text-xs text-[var(--muted)]">
-            Here&apos;s what&apos;s happening across OLMS today.
+            Here&apos;s what&apos;s happening across SLMS today.
           </p>
         </div>
         <div className="rounded-lg border border-[rgba(224,123,32,0.25)] bg-[rgba(224,123,32,0.1)] px-3.5 py-1.5 font-mono text-xs text-[var(--orange2)]">
@@ -387,8 +398,8 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       setError("Mobile number must be exactly 10 digits, numbers only.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
+    if (password.trim() && !isValidSimplePassword(password.trim())) {
+      setError(SIMPLE_PASSWORD_MESSAGE);
       return;
     }
     setError(null);
@@ -591,7 +602,8 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={styles.input} />
           </div>
           <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+            Min 4 characters — no need for capitals or symbols. The student sets their own stronger
+            password on first login.
           </p>
         </div>
 
@@ -1226,5 +1238,202 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
         </table>
       </div>
     </Card>
+  );
+}
+
+// ==================================================================
+// HOD Substitutes — cover for when an HOD can't act on leaves (e.g. they're
+// on leave themselves). Admin assigns another HOD to also see and decide
+// on the covered HOD's queue for a date range; see leavecontrol.js
+// hodScopeFilter for how the widened access actually works.
+// ==================================================================
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+export function Substitutes({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { hods, substitutes, addSubstitute, removeSubstitute } = portal;
+  const [hodId, setHodId] = useState("");
+  const [substituteHodId, setSubstituteHodId] = useState("");
+  const [fromDate, setFromDate] = useState(todayStr());
+  const [toDate, setToDate] = useState(todayStr());
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const today = todayStr();
+
+  async function handleAdd() {
+    if (!hodId || !substituteHodId) {
+      setError("Select both the covered HOD and the substitute HOD.");
+      return;
+    }
+    if (hodId === substituteHodId) {
+      setError("The substitute must be a different HOD.");
+      return;
+    }
+    if (toDate < fromDate) {
+      setError("End date can't be before start date.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await addSubstitute({ hodId, substituteHodId, fromDate, toDate, reason: reason.trim() || undefined });
+      setHodId("");
+      setSubstituteHodId("");
+      setReason("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign substitute");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemove(id: string) {
+    if (!confirm("Remove this substitute assignment?")) return;
+    try {
+      await removeSubstitute(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove substitute");
+    }
+  }
+
+  return (
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>HOD Substitutes:</strong> When an HOD can&apos;t act on leaves — e.g. they&apos;re on leave
+        themselves — assign another HOD to cover their queue for a date range. While the assignment is
+        active, the substitute sees and can approve/reject the covered HOD&apos;s Day Scholar and Officer
+        Cadet Academic Leave applications, in addition to their own.
+      </div>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Assign Substitute</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={styles.label}>Covered HOD</label>
+            <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
+              <option value="">Select HOD…</option>
+              {hods.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name} {h.department ? `(${h.department})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>Substitute HOD</label>
+            <select
+              value={substituteHodId}
+              onChange={(e) => setSubstituteHodId(e.target.value)}
+              className={styles.input}
+            >
+              <option value="">Select HOD…</option>
+              {hods.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name} {h.department ? `(${h.department})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>From Date</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className={styles.input}
+            />
+          </div>
+          <div>
+            <label className={styles.label}>To Date</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className={styles.input}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={styles.label}>Reason (optional)</label>
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. On annual leave"
+              className={styles.input}
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <Button variant="primary" disabled={submitting} onClick={handleAdd}>
+            {submitting ? "Assigning…" : "Assign Substitute"}
+          </Button>
+        </div>
+        {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Substitute Assignments</h2>
+        <div className="overflow-x-auto">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Covered HOD</th>
+                <th>Substitute HOD</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {substitutes.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                    No substitute assignments.
+                  </td>
+                </tr>
+              ) : (
+                substitutes.map((s) => {
+                  const active = s.fromDate <= today && today <= s.toDate;
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        {s.hodName}
+                        {s.hodDepartment && <div className="text-xs text-[var(--muted)]">{s.hodDepartment}</div>}
+                      </td>
+                      <td>
+                        {s.substituteHodName}
+                        {s.substituteHodDepartment && (
+                          <div className="text-xs text-[var(--muted)]">{s.substituteHodDepartment}</div>
+                        )}
+                      </td>
+                      <td>{s.fromDate}</td>
+                      <td>{s.toDate}</td>
+                      <td className="text-[var(--muted)]">{s.reason || "—"}</td>
+                      <td>
+                        <Badge tone={active ? "green" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
+                      </td>
+                      <td>
+                        <Button
+                          variant="danger"
+                          className="!px-2.5 !py-1 !text-[11px]"
+                          onClick={() => handleRemove(s.id)}
+                        >
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
   );
 }

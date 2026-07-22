@@ -3,12 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
+import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
 import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
+}
+
+function tomorrowStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
 }
 
 function validity(l: { startDate: string; startTime: string; endDate: string; endTime: string }) {
@@ -64,7 +71,33 @@ const LEAVE_TYPE_ORDER: LeaveType[] = ["Emergency Leave", "Medical Leave", "Pers
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();
+  const tomorrow = tomorrowStr();
   const todayMovements = movements.filter((m) => m.timestamp.startsWith(today));
+  const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
+
+  const todayExitEntries: ExitEntry[] = todayMovements
+    .filter((m) => m.direction === "Exit")
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: approvedLeaves.find((l) => l.id === m.leaveId)?.department,
+      direction: "Exit",
+      timestamp: m.timestamp,
+    }));
+
+  const tomorrowExitEntries: ExitEntry[] = approvedLeaves
+    .filter((l) => l.startDate === tomorrow)
+    .map((l) => ({
+      id: l.id,
+      indexNumber: l.indexNumber,
+      studentName: l.studentName,
+      studentType: l.studentType,
+      department: l.department,
+      direction: "Exit",
+      plannedDate: `${l.startDate} ${l.startTime}`,
+    }));
 
   function lastMovementFor(indexNumber: string, leaveId: string) {
     const forLeave = movements.filter((m) => m.leaveId === leaveId || m.indexNumber === indexNumber);
@@ -108,10 +141,23 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
       <div className={styles.statGrid}>
         <StatTile label="On Leave Now" value={onLeaveNow.length} tone="amber" />
-        <StatTile label="Exits Today" value={todayMovements.filter((m) => m.direction === "Exit").length} />
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today", entries: todayExitEntries })}>
+          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow", entries: tomorrowExitEntries })}>
+          <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
+        </ClickableStatCard>
         <StatTile label="Entries Today" value={todayMovements.filter((m) => m.direction === "Entry").length} tone="green" />
         <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" />
       </div>
+
+      {drilldown && (
+        <ExitDrilldownModal
+          title={drilldown.title}
+          entries={drilldown.entries}
+          onClose={() => setDrilldown(null)}
+        />
+      )}
 
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Leave Passes — Exit / Entry &amp; Validity Status</h2>
       {leavesByType.length === 0 ? (

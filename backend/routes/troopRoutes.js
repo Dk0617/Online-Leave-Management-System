@@ -7,6 +7,7 @@ import {
   troopApprove,
   troopReject,
 } from "../controllers/leavecontrol.js";
+import { troopMovements } from "../controllers/movementcontrol.js";
 
 const router = express.Router();
 
@@ -17,5 +18,7 @@ router.get("/leaves/history", troopHistory);
 router.get("/leaves/records", troopAllRecords);
 router.patch("/leaves/:id/approve", troopApprove);
 router.patch("/leaves/:id/reject", troopReject);
+
+router.get("/movements", troopMovements);
 
 export default router;

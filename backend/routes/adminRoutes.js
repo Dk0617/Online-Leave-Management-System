@@ -23,6 +23,7 @@ import {
   listAudit,
   clearAudit,
 } from "../controllers/admincontrol.js";
+import { listSubstitutes, createSubstitute, deleteSubstitute } from "../controllers/substitutecontrol.js";
 
 const router = express.Router();
 
@@ -56,5 +57,9 @@ router.patch("/notifications/:id/read", markNotificationRead);
 
 router.get("/audit", listAudit);
 router.delete("/audit", clearAudit);
+
+router.get("/substitutes", listSubstitutes);
+router.post("/substitutes", createSubstitute);
+router.delete("/substitutes/:id", deleteSubstitute);
 
 export default router;

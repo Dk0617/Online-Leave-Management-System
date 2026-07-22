@@ -1,6 +1,6 @@
-# Online Leave Management System
+# Student Leave Management System (SLMS)
 
-For KDUSC
+For KDU Southern Campus (KDUSC)
 
 A web application for managing student leave requests, approvals, and gate movement tracking.
 

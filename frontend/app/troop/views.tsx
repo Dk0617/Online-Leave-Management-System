@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
+import { isApproved } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -12,15 +14,51 @@ function tone(status: string) {
   return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
 }
 
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function tomorrowStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { user } = useAuth();
-  const { allPending, history, approve, reject, error, refresh } = portal;
+  const { allPending, history, movements, approve, reject, error, refresh } = portal;
   const intakesText = user?.intakes?.length ? user.intakes.map((i) => `Intake ${i}`).join(", ") : "no intakes assigned yet";
   const approvedByMe = history.filter((l) => l.troopStatus === "Approved").length;
   const rejectedByMe = history.filter((l) => l.troopStatus === "Rejected").length;
   const dsPending = allPending.filter((l) => l.studentType === "DAY_SCHOLAR").length;
   const cdPending = allPending.filter((l) => l.studentType === "CADET").length;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
+  const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
+
+  const today = todayStr();
+  const tomorrow = tomorrowStr();
+  const todayExitEntries: ExitEntry[] = movements
+    .filter((m) => m.direction === "Exit" && m.timestamp.startsWith(today))
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: m.department,
+      direction: "Exit",
+      timestamp: m.timestamp,
+    }));
+  const tomorrowExitEntries: ExitEntry[] = history
+    .filter((l) => isApproved(l) && l.startDate === tomorrow)
+    .map((l) => ({
+      id: l.id,
+      indexNumber: l.indexNumber,
+      studentName: l.studentName,
+      studentType: l.studentType,
+      department: l.department,
+      direction: "Exit",
+      plannedDate: `${l.startDate} ${l.startTime}`,
+    }));
 
   return (
     <div>
@@ -46,7 +84,21 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         <StatTile label="Officer Cadet Pending" value={cdPending} tone="amber" />
         <StatTile label="Approved" value={approvedByMe} tone="green" />
         <StatTile label="Rejected" value={rejectedByMe} tone="red" />
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Troop", entries: todayExitEntries })}>
+          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow — Your Troop", entries: tomorrowExitEntries })}>
+          <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
+        </ClickableStatCard>
       </div>
+
+      {drilldown && (
+        <ExitDrilldownModal
+          title={drilldown.title}
+          entries={drilldown.entries}
+          onClose={() => setDrilldown(null)}
+        />
+      )}
 
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">All Pending — Your Troop</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
@@ -282,7 +334,11 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
                   <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
                 </td>
                 <td className="text-xs text-[var(--muted)]">
-                  {l.studentType === "DAY_SCHOLAR" ? "PDF Ready (if Approved)" : "Squadron Commander"}
+                  {l.troopStatus === "Rejected"
+                    ? "Not Reached — rejected at Troop"
+                    : l.studentType === "DAY_SCHOLAR"
+                    ? "PDF Ready (if Approved)"
+                    : "Squadron Commander"}
                 </td>
               </tr>
             ))

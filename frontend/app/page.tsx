@@ -105,10 +105,10 @@ export default function LoginPage() {
                 KDU Southern Campus
               </div>
               <div className="text-2xl font-black leading-none tracking-tight text-[#0d1b5e]">
-                OLMS
+                SLMS
               </div>
               <div className="mt-1 text-xs text-[#94a3b8]">
-                Online Leave Management System
+                Student Leave Management System
               </div>
             </div>
           </div>

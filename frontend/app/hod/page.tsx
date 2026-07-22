@@ -5,17 +5,19 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
-import { Dashboard, History } from "./views";
+import { Dashboard, History, EventCalendar } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "history", label: "History", icon: "📋" },
+  { key: "calendar", label: "Event Calendar", icon: "🗓️" },
   { key: "changePass", label: "Change Password", icon: "🔑" },
 ];
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
   history: "History",
+  calendar: "Event Calendar",
   changePass: "Change Password",
 };
 
@@ -38,6 +40,7 @@ export default function HodPage() {
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "history" && <History portal={portal} />}
+      {activeView === "calendar" && <EventCalendar portal={portal} />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>
   );

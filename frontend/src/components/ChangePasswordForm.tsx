@@ -22,8 +22,11 @@ export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolea
       setMessage({ text: "Please fill in all fields.", ok: false });
       return;
     }
-    if (next.length < 4) {
-      setMessage({ text: "New password must be at least 4 characters.", ok: false });
+    if (next.length < 8 || !/[A-Z]/.test(next)) {
+      setMessage({
+        text: "New password must be at least 8 characters long and contain at least one uppercase letter.",
+        ok: false,
+      });
       return;
     }
     if (next !== confirm) {
@@ -65,6 +68,9 @@ export function ChangePasswordForm({ forced = false, onDone }: { forced?: boolea
       <div className="mb-3.5">
         <label className={labelClass}>New Password</label>
         <input type="password" value={next} onChange={(e) => setNext(e.target.value)} className={inputClass} />
+        <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+          Min 8 characters, with at least one uppercase letter.
+        </p>
       </div>
       <div className="mb-4">
         <label className={labelClass}>Confirm New Password</label>

@@ -2,7 +2,7 @@
 
 import { ReactNode, useState } from "react";
 import { LeaveRequest, LEAVE_TYPE_LABELS, LeaveStatus } from "@/src/types";
-import { isApproved } from "@/src/api";
+import { isApproved, isRejected, isStageMoot } from "@/src/api";
 import { Button, Badge } from "@/src/components/ui";
 
 // ==================================================================
@@ -149,6 +149,41 @@ function stepStatus(status: LeaveStatus, gate: boolean): TimelineStep["status"] 
   return "active";
 }
 
+// A per-stage status badge that shows "Not Reached" instead of a stale
+// "Pending" once an earlier stage has already rejected the leave — the
+// backend never lets this stage actually be decided at that point (see
+// isStageMoot in api.ts), so showing "Pending" would wrongly imply it's
+// still awaiting someone's action.
+function StageBadge({
+  leave,
+  field,
+}: {
+  leave: LeaveRequest;
+  field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus";
+}) {
+  if (isStageMoot(leave, field)) {
+    return <Badge tone="gray">Not Reached</Badge>;
+  }
+  return <Badge tone={statusTone(leave[field])}>{leave[field]}</Badge>;
+}
+
+const REJECTING_ROLE_LABELS: { field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus"; commentField: "hodComment" | "troopComment" | "sqnComment" | "sddComment"; role: string }[] = [
+  { field: "hodStatus", commentField: "hodComment", role: "HOD" },
+  { field: "troopStatus", commentField: "troopComment", role: "Troop Commander" },
+  { field: "sqnStatus", commentField: "sqnComment", role: "Squadron Commander" },
+  { field: "sddStatus", commentField: "sddComment", role: "Senior Deputy Dean" },
+];
+
+// Finds whichever stage actually recorded the rejection, so the modal can
+// show that approver's reason plus system guidance — mirrors the wording in
+// backend/utils/mailer.js sendRejectionEmail, since this is the in-app
+// counterpart of that same email.
+function rejectionInfo(leave: LeaveRequest): { role: string; comment: string } | null {
+  const hit = REJECTING_ROLE_LABELS.find((r) => leave[r.field] === "Rejected");
+  if (!hit) return null;
+  return { role: hit.role, comment: leave[hit.commentField] || "" };
+}
+
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex gap-3 border-b border-[rgba(74,144,217,0.06)] py-2 text-sm last:border-none">
@@ -192,6 +227,7 @@ export function LeaveDetailModal({
 }) {
   const isCadet = leave.studentType === "CADET";
   const approved = isApproved(leave);
+  const rejection = isRejected(leave) ? rejectionInfo(leave) : null;
   // Cadet Academic Leave routes HOD -> Squadron only (no Troop, no SDD) —
   // identified by troopStatus permanently "N/A", same marker used by
   // isApproved/isRejected. Everything else follows the normal 3-stage
@@ -239,6 +275,20 @@ export function LeaveDetailModal({
           <div className="mb-4">
             <Timeline steps={steps} />
           </div>
+
+          {rejection && (
+            <div className="mb-4 rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] p-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--err)]">
+                Rejected by {rejection.role}
+              </div>
+              <div className="mt-1 text-[13px] text-[var(--white)]">{rejection.comment}</div>
+              <div className="mt-2 text-[12px] leading-relaxed text-[var(--muted)]">
+                This application will not proceed to any further approval stage. Review the reason
+                above, then either submit a new leave request with the necessary corrections, or
+                contact the {rejection.role} directly if you need clarification before reapplying.
+              </div>
+            </div>
+          )}
 
           <Row
             label="Leave Type"
@@ -315,7 +365,7 @@ export function LeaveDetailModal({
                 label="HOD"
                 value={
                   <>
-                    <Badge tone={statusTone(leave.hodStatus)}>{leave.hodStatus}</Badge>
+                    <StageBadge leave={leave} field="hodStatus" />
                     {leave.hodComment && (
                       <em className="ml-2 text-xs text-[var(--muted)]">{leave.hodComment}</em>
                     )}
@@ -326,7 +376,7 @@ export function LeaveDetailModal({
                 label="Troop Commander"
                 value={
                   <>
-                    <Badge tone={statusTone(leave.troopStatus)}>{leave.troopStatus}</Badge>
+                    <StageBadge leave={leave} field="troopStatus" />
                     {leave.troopComment && (
                       <em className="ml-2 text-xs text-[var(--muted)]">{leave.troopComment}</em>
                     )}
@@ -341,7 +391,7 @@ export function LeaveDetailModal({
                   label="HOD"
                   value={
                     <>
-                      <Badge tone={statusTone(leave.hodStatus)}>{leave.hodStatus}</Badge>
+                      <StageBadge leave={leave} field="hodStatus" />
                       {leave.hodComment && (
                         <em className="ml-2 text-xs text-[var(--muted)]">{leave.hodComment}</em>
                       )}
@@ -349,18 +399,9 @@ export function LeaveDetailModal({
                   }
                 />
               )}
-              <Row
-                label="Troop Commander"
-                value={<Badge tone={statusTone(leave.troopStatus)}>{leave.troopStatus}</Badge>}
-              />
-              <Row
-                label="Squadron Cmdr"
-                value={<Badge tone={statusTone(leave.sqnStatus)}>{leave.sqnStatus}</Badge>}
-              />
-              <Row
-                label="Senior Deputy Dean"
-                value={<Badge tone={statusTone(leave.sddStatus)}>{leave.sddStatus}</Badge>}
-              />
+              <Row label="Troop Commander" value={<StageBadge leave={leave} field="troopStatus" />} />
+              <Row label="Squadron Cmdr" value={<StageBadge leave={leave} field="sqnStatus" />} />
+              <Row label="Senior Deputy Dean" value={<StageBadge leave={leave} field="sddStatus" />} />
             </>
           )}
 

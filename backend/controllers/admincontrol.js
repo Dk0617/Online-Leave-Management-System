@@ -16,7 +16,9 @@ function isValidMobile(mobile) {
 }
 
 // At least 8 characters, one uppercase, one lowercase, one digit, and one
-// special character — required for every password an admin sets by hand.
+// special character — required for every staff password an admin sets by
+// hand (HOD/Squadron/SDD/Gate/Troop). Student passwords use the lighter
+// isValidSimplePassword below instead — see its comment for why.
 const PASSWORD_POLICY_MESSAGE =
   "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
 function isValidPassword(password) {
@@ -28,6 +30,17 @@ function isValidPassword(password) {
     /\d/.test(password) &&
     /[^A-Za-z0-9]/.test(password)
   );
+}
+
+// A student's initial password is set by the admin and handed to them
+// on paper/verbally for their first login — it needs to be easy to read
+// back and type in, so it's deliberately not held to the staff complexity
+// policy above. Once the student changes it themselves (forced on first
+// login), the stronger self-set policy in logauthcontrol.js changePassword
+// takes over.
+const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
+function isValidSimplePassword(password) {
+  return typeof password === "string" && password.length >= 4;
 }
 
 // Email-code login looks a user up by email across every role, so the same
@@ -113,8 +126,8 @@ export const createStudent = async (req, res) => {
   if (!isValidMobile(mobile)) {
     return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
   }
-  if (!isValidPassword(password)) {
-    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+  if (!isValidSimplePassword(password)) {
+    return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
   }
   if (studentType === "DAY_SCHOLAR" && !hodId) {
     return res.status(400).json({ message: "A Day Scholar must be assigned an HOD" });
@@ -198,8 +211,8 @@ export const updateStudent = async (req, res) => {
   if (student.studentType === "DAY_SCHOLAR" && hodId) student.hodId = hodId;
   if (student.studentType === "CADET" && sqnId) student.sqnId = sqnId;
   if (password) {
-    if (!isValidPassword(password)) {
-      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    if (!isValidSimplePassword(password)) {
+      return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
     }
     student.password = password;
     student.mustChangePassword = true;
