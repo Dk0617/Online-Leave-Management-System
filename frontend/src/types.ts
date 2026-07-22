@@ -1,6 +1,6 @@
 // Core domain types for the Student Leave Management System.
 
-export type Role = "ADMIN" | "STUDENT" | "HOD" | "TROOP" | "SQUADRAN" | "SDD" | "GATE";
+export type Role = "ADMIN" | "STUDENT" | "HOD" | "TROOP" | "SQUADRAN" | "SDD" | "GATE" | "LECTURER";
 
 export type StudentType = "DAY_SCHOLAR" | "CADET";
 
@@ -24,6 +24,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   SQUADRAN: "Squadron Commander",
   SDD: "Senior Deputy Dean",
   GATE: "Gate Staff",
+  LECTURER: "Lecturer",
 };
 
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
@@ -46,6 +47,7 @@ export interface AuthUser {
   name: string;
   role: Role;
   mustChangePassword: boolean;
+  photo?: string; // base64 data URL — shown as the header avatar (see DashboardShell)
   department?: string;
   designation?: string;
   title?: string; // SDD
@@ -197,15 +199,39 @@ export interface EventDay {
   title: string;
 }
 
-// Admin-assigned HOD cover — see backend/models/Substitute.js.
-export interface SubstituteAssignment {
+// A Senior or Junior Lecturer in the campus-wide HOD-cover seniority chain
+// — see backend/models/Lecturer.js.
+export interface LecturerAccount {
+  id: string;
+  username: string;
+  name: string;
+  email?: string;
+  department?: string;
+  tier: "SENIOR" | "JUNIOR";
+  rank: number;
+  mustChangePassword: boolean;
+}
+
+// Admin-marked window when an HOD is unavailable — see
+// backend/models/HodUnavailability.js.
+export interface HodUnavailability {
   id: string;
   hodId: string;
   hodName: string;
   hodDepartment?: string;
-  substituteHodId: string;
-  substituteHodName: string;
-  substituteHodDepartment?: string;
+  fromDate: string; // "YYYY-MM-DD"
+  toDate: string; // "YYYY-MM-DD"
+  reason?: string;
+}
+
+// Admin-marked window when a Lecturer isn't available to cover HOD
+// approvals — see backend/models/LecturerUnavailability.js.
+export interface LecturerUnavailability {
+  id: string;
+  lecturerId: string;
+  lecturerName: string;
+  lecturerTier: "SENIOR" | "JUNIOR";
+  lecturerRank: number;
   fromDate: string; // "YYYY-MM-DD"
   toDate: string; // "YYYY-MM-DD"
   reason?: string;

@@ -8,6 +8,7 @@ const gateSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, index: true },
     post: { type: String, default: "Main Gate" },
+    photo: String, // base64 data URL, downscaled client-side before upload
     mustChangePassword: { type: Boolean, default: true },
   },
   { timestamps: true }

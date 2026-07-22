@@ -9,6 +9,7 @@ const hodSchema = new mongoose.Schema(
     department: String,
     email: { type: String, index: true },
     designation: { type: String, default: "Head of Department" },
+    photo: String, // base64 data URL, downscaled client-side before upload
     mustChangePassword: { type: Boolean, default: true },
   },
   { timestamps: true }

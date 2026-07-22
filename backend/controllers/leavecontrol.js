@@ -1,7 +1,9 @@
 import Leave from "../models/Leave.js";
 import Troop from "../models/Troop.js";
 import Student from "../models/Student.js";
-import Substitute from "../models/Substitute.js";
+import Lecturer from "../models/Lecturer.js";
+import HodUnavailability from "../models/HodUnavailability.js";
+import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import { writeAudit } from "../utils/audit.js";
 import { isApproved } from "../utils/leaveStatus.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../utils/mailer.js";
@@ -218,20 +220,42 @@ function buildRoleHandlers({
 }
 
 // ── HOD — Day Scholar leaves assigned to this HOD ───────────────────
-// Widens the plain "hodId: req.user.id" scope to also include any HOD
-// whose queue this HOD is currently covering, admin-assigned via
-// substitutecontrol.js (e.g. the covered HOD is on leave themselves). A
-// substitution only applies while today's date falls within its
-// [fromDate, toDate] window.
+// When an HOD is unavailable (admin-marked, see substitutecontrol.js
+// HodUnavailability), their queue falls to a fixed campus-wide seniority
+// chain of Lecturers: every Senior Lecturer (by rank) before any Junior
+// Lecturer (by rank). Only the single highest-ranked Lecturer who isn't
+// themselves marked unavailable that day (LecturerUnavailability) actually
+// gets access — nobody further down the chain does, even if they're also
+// available, since exactly one person should be covering a given gap on a
+// given day.
+async function resolveActiveCoverer(dateStr) {
+  const [unavailableHods, lecturers, unavailableLecturers] = await Promise.all([
+    HodUnavailability.find({ fromDate: { $lte: dateStr }, toDate: { $gte: dateStr } }).select("hodId"),
+    Lecturer.find().select("tier rank"),
+    LecturerUnavailability.find({ fromDate: { $lte: dateStr }, toDate: { $gte: dateStr } }).select("lecturerId"),
+  ]);
+  if (!unavailableHods.length || !lecturers.length) return null;
+
+  const unavailableLecturerIds = new Set(unavailableLecturers.map((u) => String(u.lecturerId)));
+  const chain = [...lecturers].sort((a, b) =>
+    a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1
+  );
+  const activeCoverer = chain.find((l) => !unavailableLecturerIds.has(String(l._id)));
+  if (!activeCoverer) return null;
+
+  return { lecturerId: String(activeCoverer._id), hodIds: unavailableHods.map((u) => String(u.hodId)) };
+}
+
 async function hodScopeFilter(req) {
-  const today = new Date().toISOString().split("T")[0];
-  const activeSubs = await Substitute.find({
-    substituteHodId: req.user.id,
-    fromDate: { $lte: today },
-    toDate: { $gte: today },
-  }).select("hodId");
-  const hodIds = [req.user.id, ...activeSubs.map((s) => String(s.hodId))];
-  return { hodId: { $in: hodIds } };
+  if (req.user.role === "LECTURER") {
+    const today = new Date().toISOString().split("T")[0];
+    const active = await resolveActiveCoverer(today);
+    if (!active || active.lecturerId !== String(req.user.id)) {
+      return { hodId: { $in: [] } };
+    }
+    return { hodId: { $in: active.hodIds } };
+  }
+  return { hodId: req.user.id };
 }
 
 export const hod = buildRoleHandlers({

@@ -18,12 +18,23 @@ import {
   listTroops,
   updateTroop,
   deleteTroop,
+  createLecturer,
+  listLecturers,
+  updateLecturer,
+  deleteLecturer,
   listNotifications,
   markNotificationRead,
   listAudit,
   clearAudit,
 } from "../controllers/admincontrol.js";
-import { listSubstitutes, createSubstitute, deleteSubstitute } from "../controllers/substitutecontrol.js";
+import {
+  listHodUnavailability,
+  createHodUnavailability,
+  deleteHodUnavailability,
+  listLecturerUnavailability,
+  createLecturerUnavailability,
+  deleteLecturerUnavailability,
+} from "../controllers/substitutecontrol.js";
 
 const router = express.Router();
 
@@ -46,6 +57,11 @@ router.post("/troop", createTroop);
 router.patch("/troop/:id", updateTroop);
 router.delete("/troop/:id", deleteTroop);
 
+router.get("/lecturers", listLecturers);
+router.post("/lecturers", createLecturer);
+router.patch("/lecturers/:id", updateLecturer);
+router.delete("/lecturers/:id", deleteLecturer);
+
 // Generic HOD / Squadron / SDD / Gate account management
 router.get("/staff/:role", listStaff);
 router.post("/staff/:role", createStaff);
@@ -58,8 +74,12 @@ router.patch("/notifications/:id/read", markNotificationRead);
 router.get("/audit", listAudit);
 router.delete("/audit", clearAudit);
 
-router.get("/substitutes", listSubstitutes);
-router.post("/substitutes", createSubstitute);
-router.delete("/substitutes/:id", deleteSubstitute);
+router.get("/hod-unavailability", listHodUnavailability);
+router.post("/hod-unavailability", createHodUnavailability);
+router.delete("/hod-unavailability/:id", deleteHodUnavailability);
+
+router.get("/lecturer-unavailability", listLecturerUnavailability);
+router.post("/lecturer-unavailability", createLecturerUnavailability);
+router.delete("/lecturer-unavailability/:id", deleteLecturerUnavailability);
 
 export default router;

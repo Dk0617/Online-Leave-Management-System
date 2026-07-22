@@ -26,15 +26,27 @@ export const deleteEvent = async (req, res) => {
   res.json({ ok: true });
 };
 
-// Rejects every leave still pending this HOD's decision whose date range
-// covers the event's date. Each leave's hodComment records the event's
+// Rejects the leaves the HOD picked after reviewing the full overlapping
+// list on the frontend (see hod/views.tsx EventCalendar's review modal) —
+// the HOD can exclude specific requests (e.g. an Emergency Leave) from the
+// bulk action, and those stay untouched, continuing on to their next
+// approval stage exactly as if nothing happened. `leaveIds` is trusted only
+// as a starting point: still re-checked here against hodId/hodStatus/date
+// so a tampered request can't reject leaves outside this HOD's own
+// event-day scope. Each rejected leave's hodComment records the event's
 // title as the reason, and the student gets the same rejection email/
 // guidance as an individually-rejected leave (see applyDecision).
 export const rejectOverlapping = async (req, res) => {
   const event = await EventDay.findOne({ _id: req.params.id, hodId: req.user.id });
   if (!event) return res.status(404).json({ message: "Event not found" });
 
+  const { leaveIds } = req.body;
+  if (!Array.isArray(leaveIds) || !leaveIds.length) {
+    return res.status(400).json({ message: "Select at least one leave to reject" });
+  }
+
   const leaves = await Leave.find({
+    _id: { $in: leaveIds },
     hodId: req.user.id,
     hodStatus: "Pending",
     startDate: { $lte: event.date },

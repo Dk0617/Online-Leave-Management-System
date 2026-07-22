@@ -4,8 +4,9 @@ import { useState } from "react";
 import { StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
+import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
-import { isApproved } from "@/src/api";
+import { isApproved, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -25,10 +26,11 @@ function tomorrowStr() {
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPortal> }) {
   const { pending, history, movements, approve, reject, error, refresh } = portal;
-  const approvedByMe = history.filter((l) => l.sqnStatus === "Approved").length;
-  const rejectedByMe = history.filter((l) => l.sqnStatus === "Rejected").length;
+  const approvedTodayLeaves = history.filter((l) => l.sqnStatus === "Approved" && isToday(l.sqnApprovedAt));
+  const rejectedTodayLeaves = history.filter((l) => l.sqnStatus === "Rejected" && isToday(l.sqnApprovedAt));
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
+  const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
 
   const today = todayStr();
   const tomorrow = tomorrowStr();
@@ -73,9 +75,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile label="Pending" value={pending.length} tone="amber" />
-        <StatTile label="Approved" value={approvedByMe} tone="green" />
-        <StatTile label="Rejected" value={rejectedByMe} tone="red" />
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Pending", leaves: pending })}>
+          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
+          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
+          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+        </ClickableStatCard>
         <StatTile label="Total" value={history.length + pending.length} />
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Squadron", entries: todayExitEntries })}>
           <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
@@ -90,6 +98,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
           title={drilldown.title}
           entries={drilldown.entries}
           onClose={() => setDrilldown(null)}
+        />
+      )}
+      {leaveDrilldown && (
+        <LeaveListDrilldownModal
+          title={leaveDrilldown.title}
+          leaves={leaveDrilldown.leaves}
+          onClose={() => setLeaveDrilldown(null)}
         />
       )}
 

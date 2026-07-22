@@ -2,28 +2,25 @@
 
 import { useState } from "react";
 import { Card, StatTile, Button, Badge } from "@/src/components/ui";
+import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
-import { isApproved, isRejected } from "@/src/api";
-import { ROLE_LABELS, RefName, StaffAccount, StudentType } from "@/src/types";
+import { isApproved, isRejected, isToday } from "@/src/api";
+import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest } from "@/src/types";
 import styles from "./admin.module.css";
 
-// Required for staff accounts (HOD/Squadron/SDD/Gate/Troop) — see
-// backend/controllers/admincontrol.js isValidPassword for why staff and
-// student passwords are held to different bars.
-const PASSWORD_POLICY_MESSAGE =
-  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
-function isValidPassword(password: string): boolean {
-  return (
-    password.length >= 8 &&
-    /[a-z]/.test(password) &&
-    /[A-Z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password)
-  );
+// A leave has no single "decided at" field system-wide — whichever stage
+// most recently acted is whatever's populated. Used only to scope the
+// admin dashboard's "today" breakdown to leaves that actually had a
+// decision made on them today, across any stage.
+function decidedToday(l: LeaveRequest): boolean {
+  return isToday(l.hodApprovedAt) || isToday(l.troopApprovedAt) || isToday(l.sqnApprovedAt) || isToday(l.sddApprovedAt);
 }
 
-// A student's initial password is handed to them on paper/verbally, so it's
-// deliberately not held to the staff complexity policy above — see
+// Every account an admin creates by hand — student or staff — gets a
+// password that's just a sanity-check minimum length, no complexity
+// required: it's handed to the person on paper/verbally for their first
+// login. The real security bar is the stronger policy the account holder
+// sets for themselves on first login (see ChangePasswordForm.tsx) — see
 // backend/controllers/admincontrol.js isValidSimplePassword.
 const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
 function isValidSimplePassword(password: string): boolean {
@@ -35,30 +32,43 @@ function Breakdown({
   value,
   total,
   color,
+  onClick,
 }: {
   label: string;
   value: number;
   total: number;
   color: string;
+  onClick?: () => void;
 }) {
   const pct = total ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-3">
+  const content = (
+    <>
       <div className="w-24 shrink-0 text-xs text-[var(--muted)]">{label}</div>
       <div className="h-2.5 flex-1 overflow-hidden rounded-md bg-[var(--card2)]">
         <div className="h-full rounded-md" style={{ width: `${pct}%`, background: color }} />
       </div>
       <div className="w-8 shrink-0 text-right text-xs font-bold text-[var(--white)]">{value}</div>
-    </div>
+    </>
+  );
+  if (!onClick) {
+    return <div className="flex items-center gap-3">{content}</div>;
+  }
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 text-left">
+      {content}
+    </button>
   );
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const { students, hods, troops, squadrans, sdds, gates, leaves, intakes, error, refresh } = portal;
 
-  const approvedCount = leaves.filter(isApproved).length;
-  const rejectedCount = leaves.filter(isRejected).length;
-  const pendingCount = leaves.length - approvedCount - rejectedCount;
+  const approvedLeaves = leaves.filter(isApproved);
+  const rejectedLeaves = leaves.filter(isRejected);
+  const pendingLeaves = leaves.filter((l) => !isApproved(l) && !isRejected(l));
+  const approvedTodayLeaves = approvedLeaves.filter(decidedToday);
+  const rejectedTodayLeaves = rejectedLeaves.filter(decidedToday);
+  const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
 
   const dayScholarCount = students.filter((s) => s.studentType === "DAY_SCHOLAR").length;
   const cadetCount = students.filter((s) => s.studentType === "CADET").length;
@@ -109,9 +119,27 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
             <p className="text-xs text-[var(--muted)]">No leave records yet.</p>
           ) : (
             <div className="space-y-2.5">
-              <Breakdown label="Pending" value={pendingCount} total={leaves.length} color="#f59332" />
-              <Breakdown label="Approved" value={approvedCount} total={leaves.length} color="#22c55e" />
-              <Breakdown label="Rejected" value={rejectedCount} total={leaves.length} color="#ef4444" />
+              <Breakdown
+                label="Pending"
+                value={pendingLeaves.length}
+                total={leaves.length}
+                color="#f59332"
+                onClick={() => setLeaveDrilldown({ title: "Pending", leaves: pendingLeaves })}
+              />
+              <Breakdown
+                label="Approved Today"
+                value={approvedTodayLeaves.length}
+                total={leaves.length}
+                color="#22c55e"
+                onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}
+              />
+              <Breakdown
+                label="Rejected Today"
+                value={rejectedTodayLeaves.length}
+                total={leaves.length}
+                color="#ef4444"
+                onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}
+              />
             </div>
           )}
         </Card>
@@ -173,6 +201,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           )}
         </Card>
       </div>
+
+      {leaveDrilldown && (
+        <LeaveListDrilldownModal
+          title={leaveDrilldown.title}
+          leaves={leaveDrilldown.leaves}
+          onClose={() => setLeaveDrilldown(null)}
+        />
+      )}
     </div>
   );
 }
@@ -732,8 +768,8 @@ export function StaffRole({
       setError("Please fill in all fields.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
+    if (password.trim() && !isValidSimplePassword(password.trim())) {
+      setError(SIMPLE_PASSWORD_MESSAGE);
       return;
     }
     setError(null);
@@ -822,7 +858,8 @@ export function StaffRole({
           </label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
           <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+            Min 4 characters — no need for capitals or symbols. They set their own stronger password on
+            first login.
           </p>
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
@@ -933,8 +970,8 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
       setError("Assign at least one intake to this troop officer.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
+    if (password.trim() && !isValidSimplePassword(password.trim())) {
+      setError(SIMPLE_PASSWORD_MESSAGE);
       return;
     }
     setError(null);
@@ -996,7 +1033,8 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
             </label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
             <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-              Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
+              Min 4 characters — no need for capitals or symbols. They set their own stronger password on
+            first login.
             </p>
           </div>
         </div>
@@ -1242,78 +1280,329 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
 }
 
 // ==================================================================
-// HOD Substitutes — cover for when an HOD can't act on leaves (e.g. they're
-// on leave themselves). Admin assigns another HOD to also see and decide
-// on the covered HOD's queue for a date range; see leavecontrol.js
-// hodScopeFilter for how the widened access actually works.
+// Lecturers & HOD Cover — the fixed campus-wide seniority chain used to
+// cover HOD approvals when the HOD is unavailable. Order is: the HOD
+// themselves, then every Senior Lecturer by rank, then every Junior
+// Lecturer by rank. Admin marks WHO is unavailable (an HOD, or a
+// Lecturer) on WHICH days; the system works out on its own who that
+// resolves to — nobody picks a specific substitute by hand. See
+// leavecontrol.js resolveActiveCoverer for the resolution logic.
 // ==================================================================
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
-export function Substitutes({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { hods, substitutes, addSubstitute, removeSubstitute } = portal;
-  const [hodId, setHodId] = useState("");
-  const [substituteHodId, setSubstituteHodId] = useState("");
-  const [fromDate, setFromDate] = useState(todayStr());
-  const [toDate, setToDate] = useState(todayStr());
-  const [reason, setReason] = useState("");
+const TIER_LABELS: Record<"SENIOR" | "JUNIOR", string> = { SENIOR: "Senior Lecturer", JUNIOR: "Junior Lecturer" };
+
+export function Lecturers({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { lecturers, addLecturer, editLecturer, removeLecturer } = portal;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [department, setDepartment] = useState("");
+  const [tier, setTier] = useState<"SENIOR" | "JUNIOR">("SENIOR");
+  const [rank, setRank] = useState("1");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  const today = todayStr();
+  function resetForm() {
+    setEditingId(null);
+    setUsername("");
+    setName("");
+    setEmail("");
+    setDepartment("");
+    setTier("SENIOR");
+    setRank("1");
+    setPassword("");
+  }
 
-  async function handleAdd() {
-    if (!hodId || !substituteHodId) {
-      setError("Select both the covered HOD and the substitute HOD.");
+  function startEdit(id: string) {
+    const l = lecturers.find((x) => x.id === id);
+    if (!l) return;
+    setEditingId(id);
+    setUsername(l.username);
+    setName(l.name);
+    setEmail(l.email || "");
+    setDepartment(l.department || "");
+    setTier(l.tier);
+    setRank(String(l.rank));
+    setPassword("");
+  }
+
+  async function handleSubmit() {
+    if (!editingId) {
+      if (!username.trim() || !name.trim() || !email.trim() || !password.trim()) {
+        setError("All fields are required to create an account.");
+        return;
+      }
+    } else if (!username.trim() || !name.trim()) {
+      setError("Please fill in username and name.");
       return;
     }
-    if (hodId === substituteHodId) {
-      setError("The substitute must be a different HOD.");
+    if (!rank.trim() || Number.isNaN(Number(rank)) || Number(rank) < 1) {
+      setError("Rank must be a positive number (1 = highest seniority within the tier).");
       return;
     }
-    if (toDate < fromDate) {
-      setError("End date can't be before start date.");
+    if (password.trim() && !isValidSimplePassword(password.trim())) {
+      setError(SIMPLE_PASSWORD_MESSAGE);
       return;
     }
-    setSubmitting(true);
     setError(null);
     try {
-      await addSubstitute({ hodId, substituteHodId, fromDate, toDate, reason: reason.trim() || undefined });
-      setHodId("");
-      setSubstituteHodId("");
-      setReason("");
+      const input = {
+        username: username.trim(),
+        name: name.trim(),
+        email: email.trim() || undefined,
+        department: department.trim() || undefined,
+        tier,
+        rank: Number(rank),
+        password: password.trim() || undefined,
+      };
+      if (editingId) {
+        await editLecturer(editingId, input);
+      } else {
+        await addLecturer(input);
+      }
+      resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign substitute");
-    } finally {
-      setSubmitting(false);
+      setError(err instanceof Error ? err.message : "Failed to save lecturer");
     }
   }
 
-  async function handleRemove(id: string) {
-    if (!confirm("Remove this substitute assignment?")) return;
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this lecturer account?")) return;
     try {
-      await removeSubstitute(id);
+      await removeLecturer(id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove substitute");
+      setError(err instanceof Error ? err.message : "Failed to delete lecturer");
+    }
+  }
+
+  const sorted = [...lecturers].sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1));
+
+  return (
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>Seniority Chain:</strong> When an HOD is unavailable (see HOD Cover), their approvals fall to
+        the highest-ranked available Lecturer here — every Senior Lecturer (by rank) is tried before any
+        Junior Lecturer. Rank 1 is tried first within its tier.
+      </div>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
+          {editingId ? "✏️ Edit Lecturer" : "Create Lecturer Account"}
+        </h2>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Username<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. lect1" className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Full Name<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full Name" className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
+            </label>
+            <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
+            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+              Min 4 characters — no need for capitals or symbols. They set their own stronger password on
+            first login.
+            </p>
+          </div>
+        </div>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Email (enables login by email code)<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@kdu.ac.lk" className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>Department (optional)</label>
+            <input value={department} onChange={(e) => setDepartment(e.target.value)} className={styles.input} />
+          </div>
+          <div />
+        </div>
+        <div className="mb-3.5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={styles.label}>Tier</label>
+            <select value={tier} onChange={(e) => setTier(e.target.value as "SENIOR" | "JUNIOR")} className={styles.input}>
+              <option value="SENIOR">Senior Lecturer</option>
+              <option value="JUNIOR">Junior Lecturer</option>
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>
+              Rank within tier<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={rank}
+              onChange={(e) => setRank(e.target.value)}
+              placeholder="1 = highest"
+              className={styles.input}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={handleSubmit}>
+            {editingId ? "Save Changes" : "Create Account"}
+          </Button>
+          {editingId && (
+            <Button variant="secondary" onClick={resetForm}>
+              Cancel
+            </Button>
+          )}
+        </div>
+        {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Seniority Chain (in order)</h2>
+        <div className="overflow-x-auto">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Name</th>
+                <th>Tier</th>
+                <th>Rank</th>
+                <th>Department</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                    No lecturers yet.
+                  </td>
+                </tr>
+              ) : (
+                sorted.map((l, i) => (
+                  <tr key={l.id}>
+                    <td>{i + 1}</td>
+                    <td>
+                      {l.name}
+                      <div className="text-xs text-[var(--muted)]">{l.username}</div>
+                    </td>
+                    <td>
+                      <Badge tone={l.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[l.tier]}</Badge>
+                    </td>
+                    <td>{l.rank}</td>
+                    <td className="text-[var(--muted)]">{l.department || "—"}</td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(l.id)}>
+                        Edit
+                      </Button>
+                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(l.id)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const {
+    hods,
+    lecturers,
+    hodUnavailability,
+    lecturerUnavailability,
+    addHodUnavailability,
+    removeHodUnavailability,
+    addLecturerUnavailability,
+    removeLecturerUnavailability,
+  } = portal;
+
+  const [hodId, setHodId] = useState("");
+  const [hodFrom, setHodFrom] = useState(todayStr());
+  const [hodTo, setHodTo] = useState(todayStr());
+  const [hodReason, setHodReason] = useState("");
+  const [hodError, setHodError] = useState<string | null>(null);
+
+  const [lecturerId, setLecturerId] = useState("");
+  const [lectFrom, setLectFrom] = useState(todayStr());
+  const [lectTo, setLectTo] = useState(todayStr());
+  const [lectReason, setLectReason] = useState("");
+  const [lectError, setLectError] = useState<string | null>(null);
+
+  const today = todayStr();
+
+  async function handleAddHod() {
+    if (!hodId) {
+      setHodError("Select an HOD.");
+      return;
+    }
+    if (hodTo < hodFrom) {
+      setHodError("End date can't be before start date.");
+      return;
+    }
+    setHodError(null);
+    try {
+      await addHodUnavailability({ hodId, fromDate: hodFrom, toDate: hodTo, reason: hodReason.trim() || undefined });
+      setHodId("");
+      setHodReason("");
+    } catch (err) {
+      setHodError(err instanceof Error ? err.message : "Failed to mark HOD unavailable");
+    }
+  }
+
+  async function handleAddLecturer() {
+    if (!lecturerId) {
+      setLectError("Select a Lecturer.");
+      return;
+    }
+    if (lectTo < lectFrom) {
+      setLectError("End date can't be before start date.");
+      return;
+    }
+    setLectError(null);
+    try {
+      await addLecturerUnavailability({
+        lecturerId,
+        fromDate: lectFrom,
+        toDate: lectTo,
+        reason: lectReason.trim() || undefined,
+      });
+      setLecturerId("");
+      setLectReason("");
+    } catch (err) {
+      setLectError(err instanceof Error ? err.message : "Failed to mark lecturer unavailable");
     }
   }
 
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>HOD Substitutes:</strong> When an HOD can&apos;t act on leaves — e.g. they&apos;re on leave
-        themselves — assign another HOD to cover their queue for a date range. While the assignment is
-        active, the substitute sees and can approve/reject the covered HOD&apos;s Day Scholar and Officer
-        Cadet Academic Leave applications, in addition to their own.
+        <strong>HOD Cover:</strong> Mark an HOD unavailable here when they can&apos;t act on leaves (e.g.
+        they&apos;re on leave themselves) — no need to pick who covers. The system automatically hands their
+        Day Scholar and Officer Cadet Academic Leave queue to the highest-ranked available Lecturer in the
+        seniority chain (see Lecturers). If a Lecturer in that chain is also unavailable on a given day, mark
+        them below so they&apos;re skipped over.
       </div>
 
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Assign Substitute</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark HOD Unavailable</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={styles.label}>Covered HOD</label>
+          <div className="sm:col-span-2">
+            <label className={styles.label}>HOD</label>
             <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
               <option value="">Select HOD…</option>
               {hods.map((h) => (
@@ -1324,64 +1613,38 @@ export function Substitutes({ portal }: { portal: ReturnType<typeof useAdminPort
             </select>
           </div>
           <div>
-            <label className={styles.label}>Substitute HOD</label>
-            <select
-              value={substituteHodId}
-              onChange={(e) => setSubstituteHodId(e.target.value)}
-              className={styles.input}
-            >
-              <option value="">Select HOD…</option>
-              {hods.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name} {h.department ? `(${h.department})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className={styles.label}>From Date</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className={styles.input}
-            />
+            <input type="date" value={hodFrom} onChange={(e) => setHodFrom(e.target.value)} className={styles.input} />
           </div>
           <div>
             <label className={styles.label}>To Date</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className={styles.input}
-            />
+            <input type="date" value={hodTo} onChange={(e) => setHodTo(e.target.value)} className={styles.input} />
           </div>
           <div className="sm:col-span-2">
             <label className={styles.label}>Reason (optional)</label>
             <input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              value={hodReason}
+              onChange={(e) => setHodReason(e.target.value)}
               placeholder="e.g. On annual leave"
               className={styles.input}
             />
           </div>
         </div>
         <div className="mt-4">
-          <Button variant="primary" disabled={submitting} onClick={handleAdd}>
-            {submitting ? "Assigning…" : "Assign Substitute"}
+          <Button variant="primary" onClick={handleAddHod}>
+            Mark Unavailable
           </Button>
         </div>
-        {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+        {hodError && <p className="mt-2 text-xs text-[var(--err)]">{hodError}</p>}
       </Card>
 
-      <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Substitute Assignments</h2>
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">HOD Unavailability</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Covered HOD</th>
-                <th>Substitute HOD</th>
+                <th>HOD</th>
                 <th>From</th>
                 <th>To</th>
                 <th>Reason</th>
@@ -1390,38 +1653,128 @@ export function Substitutes({ portal }: { portal: ReturnType<typeof useAdminPort
               </tr>
             </thead>
             <tbody>
-              {substitutes.length === 0 ? (
+              {hodUnavailability.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                    No substitute assignments.
+                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                    No HOD unavailability marked.
                   </td>
                 </tr>
               ) : (
-                substitutes.map((s) => {
-                  const active = s.fromDate <= today && today <= s.toDate;
+                hodUnavailability.map((u) => {
+                  const active = u.fromDate <= today && today <= u.toDate;
                   return (
-                    <tr key={s.id}>
+                    <tr key={u.id}>
                       <td>
-                        {s.hodName}
-                        {s.hodDepartment && <div className="text-xs text-[var(--muted)]">{s.hodDepartment}</div>}
+                        {u.hodName}
+                        {u.hodDepartment && <div className="text-xs text-[var(--muted)]">{u.hodDepartment}</div>}
                       </td>
+                      <td>{u.fromDate}</td>
+                      <td>{u.toDate}</td>
+                      <td className="text-[var(--muted)]">{u.reason || "—"}</td>
                       <td>
-                        {s.substituteHodName}
-                        {s.substituteHodDepartment && (
-                          <div className="text-xs text-[var(--muted)]">{s.substituteHodDepartment}</div>
-                        )}
-                      </td>
-                      <td>{s.fromDate}</td>
-                      <td>{s.toDate}</td>
-                      <td className="text-[var(--muted)]">{s.reason || "—"}</td>
-                      <td>
-                        <Badge tone={active ? "green" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
+                        <Badge tone={active ? "amber" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
                       </td>
                       <td>
                         <Button
                           variant="danger"
                           className="!px-2.5 !py-1 !text-[11px]"
-                          onClick={() => handleRemove(s.id)}
+                          onClick={() => removeHodUnavailability(u.id)}
+                        >
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark Lecturer Unavailable</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={styles.label}>Lecturer</label>
+            <select value={lecturerId} onChange={(e) => setLecturerId(e.target.value)} className={styles.input}>
+              <option value="">Select Lecturer…</option>
+              {lecturers.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({TIER_LABELS[l.tier]}, rank {l.rank})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>From Date</label>
+            <input type="date" value={lectFrom} onChange={(e) => setLectFrom(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>To Date</label>
+            <input type="date" value={lectTo} onChange={(e) => setLectTo(e.target.value)} className={styles.input} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={styles.label}>Reason (optional)</label>
+            <input
+              value={lectReason}
+              onChange={(e) => setLectReason(e.target.value)}
+              placeholder="e.g. On annual leave"
+              className={styles.input}
+            />
+          </div>
+        </div>
+        <div className="mt-4">
+          <Button variant="primary" onClick={handleAddLecturer}>
+            Mark Unavailable
+          </Button>
+        </div>
+        {lectError && <p className="mt-2 text-xs text-[var(--err)]">{lectError}</p>}
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Lecturer Unavailability</h2>
+        <div className="overflow-x-auto">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Lecturer</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lecturerUnavailability.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                    No lecturer unavailability marked.
+                  </td>
+                </tr>
+              ) : (
+                lecturerUnavailability.map((u) => {
+                  const active = u.fromDate <= today && today <= u.toDate;
+                  return (
+                    <tr key={u.id}>
+                      <td>
+                        {u.lecturerName}
+                        <div className="text-xs text-[var(--muted)]">
+                          {TIER_LABELS[u.lecturerTier]}, rank {u.lecturerRank}
+                        </div>
+                      </td>
+                      <td>{u.fromDate}</td>
+                      <td>{u.toDate}</td>
+                      <td className="text-[var(--muted)]">{u.reason || "—"}</td>
+                      <td>
+                        <Badge tone={active ? "amber" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
+                      </td>
+                      <td>
+                        <Button
+                          variant="danger"
+                          className="!px-2.5 !py-1 !text-[11px]"
+                          onClick={() => removeLecturerUnavailability(u.id)}
                         >
                           Remove
                         </Button>

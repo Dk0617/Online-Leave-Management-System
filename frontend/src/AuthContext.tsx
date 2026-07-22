@@ -21,6 +21,7 @@ export const ROLE_HOME: Record<Role, string> = {
   SQUADRAN: "/squadran",
   SDD: "/sdd",
   GATE: "/gate",
+  LECTURER: "/lecturer",
 };
 
 interface AuthContextValue {
@@ -31,6 +32,7 @@ interface AuthContextValue {
   loginWithOtp: (email: string, code: string) => Promise<AuthUser | null>;
   logout: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updatePhoto: (photo: string | null) => Promise<void>;
   refreshUser: () => void;
 }
 
@@ -120,9 +122,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (raw) setUser(JSON.parse(raw) as AuthUser);
   }
 
+  // Updates the header-avatar photo for whichever role is currently logged
+  // in (see DashboardShell) — merges into the cached session user so every
+  // portal's header reflects it immediately, without a full page reload.
+  async function updatePhoto(photo: string | null) {
+    await api.patch("/auth/photo", { photo });
+    if (user) {
+      const updated = { ...user, photo: photo ?? undefined };
+      setUser(updated);
+      window.localStorage.setItem(USER_KEY, JSON.stringify(updated));
+    }
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, requestOtp, loginWithOtp, logout, changePassword, refreshUser }}
+      value={{ user, loading, login, requestOtp, loginWithOtp, logout, changePassword, updatePhoto, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

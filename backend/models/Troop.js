@@ -9,6 +9,7 @@ const troopSchema = new mongoose.Schema(
     email: { type: String, index: true },
     intakes: { type: [String], default: [] },
     designation: { type: String, default: "Troop Commander" },
+    photo: String, // base64 data URL, downscaled client-side before upload
     mustChangePassword: { type: Boolean, default: true },
   },
   { timestamps: true }

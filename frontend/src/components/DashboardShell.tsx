@@ -1,9 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ChangeEvent, ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Role } from "@/src/types";
+import { AuthUser, Role } from "@/src/types";
 import { useAuth } from "@/src/AuthContext";
+import { downscalePhoto } from "@/src/photo";
 
 export interface NavItem {
   key: string;
@@ -20,89 +21,88 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-// A small live analog clock face. Self-ticking so it can be dropped in
+// The header's own avatar — every role can click it to upload their photo
+// (shared self-service endpoint, see logauthcontrol.js updateMyPhoto),
+// instead of needing a dedicated Profile page like Students already have.
+function HeaderAvatar({ user }: { user: AuthUser }) {
+  const { updatePhoto } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
+      setError("Please upload a JPG or PNG image.");
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      setError("Photo too large — under 1.5MB please.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const dataUrl = await downscalePhoto(file);
+      await updatePhoto(dataUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update photo");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  return (
+    <div className="relative">
+      <label
+        title="Click to update your photo"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-xs font-bold text-white"
+      >
+        {uploading ? "…" : user.photo ? (
+          <img src={user.photo} alt={user.name} className="h-full w-full object-cover" />
+        ) : (
+          initialsOf(user.name)
+        )}
+        <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
+      </label>
+      {error && (
+        <div className="absolute right-0 top-11 z-20 w-52 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[var(--card)] p-2 text-[10px] leading-snug text-[var(--err)] shadow-lg">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A small live digital clock readout. Self-ticking so it can be dropped in
 // anywhere without the caller wiring up its own interval — used only on
 // the student's Apply for Leave form (see student/views.tsx ApplyLeave) to
 // help with picking exact start/end times; every portal's shared header
 // used to show one too, but that was just clutter for roles that never
-// need to reference the clock while working. Hover shows the exact digital
-// time as a tooltip for anyone who wants it.
-export function RoundClock() {
+// need to reference the clock while working.
+export function DigitalClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  const seconds = now.getSeconds();
-  const minutes = now.getMinutes();
-  const hours = now.getHours() % 12;
-  const secDeg = seconds * 6;
-  const minDeg = minutes * 6 + seconds * 0.1;
-  const hourDeg = hours * 30 + minutes * 0.5;
 
-  const ticks = Array.from({ length: 12 }, (_, i) => {
-    const angle = i * 30 * (Math.PI / 180);
-    const outer = 44;
-    const inner = i % 3 === 0 ? 36 : 39;
-    return {
-      x1: 50 + outer * Math.sin(angle),
-      y1: 50 - outer * Math.cos(angle),
-      x2: 50 + inner * Math.sin(angle),
-      y2: 50 - inner * Math.cos(angle),
-    };
-  });
+  const hours24 = now.getHours();
+  const hours = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  const ampm = hours24 >= 12 ? "PM" : "AM";
 
   return (
     <div
-      title={now.toLocaleTimeString()}
-      className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[#152569] to-[#0a1435] shadow-[0_2px_10px_rgba(0,0,0,0.35)] sm:flex"
+      title={now.toLocaleDateString()}
+      className="hidden shrink-0 items-center gap-1.5 rounded-lg border-2 border-[var(--orange)] bg-gradient-to-br from-[#152569] to-[#0a1435] px-3 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.35)] sm:flex"
     >
-      <svg viewBox="0 0 100 100" className="h-8 w-8">
-        <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(245,147,50,0.35)" strokeWidth="2" />
-        {ticks.map((t, i) => (
-          <line
-            key={i}
-            x1={t.x1}
-            y1={t.y1}
-            x2={t.x2}
-            y2={t.y2}
-            stroke="#f59332"
-            strokeWidth={i % 3 === 0 ? 3 : 1.5}
-            strokeLinecap="round"
-          />
-        ))}
-        <line
-          x1="50"
-          y1="50"
-          x2="50"
-          y2="26"
-          stroke="#f5f7fa"
-          strokeWidth="4"
-          strokeLinecap="round"
-          transform={`rotate(${hourDeg} 50 50)`}
-        />
-        <line
-          x1="50"
-          y1="50"
-          x2="50"
-          y2="16"
-          stroke="#f5f7fa"
-          strokeWidth="3"
-          strokeLinecap="round"
-          transform={`rotate(${minDeg} 50 50)`}
-        />
-        <line
-          x1="50"
-          y1="56"
-          x2="50"
-          y2="12"
-          stroke="#d4a017"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          transform={`rotate(${secDeg} 50 50)`}
-        />
-        <circle cx="50" cy="50" r="4" fill="#d4a017" />
-      </svg>
+      <span className="font-mono text-sm font-bold tabular-nums text-white">
+        {hours}:{minutes}:{seconds}
+      </span>
+      <span className="text-[10px] font-bold text-[var(--orange)]">{ampm}</span>
     </div>
   );
 }
@@ -115,6 +115,7 @@ export function DashboardShell({
   activeView,
   onNavigate,
   roleTag,
+  locationLabel,
   children,
 }: {
   role: Role;
@@ -124,6 +125,11 @@ export function DashboardShell({
   activeView: string;
   onNavigate: (key: string) => void;
   roleTag?: string;
+  // Shown in the header pill next to the avatar, in place of the username/
+  // index number — each page.tsx passes whatever "location" makes sense for
+  // that role (a student's current leave address or department, an HOD's
+  // department, a Gate officer's post, etc.).
+  locationLabel?: string;
   children: ReactNode;
 }) {
   const { user, loading, logout } = useAuth();
@@ -242,12 +248,12 @@ export function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-lg border border-[rgba(37,99,176,0.3)] bg-[rgba(37,99,176,0.15)] px-3 py-1 font-mono text-xs text-[var(--sky)]">
-              {user.username}
-            </span>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-xs font-bold text-white">
-              {initialsOf(user.name)}
-            </div>
+            {locationLabel && (
+              <span className="rounded-lg border border-[rgba(37,99,176,0.3)] bg-[rgba(37,99,176,0.15)] px-3 py-1 font-mono text-xs text-[var(--sky)]">
+                📍 {locationLabel}
+              </span>
+            )}
+            <HeaderAvatar user={user} />
           </div>
         </header>
         <main className="flex-1 p-7">{children}</main>

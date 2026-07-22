@@ -111,6 +111,24 @@ export const changePassword = async (req, res) => {
   res.json({ message: "Password updated" });
 };
 
+// Shared by every role — same "look up the caller's own model via their
+// token" pattern as changePassword above. Updates the dashboard-header
+// avatar photo for whichever account is currently logged in (Student
+// already had its own separate photo endpoint under /student for its
+// fuller Profile page — this one covers every role, including Student,
+// for the header's own upload control).
+export const updateMyPhoto = async (req, res) => {
+  const { photo } = req.body; // base64 data URL, already downscaled client-side
+
+  const Model = ROLE_MODELS[req.user.role];
+  const user = await Model.findById(req.user.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.photo = photo || undefined;
+  await user.save();
+  res.json({ message: "Photo updated" });
+};
+
 // ── Email-code (passwordless) login ────────────────────────────────
 // Admin sets an email on an actor's account; that actor can then request a
 // 6-digit code sent to it and log in without a password. The code is

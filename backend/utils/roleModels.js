@@ -5,6 +5,7 @@ import Troop from "../models/Troop.js";
 import Squadran from "../models/Squadran.js";
 import Sdd from "../models/Sdd.js";
 import Gate from "../models/Gate.js";
+import Lecturer from "../models/Lecturer.js";
 
 // Every role that can log in, and the Mongoose model that owns its accounts.
 export const ROLE_MODELS = {
@@ -15,4 +16,5 @@ export const ROLE_MODELS = {
   SQUADRAN: Squadran,
   SDD: Sdd,
   GATE: Gate,
+  LECTURER: Lecturer,
 };

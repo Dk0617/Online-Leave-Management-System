@@ -4,11 +4,12 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
-import { RoundClock } from "@/src/components/DashboardShell";
+import { DigitalClock } from "@/src/components/DashboardShell";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
 import { downloadLeavePassPdf } from "@/src/pdf";
+import { downscalePhoto } from "@/src/photo";
 import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "./student.module.css";
 
@@ -459,7 +460,7 @@ export function ApplyLeave({
               </span>
             </div>
           </div>
-          <RoundClock />
+          <DigitalClock />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -680,32 +681,6 @@ export function ApplyLeave({
       </Card>
     </div>
   );
-}
-
-function downscalePhoto(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const size = 400;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas not supported"));
-        const minSide = Math.min(img.width, img.height);
-        const sx = (img.width - minSide) / 2;
-        const sy = (img.height - minSide) / 2;
-        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.9));
-      };
-      img.onerror = () => reject(new Error("Could not read image"));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error("Could not read the file."));
-    reader.readAsDataURL(file);
-  });
 }
 
 export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {

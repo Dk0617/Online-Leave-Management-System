@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
+import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
-import { isApproved } from "@/src/api";
+import { isApproved, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -28,12 +29,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const { user } = useAuth();
   const { allPending, history, movements, approve, reject, error, refresh } = portal;
   const intakesText = user?.intakes?.length ? user.intakes.map((i) => `Intake ${i}`).join(", ") : "no intakes assigned yet";
-  const approvedByMe = history.filter((l) => l.troopStatus === "Approved").length;
-  const rejectedByMe = history.filter((l) => l.troopStatus === "Rejected").length;
-  const dsPending = allPending.filter((l) => l.studentType === "DAY_SCHOLAR").length;
-  const cdPending = allPending.filter((l) => l.studentType === "CADET").length;
+  const approvedTodayLeaves = history.filter((l) => l.troopStatus === "Approved" && isToday(l.troopApprovedAt));
+  const rejectedTodayLeaves = history.filter((l) => l.troopStatus === "Rejected" && isToday(l.troopApprovedAt));
+  const dsPendingLeaves = allPending.filter((l) => l.studentType === "DAY_SCHOLAR");
+  const cdPendingLeaves = allPending.filter((l) => l.studentType === "CADET");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
+  const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
 
   const today = todayStr();
   const tomorrow = tomorrowStr();
@@ -80,10 +82,18 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile label="DS Pending" value={dsPending} tone="amber" />
-        <StatTile label="Officer Cadet Pending" value={cdPending} tone="amber" />
-        <StatTile label="Approved" value={approvedByMe} tone="green" />
-        <StatTile label="Rejected" value={rejectedByMe} tone="red" />
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Day Scholar Pending", leaves: dsPendingLeaves })}>
+          <StatTile label="DS Pending (click for details)" value={dsPendingLeaves.length} tone="amber" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Officer Cadet Pending", leaves: cdPendingLeaves })}>
+          <StatTile label="Officer Cadet Pending (click for details)" value={cdPendingLeaves.length} tone="amber" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
+          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
+          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+        </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Troop", entries: todayExitEntries })}>
           <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
         </ClickableStatCard>
@@ -97,6 +107,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
           title={drilldown.title}
           entries={drilldown.entries}
           onClose={() => setDrilldown(null)}
+        />
+      )}
+      {leaveDrilldown && (
+        <LeaveListDrilldownModal
+          title={leaveDrilldown.title}
+          leaves={leaveDrilldown.leaves}
+          onClose={() => setLeaveDrilldown(null)}
         />
       )}
 

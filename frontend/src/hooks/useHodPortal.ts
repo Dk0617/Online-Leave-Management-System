@@ -51,10 +51,13 @@ export function useHodPortal() {
     await api.delete(`/hod/events/${id}`);
     await refresh();
   }
-  // Returns how many pending leaves were rejected, so the caller can show
-  // the HOD a confirmation of what just happened.
-  async function rejectOverlapping(id: string): Promise<number> {
-    const result = await api.post<{ rejectedCount: number }>(`/hod/events/${id}/reject-overlapping`);
+  // Rejects only the leaves the HOD picked after reviewing the full
+  // overlapping list (see hod/views.tsx EventCalendar's review modal) —
+  // leaveIds is whatever survived the HOD un-checking anything they want
+  // to keep (e.g. an Emergency Leave). Returns how many were actually
+  // rejected, so the caller can show a confirmation.
+  async function rejectOverlapping(id: string, leaveIds: string[]): Promise<number> {
+    const result = await api.post<{ rejectedCount: number }>(`/hod/events/${id}/reject-overlapping`, { leaveIds });
     await refresh();
     return result.rejectedCount;
   }

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { ClickableStatCard } from "@/src/components/exitStats";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
-import { isApproved, isRejected } from "@/src/api";
+import { isApproved, isRejected, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -14,9 +16,10 @@ function tone(status: string) {
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
   const { pending, history, pipeline, approve, reject, error, refresh } = portal;
-  const approvedByMe = history.filter((l) => l.sddStatus === "Approved").length;
-  const rejectedByMe = history.filter((l) => l.sddStatus === "Rejected").length;
+  const approvedTodayLeaves = history.filter((l) => l.sddStatus === "Approved" && isToday(l.sddApprovedAt));
+  const rejectedTodayLeaves = history.filter((l) => l.sddStatus === "Rejected" && isToday(l.sddApprovedAt));
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
+  const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
 
   return (
     <div>
@@ -35,11 +38,25 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile label="Awaiting You" value={pending.length} tone="amber" />
-        <StatTile label="Fully Approved" value={approvedByMe} tone="green" />
-        <StatTile label="Rejected" value={rejectedByMe} tone="red" />
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Awaiting You", leaves: pending })}>
+          <StatTile label="Awaiting You (click for details)" value={pending.length} tone="amber" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Fully Approved Today", leaves: approvedTodayLeaves })}>
+          <StatTile label="Fully Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
+          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+        </ClickableStatCard>
         <StatTile label="In Progress" value={pipeline.length} />
       </div>
+
+      {leaveDrilldown && (
+        <LeaveListDrilldownModal
+          title={leaveDrilldown.title}
+          leaves={leaveDrilldown.leaves}
+          onClose={() => setLeaveDrilldown(null)}
+        />
+      )}
 
       <div className="mb-4 flex items-center gap-2 rounded-lg border border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.08)] px-4 py-2.5 text-xs text-[var(--ok)]">
         ⭐ Your approval grants the official leave pass. All 3 stages must be complete before an officer cadet can exit

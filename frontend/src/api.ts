@@ -8,15 +8,17 @@ import {
   DOC_REQUIRED_TYPES,
   DOC_REQUIRED_TYPES_CADET,
   EventDay,
+  HodUnavailability,
   Intake,
   LeaveRequest,
+  LecturerAccount,
+  LecturerUnavailability,
   Movement,
   NotificationEntry,
   RefName,
   Role,
   StaffAccount,
   Student,
-  SubstituteAssignment,
 } from "@/src/types";
 
 // ==================================================================
@@ -109,6 +111,7 @@ export function normalizeAuthUser(raw: Raw): AuthUser {
     name: raw.name as string,
     role: raw.role as Role,
     mustChangePassword: !!raw.mustChangePassword,
+    photo: raw.photo as string | undefined,
     department: raw.department as string | undefined,
     designation: raw.designation as string | undefined,
     title: raw.title as string | undefined,
@@ -254,17 +257,40 @@ export function normalizeEventDay(raw: Raw): EventDay {
   };
 }
 
-export function normalizeSubstitute(raw: Raw): SubstituteAssignment {
+export function normalizeLecturer(raw: Raw): LecturerAccount {
+  return {
+    id: String(raw._id ?? raw.id),
+    username: raw.username as string,
+    name: raw.name as string,
+    email: raw.email as string | undefined,
+    department: raw.department as string | undefined,
+    tier: raw.tier as "SENIOR" | "JUNIOR",
+    rank: raw.rank as number,
+    mustChangePassword: !!raw.mustChangePassword,
+  };
+}
+
+export function normalizeHodUnavailability(raw: Raw): HodUnavailability {
   const hod = raw.hodId as Raw;
-  const sub = raw.substituteHodId as Raw;
   return {
     id: String(raw._id ?? raw.id),
     hodId: String(hod?._id ?? hod),
     hodName: (hod?.name as string) ?? "Unknown",
     hodDepartment: hod?.department as string | undefined,
-    substituteHodId: String(sub?._id ?? sub),
-    substituteHodName: (sub?.name as string) ?? "Unknown",
-    substituteHodDepartment: sub?.department as string | undefined,
+    fromDate: raw.fromDate as string,
+    toDate: raw.toDate as string,
+    reason: raw.reason as string | undefined,
+  };
+}
+
+export function normalizeLecturerUnavailability(raw: Raw): LecturerUnavailability {
+  const lecturer = raw.lecturerId as Raw;
+  return {
+    id: String(raw._id ?? raw.id),
+    lecturerId: String(lecturer?._id ?? lecturer),
+    lecturerName: (lecturer?.name as string) ?? "Unknown",
+    lecturerTier: lecturer?.tier as "SENIOR" | "JUNIOR",
+    lecturerRank: lecturer?.rank as number,
     fromDate: raw.fromDate as string,
     toDate: raw.toDate as string,
     reason: raw.reason as string | undefined,
@@ -321,6 +347,19 @@ export function isStageMoot(
   return leave[field] === "Pending" && isRejected(leave);
 }
 
+// hodApprovedAt/troopApprovedAt/sqnApprovedAt/sddApprovedAt are stored as
+// `new Date().toLocaleString()` (see leavecontrol.js applyDecision) rather
+// than a clean ISO string — still parseable by `new Date(...)`, just not
+// directly string-comparable. Used to scope each portal's "Approved
+// Today"/"Rejected Today" dashboard stats to actions actually taken today,
+// as opposed to the leave's original application date.
+export function isToday(dateStr?: string): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toDateString() === new Date().toDateString();
+}
+
 // Academic Leave is an academic excuse kept on file with the approver (HOD
 // for Day Scholars, Squadron Commander for Cadets), not an exit permit — it
 // never produces a gate pass or downloadable PDF, even once fully approved.
@@ -328,6 +367,20 @@ export function isStageMoot(
 // use to exit/re-enter campus.
 export function isGateEligible(leave: LeaveRequest): boolean {
   return isApproved(leave) && leave.type !== "Academic Leave";
+}
+
+// The leave a student is out on right now, if any — mirrors backend
+// gatecontrol.js isCurrentlyValid. Used to show "currently at {address}"
+// in the dashboard header instead of the student's department while
+// they're actually off campus (see DashboardShell's locationLabel).
+export function currentlyOnLeave(leaves: LeaveRequest[]): LeaveRequest | undefined {
+  const now = new Date();
+  return leaves.find((l) => {
+    if (!isGateEligible(l)) return false;
+    const start = new Date(`${l.startDate}T${l.startTime || "00:00"}`);
+    const end = new Date(`${l.endDate}T${l.endTime || "23:59"}`);
+    return now >= start && now <= end;
+  });
 }
 
 // Day Scholar rule is unchanged; Cadets follow a different rule (see

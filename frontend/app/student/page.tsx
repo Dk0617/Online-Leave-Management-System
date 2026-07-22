@@ -5,6 +5,7 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
+import { currentlyOnLeave } from "@/src/api";
 import { Dashboard, ApplyLeave, Profile } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
@@ -28,6 +29,11 @@ export default function StudentPage() {
 
   const forced = !!user?.mustChangePassword;
   const activeView = forced ? "changePass" : view;
+  // Whichever leave they're currently out on (if any) beats their
+  // department as the "location" shown in the header — see api.ts
+  // currentlyOnLeave.
+  const activeLeave = currentlyOnLeave(portal.leaves);
+  const locationLabel = activeLeave?.address || user?.department;
 
   return (
     <DashboardShell
@@ -37,6 +43,7 @@ export default function StudentPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user ? `${user.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠Day Scholar"}\n${user.indexNumber}` : undefined}
+      locationLabel={locationLabel}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "applyLeave" && <ApplyLeave portal={portal} onDone={() => setView("dashboard")} />}

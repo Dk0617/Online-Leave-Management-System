@@ -3,7 +3,10 @@
 import { FormEvent, useState } from "react";
 import { Card, StatTile, Badge, Button } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { ClickableStatCard } from "@/src/components/exitStats";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
+import { isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -11,11 +14,22 @@ function tone(status: string) {
   return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
 }
 
-export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
+export function Dashboard({
+  portal,
+  asLecturer,
+}: {
+  portal: ReturnType<typeof useHodPortal>;
+  // Set by the Lecturer portal (see app/lecturer/page.tsx), which reuses
+  // this same screen — swaps the HOD-specific "your department" framing
+  // for one that makes sense when you're only here because you're
+  // currently covering someone else's queue.
+  asLecturer?: boolean;
+}) {
   const { pending, history, approve, reject, error, refresh } = portal;
-  const approvedByMe = history.filter((l) => l.hodStatus === "Approved").length;
-  const rejectedByMe = history.filter((l) => l.hodStatus === "Rejected").length;
+  const approvedTodayLeaves = history.filter((l) => l.hodStatus === "Approved" && isToday(l.hodApprovedAt));
+  const rejectedTodayLeaves = history.filter((l) => l.hodStatus === "Rejected" && isToday(l.hodApprovedAt));
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
+  const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
 
   return (
     <div>
@@ -28,18 +42,45 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useHodPortal> 
         </div>
       )}
       <div className={styles.infoBanner}>
-        <strong>Your Role:</strong> You approve <strong>Day Scholar</strong> leave applications at Stage 1 —
-        after your approval, they move to the Troop Commander. You also approve <strong>Officer Cadet Academic
-        Leave</strong> (matched to your department), which skips Troop Commander entirely and moves straight
-        to the Squadron Commander instead. Only students in your department appear here.
+        {asLecturer ? (
+          <>
+            <strong>Your Role:</strong> You only see leaves here while you&apos;re actively covering an HOD who
+            is marked unavailable — you approve their <strong>Day Scholar</strong> leave applications at Stage
+            1 and their <strong>Officer Cadet Academic Leave</strong>, exactly as that HOD normally would. If
+            no HOD is currently unavailable (or someone more senior than you is covering instead), this list
+            will be empty.
+          </>
+        ) : (
+          <>
+            <strong>Your Role:</strong> You approve <strong>Day Scholar</strong> leave applications at Stage 1
+            — after your approval, they move to the Troop Commander. You also approve{" "}
+            <strong>Officer Cadet Academic Leave</strong> (matched to your department), which skips Troop
+            Commander entirely and moves straight to the Squadron Commander instead. Only students in your
+            department appear here.
+          </>
+        )}
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile label="Pending" value={pending.length} tone="amber" />
-        <StatTile label="Approved" value={approvedByMe} tone="green" />
-        <StatTile label="Rejected" value={rejectedByMe} tone="red" />
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Pending", leaves: pending })}>
+          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
+          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
+          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+        </ClickableStatCard>
         <StatTile label="Total" value={history.length + pending.length} />
       </div>
+
+      {drilldown && (
+        <LeaveListDrilldownModal
+          title={drilldown.title}
+          leaves={drilldown.leaves}
+          onClose={() => setDrilldown(null)}
+        />
+      )}
 
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending Applications</h2>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
@@ -246,10 +287,6 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  function overlapCount(date: string): number {
-    return pending.filter((l) => l.startDate <= date && l.endDate >= date).length;
-  }
-
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!selectedDate || !title.trim()) return;
@@ -266,17 +303,25 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     }
   }
 
-  async function handleRejectAll(id: string) {
-    setRejectingId(id);
+  function overlappingLeaves(date: string): LeaveRequest[] {
+    return pending.filter((l) => l.startDate <= date && l.endDate >= date);
+  }
+
+  const [reviewEvent, setReviewEvent] = useState<{ id: string; date: string; title: string } | null>(null);
+
+  async function handleConfirmReject(leaveIds: string[]) {
+    if (!reviewEvent) return;
+    setRejectingId(reviewEvent.id);
     setConfirmMsg(null);
     setError(null);
     try {
-      const count = await rejectOverlapping(id);
+      const count = await rejectOverlapping(reviewEvent.id, leaveIds);
       setConfirmMsg(
         count === 0
           ? "No pending leaves overlapped this date."
           : `Rejected ${count} pending leave${count === 1 ? "" : "s"}.`
       );
+      setReviewEvent(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject overlapping leaves");
     } finally {
@@ -288,12 +333,13 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     <div>
       <div className={styles.infoBanner}>
         <strong>Event Calendar:</strong> Mark mandatory-attendance days here — e.g. a workshop every
-        student in your department must attend. Any Day Scholar or Officer Cadet Academic Leave
-        still pending your decision that overlaps that date can then be rejected in one click,
-        instead of one by one.
+        student in your department must attend. Any Day Scholar or Officer Cadet Academic Leave still
+        pending your decision that overlaps that date can then be reviewed and rejected in bulk — you&apos;ll
+        see the full list first and can exclude specific requests (e.g. an Emergency Leave) before
+        confirming.
       </div>
 
-      <Card className="mb-6 p-5">
+      <Card className="mb-6 max-w-lg p-5">
         <div className="mb-4 flex items-center justify-between">
           <Button
             type="button"
@@ -315,12 +361,12 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
             ›
           </Button>
         </div>
-        <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-bold uppercase text-[var(--muted)]">
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-[var(--muted)]">
           {WEEKDAY_LABELS.map((w, i) => (
             <div key={i}>{w}</div>
           ))}
         </div>
-        <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+        <div className="mt-1 grid grid-cols-7 gap-1">
           {cells.map((day, i) => {
             if (day === null) return <div key={i} />;
             const date = ymd(new Date(year, month, day));
@@ -332,7 +378,7 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                 type="button"
                 onClick={() => setSelectedDate(date)}
                 title={event?.title}
-                className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-xs transition-all ${
+                className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1 text-xs transition-all ${
                   event
                     ? "border-[var(--err)] bg-[rgba(239,68,68,0.12)] font-bold text-[var(--err)]"
                     : isToday
@@ -340,7 +386,12 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                     : "border-[var(--border)] text-[var(--white)] hover:bg-[rgba(74,144,217,0.08)]"
                 } ${selectedDate === date ? "ring-2 ring-[var(--sky)]" : ""}`}
               >
-                {day}
+                <span>{day}</span>
+                {event && (
+                  <span className="w-full truncate px-0.5 text-[8px] font-semibold leading-none">
+                    {event.title}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -403,7 +454,7 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
               </tr>
             ) : (
               events.map((e) => {
-                const count = overlapCount(e.date);
+                const count = overlappingLeaves(e.date).length;
                 return (
                   <tr key={e.id}>
                     <td>{e.date}</td>
@@ -416,9 +467,9 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                         variant="danger"
                         className="!px-2.5 !py-1 !text-[11px]"
                         disabled={count === 0 || rejectingId === e.id}
-                        onClick={() => handleRejectAll(e.id)}
+                        onClick={() => setReviewEvent({ id: e.id, date: e.date, title: e.title })}
                       >
-                        {rejectingId === e.id ? "Rejecting…" : `Reject All (${count})`}
+                        {rejectingId === e.id ? "Rejecting…" : `Review & Reject (${count})`}
                       </Button>
                       <Button
                         type="button"
@@ -435,6 +486,108 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
             )}
           </tbody>
         </table>
+      </div>
+
+      {reviewEvent && (
+        <ReviewRejectModal
+          event={reviewEvent}
+          leaves={overlappingLeaves(reviewEvent.date)}
+          submitting={rejectingId === reviewEvent.id}
+          onConfirm={handleConfirmReject}
+          onClose={() => setReviewEvent(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Shown before a bulk reject actually happens — lists every leave that
+// overlaps the event date so the HOD can uncheck anything that shouldn't
+// be rejected (e.g. an Emergency Leave that genuinely needs to go through).
+// Anything left checked when "Reject Selected" is clicked gets rejected;
+// anything unchecked is left completely untouched and continues on to its
+// next approval stage normally.
+function ReviewRejectModal({
+  event,
+  leaves,
+  submitting,
+  onConfirm,
+  onClose,
+}: {
+  event: { id: string; date: string; title: string };
+  leaves: LeaveRequest[];
+  submitting: boolean;
+  onConfirm: (leaveIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  function toggle(id: string) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const selectedIds = leaves.filter((l) => !excluded.has(l.id)).map((l) => l.id);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm">
+      <div className="max-h-[85vh] w-[90%] max-w-[560px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <div className="border-b border-[var(--border)] px-6 py-5">
+          <h3 className="text-[15px] font-bold text-[var(--white)]">
+            Review Before Rejecting — {event.title}
+          </h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {event.date} · Uncheck any leave you want to keep (e.g. an Emergency Leave) — it will stay
+            pending and continue on normally. Everything left checked gets rejected.
+          </p>
+        </div>
+        <div className="px-6 py-4">
+          {leaves.length === 0 ? (
+            <p className="py-6 text-center text-sm text-[var(--muted)]">No pending leaves overlap this date.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {leaves.map((l) => (
+                <label
+                  key={l.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--card2)] px-4 py-3"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!excluded.has(l.id)}
+                    onChange={() => toggle(l.id)}
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[var(--white)]">
+                      {l.studentName}
+                      {l.priority === "emergency" && <Badge tone="red">Emergency</Badge>}
+                    </div>
+                    <div className="text-xs text-[var(--muted)]">
+                      {l.indexNumber} · {LEAVE_TYPE_LABELS[l.type]} · {l.startDate} to {l.endDate}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 border-t border-[var(--border)] px-6 py-4">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={selectedIds.length === 0 || submitting}
+            onClick={() => onConfirm(selectedIds)}
+          >
+            {submitting ? "Rejecting…" : `Reject Selected (${selectedIds.length})`}
+          </Button>
+        </div>
       </div>
     </div>
   );

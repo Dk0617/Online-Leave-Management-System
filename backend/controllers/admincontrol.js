@@ -5,6 +5,8 @@ import Troop from "../models/Troop.js";
 import Squadran from "../models/Squadran.js";
 import Sdd from "../models/Sdd.js";
 import Gate from "../models/Gate.js";
+import Lecturer from "../models/Lecturer.js";
+import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
 import Notification from "../models/Notification.js";
@@ -15,29 +17,12 @@ function isValidMobile(mobile) {
   return /^\d{10}$/.test(mobile);
 }
 
-// At least 8 characters, one uppercase, one lowercase, one digit, and one
-// special character — required for every staff password an admin sets by
-// hand (HOD/Squadron/SDD/Gate/Troop). Student passwords use the lighter
-// isValidSimplePassword below instead — see its comment for why.
-const PASSWORD_POLICY_MESSAGE =
-  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
-function isValidPassword(password) {
-  return (
-    typeof password === "string" &&
-    password.length >= 8 &&
-    /[a-z]/.test(password) &&
-    /[A-Z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password)
-  );
-}
-
-// A student's initial password is set by the admin and handed to them
-// on paper/verbally for their first login — it needs to be easy to read
-// back and type in, so it's deliberately not held to the staff complexity
-// policy above. Once the student changes it themselves (forced on first
-// login), the stronger self-set policy in logauthcontrol.js changePassword
-// takes over.
+// Every account an admin creates by hand — student or staff — gets a
+// password that's handed to the person on paper/verbally for their first
+// login, so it's deliberately not held to any complexity policy: just a
+// sanity-check minimum length. Once the account holder changes it
+// themselves (forced on first login), the real security bar is the
+// stronger self-set policy in logauthcontrol.js changePassword instead.
 const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
 function isValidSimplePassword(password) {
   return typeof password === "string" && password.length >= 4;
@@ -254,8 +239,8 @@ export const createStaff = async (req, res) => {
     return res.status(400).json({ message: "All fields are required to create an account" });
   }
 
-  if (!isValidPassword(password)) {
-    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+  if (!isValidSimplePassword(password)) {
+    return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
   }
 
   const existing = await Model.findOne({ username });
@@ -301,8 +286,8 @@ export const updateStaff = async (req, res) => {
   const extraField = STAFF_EXTRA_FIELD[role];
   if (extraField && extra !== undefined) staff[extraField] = extra;
   if (password) {
-    if (!isValidPassword(password)) {
-      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    if (!isValidSimplePassword(password)) {
+      return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
     }
     staff.password = password;
     staff.mustChangePassword = true;
@@ -359,8 +344,8 @@ export const createTroop = async (req, res) => {
   if (!Array.isArray(intakes) || !intakes.length) {
     return res.status(400).json({ message: "Assign at least one intake to this officer" });
   }
-  if (!isValidPassword(password)) {
-    return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+  if (!isValidSimplePassword(password)) {
+    return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
   }
 
   const existing = await Troop.findOne({ username });
@@ -402,8 +387,8 @@ export const updateTroop = async (req, res) => {
   if (email !== undefined) troop.email = email;
   if (Array.isArray(intakes)) troop.intakes = intakes;
   if (password) {
-    if (!isValidPassword(password)) {
-      return res.status(400).json({ message: PASSWORD_POLICY_MESSAGE });
+    if (!isValidSimplePassword(password)) {
+      return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
     }
     troop.password = password;
     troop.mustChangePassword = true;
@@ -425,6 +410,80 @@ export const deleteTroop = async (req, res) => {
     });
   }
   await Troop.findByIdAndDelete(req.params.id);
+  res.json({ message: "Deleted" });
+};
+
+// ── Lecturers (extra: tier + rank — the fixed seniority chain used to
+// cover HOD approvals when the HOD is unavailable; see
+// leavecontrol.js resolveActiveCoverer) ─────────────────────────────
+export const createLecturer = async (req, res) => {
+  const { username, name, password, email, department, tier, rank } = req.body;
+  if (!username || !name || !email || !password || !tier || rank === undefined || rank === null) {
+    return res.status(400).json({ message: "All fields are required to create an account" });
+  }
+  if (!["SENIOR", "JUNIOR"].includes(tier)) {
+    return res.status(400).json({ message: "Tier must be Senior or Junior" });
+  }
+  if (!isValidSimplePassword(password)) {
+    return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
+  }
+
+  const existing = await Lecturer.findOne({ username });
+  if (existing) return res.status(409).json({ message: "That username is already taken" });
+  if (await isEmailTaken(email)) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
+
+  const created = await Lecturer.create({ username, name, password, email, department, tier, rank: Number(rank) });
+  await writeAudit("ADMIN", req.user.name, "account_created", `lecturer ${username}`);
+  const { password: _pw, ...safe } = created.toObject();
+  res.status(201).json(safe);
+};
+
+export const listLecturers = async (req, res) => {
+  res.json(await Lecturer.find().select("-password").sort({ tier: 1, rank: 1 }));
+};
+
+export const updateLecturer = async (req, res) => {
+  const { username, name, password, email, department, tier, rank } = req.body;
+  const lecturer = await Lecturer.findById(req.params.id);
+  if (!lecturer) return res.status(404).json({ message: "Lecturer not found" });
+
+  if (username && username !== lecturer.username) {
+    const clash = await Lecturer.findOne({ username, _id: { $ne: lecturer._id } });
+    if (clash) return res.status(409).json({ message: "That username is already taken" });
+    lecturer.username = username;
+  }
+  if (name) lecturer.name = name;
+  if (email && email !== lecturer.email && (await isEmailTaken(email, lecturer._id))) {
+    return res.status(409).json({ message: "That email is already used by another account" });
+  }
+  if (email !== undefined) lecturer.email = email;
+  if (department !== undefined) lecturer.department = department;
+  if (tier) {
+    if (!["SENIOR", "JUNIOR"].includes(tier)) {
+      return res.status(400).json({ message: "Tier must be Senior or Junior" });
+    }
+    lecturer.tier = tier;
+  }
+  if (rank !== undefined && rank !== null && rank !== "") lecturer.rank = Number(rank);
+  if (password) {
+    if (!isValidSimplePassword(password)) {
+      return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
+    }
+    lecturer.password = password;
+    lecturer.mustChangePassword = true;
+  }
+
+  await lecturer.save();
+  await writeAudit("ADMIN", req.user.name, "account_updated", `lecturer ${lecturer.username}`);
+  const { password: _pw, ...safe } = lecturer.toObject();
+  res.json(safe);
+};
+
+export const deleteLecturer = async (req, res) => {
+  await LecturerUnavailability.deleteMany({ lecturerId: req.params.id });
+  await Lecturer.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
 };
 

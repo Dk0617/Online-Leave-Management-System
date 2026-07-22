@@ -4,21 +4,25 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   normalizeAudit,
+  normalizeHodUnavailability,
   normalizeIntake,
   normalizeLeave,
+  normalizeLecturer,
+  normalizeLecturerUnavailability,
   normalizeNotification,
   normalizeStaff,
   normalizeStudent,
-  normalizeSubstitute,
 } from "@/src/api";
 import {
   AuditEntry,
+  HodUnavailability,
   Intake,
   LeaveRequest,
+  LecturerAccount,
+  LecturerUnavailability,
   NotificationEntry,
   StaffAccount,
   Student,
-  SubstituteAssignment,
 } from "@/src/types";
 
 export type StaffRole = "HOD" | "SQUADRAN" | "SDD" | "GATE";
@@ -54,6 +58,16 @@ export interface NewTroopInput {
   email?: string;
 }
 
+export interface NewLecturerInput {
+  username: string;
+  name: string;
+  password?: string;
+  email?: string;
+  department?: string;
+  tier: "SENIOR" | "JUNIOR";
+  rank: number;
+}
+
 export function useAdminPortal() {
   const [students, setStudents] = useState<Student[]>([]);
   const [hods, setHods] = useState<StaffAccount[]>([]);
@@ -65,7 +79,9 @@ export function useAdminPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [substitutes, setSubstitutes] = useState<SubstituteAssignment[]>([]);
+  const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
+  const [hodUnavailability, setHodUnavailability] = useState<HodUnavailability[]>([]);
+  const [lecturerUnavailability, setLecturerUnavailability] = useState<LecturerUnavailability[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +100,9 @@ export function useAdminPortal() {
         leavesRaw,
         notifsRaw,
         auditRaw,
-        substitutesRaw,
+        lecturersRaw,
+        hodUnavailabilityRaw,
+        lecturerUnavailabilityRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
         api.get<Record<string, unknown>[]>("/admin/staff/hod"),
@@ -96,7 +114,9 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/leaves"),
         api.get<Record<string, unknown>[]>("/admin/notifications"),
         api.get<Record<string, unknown>[]>("/admin/audit"),
-        api.get<Record<string, unknown>[]>("/admin/substitutes"),
+        api.get<Record<string, unknown>[]>("/admin/lecturers"),
+        api.get<Record<string, unknown>[]>("/admin/hod-unavailability"),
+        api.get<Record<string, unknown>[]>("/admin/lecturer-unavailability"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
       setHods(hodsRaw.map(normalizeStaff));
@@ -108,7 +128,9 @@ export function useAdminPortal() {
       setLeaves(leavesRaw.map(normalizeLeave));
       setNotifications(notifsRaw.map(normalizeNotification));
       setAudit(auditRaw.map(normalizeAudit));
-      setSubstitutes(substitutesRaw.map(normalizeSubstitute));
+      setLecturers(lecturersRaw.map(normalizeLecturer));
+      setHodUnavailability(hodUnavailabilityRaw.map(normalizeHodUnavailability));
+      setLecturerUnavailability(lecturerUnavailabilityRaw.map(normalizeLecturerUnavailability));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
     } finally {
@@ -182,19 +204,40 @@ export function useAdminPortal() {
     await refresh();
   }
 
-  // ── HOD substitutes ─────────────────────────────────────────────
-  async function addSubstitute(input: {
-    hodId: string;
-    substituteHodId: string;
+  // ── Lecturers (extra: tier + rank — the HOD-cover seniority chain) ──
+  async function addLecturer(input: NewLecturerInput) {
+    await api.post("/admin/lecturers", input);
+    await refresh();
+  }
+  async function editLecturer(id: string, input: Partial<NewLecturerInput>) {
+    await api.patch(`/admin/lecturers/${id}`, input);
+    await refresh();
+  }
+  async function removeLecturer(id: string) {
+    await api.delete(`/admin/lecturers/${id}`);
+    await refresh();
+  }
+
+  // ── HOD / Lecturer unavailability (feeds the seniority-chain cover) ─
+  async function addHodUnavailability(input: { hodId: string; fromDate: string; toDate: string; reason?: string }) {
+    await api.post("/admin/hod-unavailability", input);
+    await refresh();
+  }
+  async function removeHodUnavailability(id: string) {
+    await api.delete(`/admin/hod-unavailability/${id}`);
+    await refresh();
+  }
+  async function addLecturerUnavailability(input: {
+    lecturerId: string;
     fromDate: string;
     toDate: string;
     reason?: string;
   }) {
-    await api.post("/admin/substitutes", input);
+    await api.post("/admin/lecturer-unavailability", input);
     await refresh();
   }
-  async function removeSubstitute(id: string) {
-    await api.delete(`/admin/substitutes/${id}`);
+  async function removeLecturerUnavailability(id: string) {
+    await api.delete(`/admin/lecturer-unavailability/${id}`);
     await refresh();
   }
 
@@ -209,7 +252,9 @@ export function useAdminPortal() {
     leaves,
     notifications,
     audit,
-    substitutes,
+    lecturers,
+    hodUnavailability,
+    lecturerUnavailability,
     loading,
     error,
     refresh,
@@ -226,7 +271,12 @@ export function useAdminPortal() {
     removeTroop,
     markNotificationRead,
     clearAuditLog,
-    addSubstitute,
-    removeSubstitute,
+    addLecturer,
+    editLecturer,
+    removeLecturer,
+    addHodUnavailability,
+    removeHodUnavailability,
+    addLecturerUnavailability,
+    removeLecturerUnavailability,
   };
 }
