@@ -344,8 +344,8 @@ export function ApplyLeave({
       setError("Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.");
       return;
     }
-    if (new Date(`${endDate}T${endTime}`) < new Date(`${startDate}T${startTime}`)) {
-      setError("End date/time must be after start date/time.");
+    if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
+      setError("End date/time must be after start date/time — they can't be the same.");
       return;
     }
     if (!isEmergency) {
@@ -756,7 +756,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
       return;
     }
     try {
-      await updateProfile({ firstName, lastName, email, mobile });
+      await updateProfile({ firstName, lastName, mobile });
       setMessage("Profile saved!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save profile");
@@ -800,7 +800,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
         </div>
         <div>
           <label className={styles.label}>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={styles.input} />
+          <input type="email" value={email} readOnly className={`${styles.input} opacity-60`} />
         </div>
         <div>
           <label className={styles.label}>Mobile</label>

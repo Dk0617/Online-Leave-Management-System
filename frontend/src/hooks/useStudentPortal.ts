@@ -23,10 +23,13 @@ export interface NewLeaveInput {
   personalAttachmentData?: string;
 }
 
+// Email is fixed once the account is created (only Admin can change it) —
+// same reasoning as indexNumber/department, which were never editable
+// here to begin with. See backend/controllers/studentcontrol.js
+// updateProfile.
 export interface ProfileInput {
   firstName?: string;
   lastName?: string;
-  email?: string;
   mobile?: string;
 }
 

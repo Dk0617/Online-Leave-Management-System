@@ -140,10 +140,10 @@ export const applyLeave = async (req, res) => {
       message: "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).",
     });
   }
-  if (new Date(`${endDate}T${endTime}`) < new Date(`${startDate}T${startTime}`)) {
+  if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
     return res
       .status(400)
-      .json({ message: "End date/time must be after start date/time" });
+      .json({ message: "End date/time must be after start date/time — they can't be the same" });
   }
   if (attachmentData && Buffer.byteLength(attachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
     return res.status(400).json({ message: "Attachment too large (max 2MB)" });
@@ -295,14 +295,19 @@ export const getProfile = async (req, res) => {
   res.json(student);
 };
 
+// Email, like indexNumber/department/studentType, is fixed once the
+// account is created — it's tied to OTP-based login, so letting a student
+// change it themselves would let them silently lock themselves out (or
+// hijack another account's OTP login) with no admin oversight. Only Admin
+// can change it, via updateStudent. Deliberately not read from req.body
+// here, same reasoning as the fields admincontrol.js already locks down.
 export const updateProfile = async (req, res) => {
-  const { firstName, lastName, email, mobile } = req.body;
+  const { firstName, lastName, mobile } = req.body;
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
 
   if (firstName) student.firstName = firstName;
   if (lastName) student.lastName = lastName;
-  if (email !== undefined) student.email = email;
   if (mobile) {
     if (!/^\d{10}$/.test(mobile)) {
       return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
