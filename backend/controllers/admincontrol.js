@@ -11,6 +11,7 @@ import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
 import Notification from "../models/Notification.js";
 import AuditEntry from "../models/AuditEntry.js";
+import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import { writeAudit } from "../utils/audit.js";
 
 function isValidMobile(mobile) {
@@ -212,6 +213,56 @@ export const updateStudent = async (req, res) => {
 export const deleteStudent = async (req, res) => {
   await Student.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
+};
+
+// ── Photo change requests — a student only gets one self-service photo
+// set (see studentcontrol.js updatePhoto/requestPhotoChange); anything
+// after that needs a decision here before Student.photo actually changes.
+export const listPhotoRequests = async (req, res) => {
+  const requests = await PhotoChangeRequest.find()
+    .populate("studentId", "firstName lastName indexNumber photo")
+    .sort({ createdAt: -1 });
+  res.json(requests);
+};
+
+export const approvePhotoRequest = async (req, res) => {
+  const request = await PhotoChangeRequest.findById(req.params.id);
+  if (!request) return res.status(404).json({ message: "Request not found" });
+  if (request.status !== "PENDING") {
+    return res.status(409).json({ message: "This request has already been decided" });
+  }
+
+  const student = await Student.findById(request.studentId);
+  if (!student) return res.status(404).json({ message: "Student not found" });
+
+  student.photo = request.requestedPhoto;
+  await student.save();
+
+  request.status = "APPROVED";
+  request.decidedBy = req.user.name;
+  request.decidedAt = new Date().toLocaleString();
+  await request.save();
+
+  await writeAudit("ADMIN", req.user.name, "photo_change_approved", `student=${student._id}`);
+  res.json(request);
+};
+
+export const rejectPhotoRequest = async (req, res) => {
+  const { reason } = req.body;
+  const request = await PhotoChangeRequest.findById(req.params.id);
+  if (!request) return res.status(404).json({ message: "Request not found" });
+  if (request.status !== "PENDING") {
+    return res.status(409).json({ message: "This request has already been decided" });
+  }
+
+  request.status = "REJECTED";
+  request.decidedBy = req.user.name;
+  request.decidedAt = new Date().toLocaleString();
+  request.decisionReason = reason?.trim() || undefined;
+  await request.save();
+
+  await writeAudit("ADMIN", req.user.name, "photo_change_rejected", `student=${request.studentId}`);
+  res.json(request);
 };
 
 // ── Generic staff accounts: HOD / Squadron / SDD / Gate ────────────

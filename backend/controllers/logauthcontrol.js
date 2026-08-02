@@ -116,7 +116,10 @@ export const changePassword = async (req, res) => {
 // avatar photo for whichever account is currently logged in (Student
 // already had its own separate photo endpoint under /student for its
 // fuller Profile page — this one covers every role, including Student,
-// for the header's own upload control).
+// for the header's own upload control). Students only get one self-service
+// set (see studentcontrol.js updatePhoto for the same rule enforced
+// there) — checked again here since this is a separate route that reaches
+// the same underlying document.
 export const updateMyPhoto = async (req, res) => {
   const { photo } = req.body; // base64 data URL, already downscaled client-side
 
@@ -124,7 +127,15 @@ export const updateMyPhoto = async (req, res) => {
   const user = await Model.findById(req.user.id);
   if (!user) return res.status(404).json({ message: "User not found" });
 
+  if (req.user.role === "STUDENT" && user.photoLocked) {
+    return res.status(403).json({
+      message:
+        "Your profile photo can only be set once. To change it now, submit a photo change request from My Profile for Admin approval.",
+    });
+  }
+
   user.photo = photo || undefined;
+  if (req.user.role === "STUDENT" && photo) user.photoLocked = true;
   await user.save();
   res.json({ message: "Photo updated" });
 };

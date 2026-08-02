@@ -93,7 +93,29 @@ export interface Student {
   hodId?: string | RefName;
   sqnId?: string | RefName;
   photo?: string;
+  // Set once the student has used their one self-service photo set — see
+  // backend/models/Student.js. Further changes need a PhotoChangeRequest.
+  photoLocked?: boolean;
   mustChangePassword: boolean;
+}
+
+export type PhotoChangeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+// A student's request to change their photo after it's locked — see
+// backend/models/PhotoChangeRequest.js.
+export interface PhotoChangeRequest {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  studentIndexNumber?: string;
+  currentPhoto?: string;
+  requestedPhoto: string;
+  reason?: string;
+  status: PhotoChangeRequestStatus;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionReason?: string;
+  createdAt: string;
 }
 
 export interface Intake {
@@ -191,12 +213,28 @@ export interface AuditEntry {
   time: string; // createdAt
 }
 
-// A mandatory-attendance day an HOD marks on their calendar (e.g. a
-// workshop) — see backend/models/EventDay.js.
+// A day an HOD marks on their calendar — see backend/models/EventDay.js.
+export type EventCategory = "WORKSHOP" | "POYA" | "HOLIDAY" | "NO_LECTURE" | "OTHER";
+
+export const EVENT_CATEGORY_LABELS: Record<EventCategory, string> = {
+  WORKSHOP: "Workshop",
+  POYA: "Poya Day",
+  HOLIDAY: "Holiday",
+  NO_LECTURE: "No Lecture Day",
+  OTHER: "Other",
+};
+
+// Only Workshop is mandatory-attendance — the one the bulk-reject action
+// (see hod/views.tsx EventCalendar) actually makes sense for. Poya Day is
+// itself a public holiday (students are normally free to leave on it, not
+// restricted), and Holiday/No Lecture are purely informational too.
+export const MANDATORY_EVENT_CATEGORIES: EventCategory[] = ["WORKSHOP"];
+
 export interface EventDay {
   id: string;
   date: string; // "YYYY-MM-DD"
   title: string;
+  category: EventCategory;
 }
 
 // A Senior or Junior Lecturer in the campus-wide HOD-cover seniority chain

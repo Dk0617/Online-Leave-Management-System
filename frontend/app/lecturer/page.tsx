@@ -46,7 +46,6 @@ export default function LecturerPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user?.department}
-      locationLabel={user?.department}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} asLecturer />}
       {activeView === "history" && <History portal={portal} />}

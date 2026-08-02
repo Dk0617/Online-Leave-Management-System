@@ -21,6 +21,12 @@ const studentSchema = new mongoose.Schema(
     hodId: { type: mongoose.Schema.Types.ObjectId, ref: "Hod" },
     sqnId: { type: mongoose.Schema.Types.ObjectId, ref: "Squadran" },
     photo: String, // base64 data URL, downscaled client-side before upload
+    // Set the first time the student sets a photo themselves (see
+    // studentcontrol.js updatePhoto) — once true, any further change has
+    // to go through a PhotoChangeRequest for Admin approval instead of
+    // being self-service, so a lost/stolen ID photo can't be swapped out
+    // unilaterally by whoever's logged in.
+    photoLocked: { type: Boolean, default: false },
     mustChangePassword: { type: Boolean, default: true },
   },
   { timestamps: true, toObject: { virtuals: true }, toJSON: { virtuals: true } }

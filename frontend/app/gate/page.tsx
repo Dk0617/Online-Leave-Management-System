@@ -40,7 +40,6 @@ export default function GatePage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user?.post}
-      locationLabel={user?.post}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "verify" && <Verify portal={portal} />}

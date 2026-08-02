@@ -33,6 +33,7 @@ interface AuthContextValue {
   logout: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updatePhoto: (photo: string | null) => Promise<void>;
+  setUserPhoto: (photo: string | undefined) => void;
   refreshUser: () => void;
 }
 
@@ -127,16 +128,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // portal's header reflects it immediately, without a full page reload.
   async function updatePhoto(photo: string | null) {
     await api.patch("/auth/photo", { photo });
-    if (user) {
-      const updated = { ...user, photo: photo ?? undefined };
-      setUser(updated);
+    setUserPhoto(photo ?? undefined);
+  }
+
+  // Local-only sync (no API call) — lets a portal hook that already polls
+  // the server (e.g. useStudentPortal, after an Admin approves a photo
+  // change request elsewhere) push a freshly-fetched photo into the
+  // cached session user, so the header avatar catches up without the
+  // student having to log out and back in.
+  function setUserPhoto(photo: string | undefined) {
+    setUser((prev) => {
+      if (!prev || prev.photo === photo) return prev;
+      const updated = { ...prev, photo };
       window.localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    }
+      return updated;
+    });
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, requestOtp, loginWithOtp, logout, changePassword, updatePhoto, refreshUser }}
+      value={{
+        user,
+        loading,
+        login,
+        requestOtp,
+        loginWithOtp,
+        logout,
+        changePassword,
+        updatePhoto,
+        setUserPhoto,
+        refreshUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

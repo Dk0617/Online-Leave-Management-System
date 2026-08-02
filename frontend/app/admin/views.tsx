@@ -1790,3 +1790,161 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     </div>
   );
 }
+
+// ==================================================================
+// Photo Requests — a student only gets one self-service photo set (see
+// backend/models/Student.js photoLocked); anything after that needs a
+// decision here before it actually replaces their photo.
+// ==================================================================
+
+export function PhotoRequests({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { photoRequests, approvePhotoRequest, rejectPhotoRequest } = portal;
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = photoRequests.filter((r) => r.status === "PENDING");
+  const decided = photoRequests.filter((r) => r.status !== "PENDING");
+
+  async function handleApprove(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await approvePhotoRequest(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve request");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReject(id: string) {
+    const reason = prompt("Reason for rejecting this photo change (optional):") ?? "";
+    setBusyId(id);
+    setError(null);
+    try {
+      await rejectPhotoRequest(id, reason.trim() || undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject request");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>Photo Requests:</strong> A student can only set their own profile photo once — any change
+        after that needs your approval here, so a lost/stolen ID photo can&apos;t be swapped out
+        unilaterally by whoever&apos;s currently logged in.
+      </div>
+
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending ({pending.length})</h2>
+      {pending.length === 0 ? (
+        <Card className="mb-6 p-5 text-center text-sm text-[var(--muted)]">No pending photo requests.</Card>
+      ) : (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {pending.map((r) => (
+            <Card key={r.id} className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold text-[var(--white)]">{r.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">{r.studentIndexNumber}</div>
+                </div>
+                <span className="text-[10px] text-[var(--muted)]">
+                  {new Date(r.createdAt).toLocaleString()}
+                </span>
+              </div>
+              <div className="mb-3 flex items-center justify-center gap-4">
+                <div className="text-center">
+                  <div className="mb-1 text-[10px] uppercase text-[var(--muted)]">Current</div>
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--border)] bg-[var(--card2)]">
+                    {r.currentPhoto ? (
+                      <img src={r.currentPhoto} alt="Current" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[9px] text-[var(--muted)]">No Photo</span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-lg text-[var(--muted)]">→</span>
+                <div className="text-center">
+                  <div className="mb-1 text-[10px] uppercase text-[var(--sky)]">Requested</div>
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--sky)] bg-[var(--card2)]">
+                    <img src={r.requestedPhoto} alt="Requested" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              </div>
+              {r.reason && (
+                <p className="mb-3 text-xs text-[var(--muted)]">
+                  <strong className="text-[var(--white)]">Reason:</strong> {r.reason}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="success"
+                  className="!text-xs"
+                  disabled={busyId === r.id}
+                  onClick={() => handleApprove(r.id)}
+                >
+                  {busyId === r.id ? "Working…" : "✅ Approve"}
+                </Button>
+                <Button
+                  variant="danger"
+                  className="!text-xs"
+                  disabled={busyId === r.id}
+                  onClick={() => handleReject(r.id)}
+                >
+                  ❌ Reject
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Decided</h2>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Requested</th>
+              <th>Status</th>
+              <th>Decided By</th>
+              <th>Date</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {decided.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No decided requests yet.
+                </td>
+              </tr>
+            ) : (
+              decided.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    {r.studentName}
+                    <div className="text-xs text-[var(--muted)]">{r.studentIndexNumber}</div>
+                  </td>
+                  <td>
+                    <img src={r.requestedPhoto} alt="Requested" className="h-10 w-10 rounded-full object-cover" />
+                  </td>
+                  <td>
+                    <Badge tone={r.status === "APPROVED" ? "green" : "red"}>{r.status}</Badge>
+                  </td>
+                  <td className="text-[var(--muted)]">{r.decidedBy || "—"}</td>
+                  <td className="text-[var(--muted)]">{r.decidedAt || "—"}</td>
+                  <td className="max-w-[200px] text-[var(--muted)]">{r.decisionReason || "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

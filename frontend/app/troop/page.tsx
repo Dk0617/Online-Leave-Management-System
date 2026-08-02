@@ -45,7 +45,6 @@ export default function TroopPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={intakesText}
-      locationLabel={intakesText}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "dayscholar" && <DayScholarQueue portal={portal} />}

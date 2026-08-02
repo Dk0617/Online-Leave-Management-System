@@ -115,7 +115,6 @@ export function DashboardShell({
   activeView,
   onNavigate,
   roleTag,
-  locationLabel,
   children,
 }: {
   role: Role;
@@ -125,11 +124,6 @@ export function DashboardShell({
   activeView: string;
   onNavigate: (key: string) => void;
   roleTag?: string;
-  // Shown in the header pill next to the avatar, in place of the username/
-  // index number — each page.tsx passes whatever "location" makes sense for
-  // that role (a student's current leave address or department, an HOD's
-  // department, a Gate officer's post, etc.).
-  locationLabel?: string;
   children: ReactNode;
 }) {
   const { user, loading, logout } = useAuth();
@@ -248,11 +242,7 @@ export function DashboardShell({
             )}
           </div>
           <div className="flex items-center gap-3">
-            {locationLabel && (
-              <span className="rounded-lg border border-[rgba(37,99,176,0.3)] bg-[rgba(37,99,176,0.15)] px-3 py-1 font-mono text-xs text-[var(--sky)]">
-                📍 {locationLabel}
-              </span>
-            )}
+            <DigitalClock />
             <HeaderAvatar user={user} />
           </div>
         </header>

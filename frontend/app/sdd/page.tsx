@@ -40,7 +40,6 @@ export default function SddPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user?.title}
-      locationLabel={user?.title}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "overview" && <Overview portal={portal} />}

@@ -10,8 +10,10 @@ import {
   normalizeLecturer,
   normalizeLecturerUnavailability,
   normalizeNotification,
+  normalizePhotoChangeRequest,
   normalizeStaff,
   normalizeStudent,
+  POLL_INTERVAL_MS,
 } from "@/src/api";
 import {
   AuditEntry,
@@ -21,6 +23,7 @@ import {
   LecturerAccount,
   LecturerUnavailability,
   NotificationEntry,
+  PhotoChangeRequest,
   StaffAccount,
   Student,
 } from "@/src/types";
@@ -82,6 +85,7 @@ export function useAdminPortal() {
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [hodUnavailability, setHodUnavailability] = useState<HodUnavailability[]>([]);
   const [lecturerUnavailability, setLecturerUnavailability] = useState<LecturerUnavailability[]>([]);
+  const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +107,7 @@ export function useAdminPortal() {
         lecturersRaw,
         hodUnavailabilityRaw,
         lecturerUnavailabilityRaw,
+        photoRequestsRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
         api.get<Record<string, unknown>[]>("/admin/staff/hod"),
@@ -117,6 +122,7 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/hod-unavailability"),
         api.get<Record<string, unknown>[]>("/admin/lecturer-unavailability"),
+        api.get<Record<string, unknown>[]>("/admin/photo-requests"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
       setHods(hodsRaw.map(normalizeStaff));
@@ -131,6 +137,7 @@ export function useAdminPortal() {
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setHodUnavailability(hodUnavailabilityRaw.map(normalizeHodUnavailability));
       setLecturerUnavailability(lecturerUnavailabilityRaw.map(normalizeLecturerUnavailability));
+      setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
     } finally {
@@ -140,6 +147,13 @@ export function useAdminPortal() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // No push/websocket infra — poll instead, so admin's system-wide view
+  // stays current without a manual reload. See api.ts POLL_INTERVAL_MS.
+  useEffect(() => {
+    const id = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [refresh]);
 
   // ── Intakes ─────────────────────────────────────────────────────
@@ -241,6 +255,17 @@ export function useAdminPortal() {
     await refresh();
   }
 
+  // ── Photo change requests (student's photo is locked after their first
+  // self-service set — see backend/models/Student.js photoLocked) ────
+  async function approvePhotoRequest(id: string) {
+    await api.patch(`/admin/photo-requests/${id}/approve`);
+    await refresh();
+  }
+  async function rejectPhotoRequest(id: string, reason?: string) {
+    await api.patch(`/admin/photo-requests/${id}/reject`, { reason });
+    await refresh();
+  }
+
   return {
     students,
     hods,
@@ -255,6 +280,7 @@ export function useAdminPortal() {
     lecturers,
     hodUnavailability,
     lecturerUnavailability,
+    photoRequests,
     loading,
     error,
     refresh,
@@ -278,5 +304,7 @@ export function useAdminPortal() {
     removeHodUnavailability,
     addLecturerUnavailability,
     removeLecturerUnavailability,
+    approvePhotoRequest,
+    rejectPhotoRequest,
   };
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave, normalizeStudent } from "@/src/api";
-import { LeaveRequest, LeaveType, Student } from "@/src/types";
+import { api, normalizeLeave, normalizePhotoChangeRequest, normalizeStudent, POLL_INTERVAL_MS } from "@/src/api";
+import { LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
 import { PassVerification } from "@/src/pdf";
 
 export interface NewLeaveInput {
@@ -23,19 +23,17 @@ export interface NewLeaveInput {
   personalAttachmentData?: string;
 }
 
-// Email is fixed once the account is created (only Admin can change it) —
-// same reasoning as indexNumber/department, which were never editable
-// here to begin with. See backend/controllers/studentcontrol.js
-// updateProfile.
+// firstName/lastName/email are all fixed once the account is created (only
+// Admin can change them) — mobile is the only thing a student can update
+// themselves. See backend/controllers/studentcontrol.js updateProfile.
 export interface ProfileInput {
-  firstName?: string;
-  lastName?: string;
   mobile?: string;
 }
 
 export function useStudentPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profile, setProfile] = useState<Student | null>(null);
+  const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,12 +41,14 @@ export function useStudentPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [leavesRaw, profileRaw] = await Promise.all([
+      const [leavesRaw, profileRaw, photoRequestsRaw] = await Promise.all([
         api.get<Record<string, unknown>[]>("/student/leaves"),
         api.get<Record<string, unknown>>("/student/profile"),
+        api.get<Record<string, unknown>[]>("/student/photo-requests"),
       ]);
       setLeaves(leavesRaw.map(normalizeLeave));
       setProfile(normalizeStudent(profileRaw));
+      setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -58,6 +58,14 @@ export function useStudentPortal() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // No push/websocket infra — poll instead, so a decision made on one of
+  // their leaves shows up here without a manual reload. See api.ts
+  // POLL_INTERVAL_MS.
+  useEffect(() => {
+    const id = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [refresh]);
 
   async function applyLeave(input: NewLeaveInput) {
@@ -70,8 +78,12 @@ export function useStudentPortal() {
     await refresh();
   }
 
-  async function updatePhoto(photo: string | null) {
-    await api.patch("/student/photo", { photo });
+  // Only reachable once profile.photoLocked is true — see student/views.tsx
+  // Profile for the UI that swaps to this. The initial (unlocked) photo set
+  // goes through AuthContext's updatePhoto instead (see student/views.tsx
+  // Profile) so the header avatar updates immediately too.
+  async function requestPhotoChange(photo: string, reason?: string) {
+    await api.post("/student/photo-request", { photo, reason });
     await refresh();
   }
 
@@ -79,5 +91,16 @@ export function useStudentPortal() {
     return api.get<PassVerification>(`/student/leaves/${leaveId}/movements`);
   }
 
-  return { leaves, profile, loading, error, refresh, applyLeave, updateProfile, updatePhoto, getMovements };
+  return {
+    leaves,
+    profile,
+    photoRequests,
+    loading,
+    error,
+    refresh,
+    applyLeave,
+    updateProfile,
+    requestPhotoChange,
+    getMovements,
+  };
 }

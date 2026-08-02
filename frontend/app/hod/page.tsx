@@ -40,7 +40,6 @@ export default function HodPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user?.department}
-      locationLabel={user?.department}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "history" && <History portal={portal} />}

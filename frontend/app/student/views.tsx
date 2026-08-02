@@ -4,7 +4,6 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
-import { DigitalClock } from "@/src/components/DashboardShell";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
@@ -340,6 +339,10 @@ export function ApplyLeave({
       setError("Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).");
       return;
     }
+    if (new Date(`${startDate}T${startTime}`) < new Date()) {
+      setError("Start date/time can't be in the past.");
+      return;
+    }
    if (!isEmergency && startDate && startDate < minStartDate) {
       setError("Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.");
       return;
@@ -460,7 +463,6 @@ export function ApplyLeave({
               </span>
             </div>
           </div>
-          <DigitalClock />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -684,12 +686,22 @@ export function ApplyLeave({
 }
 
 export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
-  const { profile, updateProfile, updatePhoto, loading, error, refresh } = portal;
+  const { profile, photoRequests, updateProfile, requestPhotoChange, loading, error, refresh } = portal;
+  // Photo changes go through AuthContext's updatePhoto (the same one the
+  // header avatar uses — see DashboardShell), not a separate student-only
+  // endpoint, so the header updates immediately instead of staying stale
+  // until the next login. refresh() below then pulls the saved value back
+  // into `profile` for this page's own preview/photoLocked check.
+  const { updatePhoto } = useAuth();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [requestingChange, setRequestingChange] = useState(false);
+  const [requestFile, setRequestFile] = useState<File | null>(null);
+  const [requestReason, setRequestReason] = useState("");
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -729,6 +741,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
     try {
       const dataUrl = await downscalePhoto(file);
       await updatePhoto(dataUrl);
+      await refresh();
       setMessage("📷 Profile photo updated!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to update photo");
@@ -744,9 +757,39 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
     if (!confirm("Remove your profile photo?")) return;
     try {
       await updatePhoto(null);
+      await refresh();
       setMessage("Photo removed.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to remove photo");
+    }
+  }
+
+  async function handleRequestPhotoChange(e: FormEvent) {
+    e.preventDefault();
+    if (!requestFile) {
+      setMessage("Choose a photo first.");
+      return;
+    }
+    if (!/^image\/(png|jpe?g)$/i.test(requestFile.type)) {
+      setMessage("Please upload a JPG or PNG image.");
+      return;
+    }
+    if (requestFile.size > 1.5 * 1024 * 1024) {
+      setMessage("Photo too large — please use an image under 1.5MB.");
+      return;
+    }
+    setRequestSubmitting(true);
+    try {
+      const dataUrl = await downscalePhoto(requestFile);
+      await requestPhotoChange(dataUrl, requestReason.trim() || undefined);
+      setMessage("Request submitted — an Admin will review it.");
+      setRequestingChange(false);
+      setRequestFile(null);
+      setRequestReason("");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to submit request");
+    } finally {
+      setRequestSubmitting(false);
     }
   }
 
@@ -756,12 +799,15 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
       return;
     }
     try {
-      await updateProfile({ firstName, lastName, mobile });
+      await updateProfile({ mobile });
       setMessage("Profile saved!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save profile");
     }
   }
+
+  const pendingPhotoRequest = photoRequests.find((r) => r.status === "PENDING");
+  const lastPhotoRequest = photoRequests[0];
 
   return (
     <Card className="p-5">
@@ -772,31 +818,96 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
           {profile.photo ? <img src={profile.photo} alt="Profile" /> : initials}
         </div>
         <div className="flex-1">
-          <p className="mb-2.5 text-xs leading-relaxed text-[var(--muted)]">
-            Upload a clear passport-style photo. This photo appears on your official Leave Pass PDF and your
-            dashboard avatar.
-          </p>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
-            📷 Upload Photo
-            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
-          </label>
-          <button
-            onClick={handleRemovePhoto}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3.5 py-2 text-xs font-bold text-[var(--err-soft)]"
-          >
-            🗑️ Remove
-          </button>
+          {!profile.photoLocked ? (
+            <>
+              <p className="mb-2.5 text-xs leading-relaxed text-[var(--muted)]">
+                Upload a clear passport-style photo. This photo appears on your official Leave Pass PDF
+                and your dashboard avatar. You can only set it once yourself — after that, any change
+                needs Admin approval.
+              </p>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                📷 Upload Photo
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
+              </label>
+              <button
+                onClick={handleRemovePhoto}
+                className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3.5 py-2 text-xs font-bold text-[var(--err-soft)]"
+              >
+                🗑️ Remove
+              </button>
+            </>
+          ) : pendingPhotoRequest ? (
+            <p className="text-xs leading-relaxed text-[var(--warn)]">
+              ⏳ Your photo change request is pending Admin approval.
+              {pendingPhotoRequest.reason && <> Reason given: {pendingPhotoRequest.reason}</>}
+            </p>
+          ) : requestingChange ? (
+            <form onSubmit={handleRequestPhotoChange} className="flex flex-col gap-2">
+              <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                📷 {requestFile ? requestFile.name : "Choose New Photo"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  onChange={(e) => setRequestFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <textarea
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+                rows={2}
+                placeholder="Reason for the change (optional)"
+                className={styles.input}
+              />
+              <div className="flex gap-2">
+                <Button type="submit" variant="primary" className="!text-xs" disabled={requestSubmitting}>
+                  {requestSubmitting ? "Submitting…" : "Submit Request"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="!text-xs"
+                  onClick={() => setRequestingChange(false)}
+                  disabled={requestSubmitting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <p className="mb-2.5 text-xs leading-relaxed text-[var(--muted)]">
+                Your photo is locked after the first self-service set — changing it now needs Admin
+                approval.
+                {lastPhotoRequest?.status === "REJECTED" && (
+                  <>
+                    {" "}
+                    Your last request was rejected
+                    {lastPhotoRequest.decisionReason && <>: {lastPhotoRequest.decisionReason}</>}.
+                  </>
+                )}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!text-xs"
+                onClick={() => setRequestingChange(true)}
+              >
+                🔄 Request Photo Change
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       <div className={`${styles.formGrid} mb-4`}>
         <div>
           <label className={styles.label}>First Name</label>
-          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={styles.input} />
+          <input value={firstName} readOnly className={`${styles.input} opacity-60`} />
         </div>
         <div>
           <label className={styles.label}>Last Name</label>
-          <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={styles.input} />
+          <input value={lastName} readOnly className={`${styles.input} opacity-60`} />
         </div>
         <div>
           <label className={styles.label}>Email</label>

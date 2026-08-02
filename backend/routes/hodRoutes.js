@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
-import { hod } from "../controllers/leavecontrol.js";
+import { hod, hodCorrectDateTime } from "../controllers/leavecontrol.js";
 import { listEvents, createEvent, deleteEvent, rejectOverlapping } from "../controllers/eventcontrol.js";
 
 const router = express.Router();
@@ -16,6 +16,7 @@ router.get("/leaves/pending", hod.pending);
 router.get("/leaves/history", hod.history);
 router.patch("/leaves/:id/approve", hod.approve);
 router.patch("/leaves/:id/reject", hod.reject);
+router.patch("/leaves/:id/datetime", requireRole("HOD"), hodCorrectDateTime);
 
 router.get("/events", requireRole("HOD"), listEvents);
 router.post("/events", requireRole("HOD"), createEvent);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave, normalizeMovement } from "@/src/api";
+import { api, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
 import { LeaveRequest, Movement } from "@/src/types";
 
 export function useTroopPortal() {
@@ -44,6 +44,14 @@ export function useTroopPortal() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // No push/websocket infra — poll instead, so a newly-submitted leave (or
+  // a decision made on one elsewhere) shows up here without a manual
+  // reload. See api.ts POLL_INTERVAL_MS.
+  useEffect(() => {
+    const id = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [refresh]);
 
   async function approve(id: string, comment?: string) {

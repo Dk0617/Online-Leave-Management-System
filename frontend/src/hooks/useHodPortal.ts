@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeEventDay, normalizeLeave } from "@/src/api";
-import { EventDay, LeaveRequest } from "@/src/types";
+import { api, normalizeEventDay, normalizeLeave, POLL_INTERVAL_MS } from "@/src/api";
+import { EventCategory, EventDay, LeaveRequest } from "@/src/types";
 
 export function useHodPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
@@ -34,6 +34,14 @@ export function useHodPortal() {
     refresh();
   }, [refresh]);
 
+  // No push/websocket infra — poll instead, so a newly-submitted leave (or
+  // a decision made on one elsewhere) shows up here without a manual
+  // reload. See api.ts POLL_INTERVAL_MS.
+  useEffect(() => {
+    const id = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refresh]);
+
   async function approve(id: string, comment?: string) {
     await api.patch(`/hod/leaves/${id}/approve`, { comment });
     await refresh();
@@ -42,9 +50,18 @@ export function useHodPortal() {
     await api.patch(`/hod/leaves/${id}/reject`, { comment });
     await refresh();
   }
+  // Corrects a student's own date/time entry mistake on a leave still
+  // pending the HOD's decision — see leavecontrol.js hodCorrectDateTime.
+  async function correctDateTime(
+    id: string,
+    input: { startDate: string; startTime: string; endDate: string; endTime: string }
+  ) {
+    await api.patch(`/hod/leaves/${id}/datetime`, input);
+    await refresh();
+  }
 
-  async function addEvent(date: string, title: string) {
-    await api.post("/hod/events", { date, title });
+  async function addEvent(date: string, title: string, category: EventCategory) {
+    await api.post("/hod/events", { date, title, category });
     await refresh();
   }
   async function removeEvent(id: string) {
@@ -71,6 +88,7 @@ export function useHodPortal() {
     refresh,
     approve,
     reject,
+    correctDateTime,
     addEvent,
     removeEvent,
     rejectOverlapping,

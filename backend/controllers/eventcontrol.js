@@ -1,10 +1,14 @@
 import Leave from "../models/Leave.js";
-import EventDay from "../models/EventDay.js";
+import EventDay, { EVENT_CATEGORIES } from "../models/EventDay.js";
 import { applyDecision } from "./leavecontrol.js";
 
-// HOD-only: mandatory-attendance calendar days (e.g. a workshop) used to
+// HOD-only calendar: workshop days (mandatory attendance — can be used to
 // bulk-reject every leave currently pending the HOD's decision that
-// overlaps the date, instead of rejecting each one individually.
+// overlaps the date, instead of rejecting each one individually) as well
+// as Poya days, holidays, and no-lecture days (purely informational —
+// nothing to protect, so no bulk-reject action makes sense for those; a
+// Poya day is itself a public holiday, so students are normally free to
+// leave on it).
 
 export const listEvents = async (req, res) => {
   const events = await EventDay.find({ hodId: req.user.id }).sort({ date: 1 });
@@ -12,11 +16,19 @@ export const listEvents = async (req, res) => {
 };
 
 export const createEvent = async (req, res) => {
-  const { date, title } = req.body;
+  const { date, title, category } = req.body;
   if (!date || !title?.trim()) {
     return res.status(400).json({ message: "Date and title are required" });
   }
-  const event = await EventDay.create({ hodId: req.user.id, date, title: title.trim() });
+  if (category && !EVENT_CATEGORIES.includes(category)) {
+    return res.status(400).json({ message: "Invalid category" });
+  }
+  const event = await EventDay.create({
+    hodId: req.user.id,
+    date,
+    title: title.trim(),
+    category: category || "OTHER",
+  });
   res.status(201).json(event);
 };
 

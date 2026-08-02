@@ -28,6 +28,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
   const { pending, history, movements, approve, reject, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.sqnStatus === "Approved" && isToday(l.sqnApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.sqnStatus === "Rejected" && isToday(l.sqnApprovedAt));
+  const emergencyPending = pending.filter((l) => l.priority === "emergency");
+  const otherPending = pending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
@@ -108,62 +110,93 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         />
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending — Awaiting Squadron</h2>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Previous Stage</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No pending applications.
-                </td>
-              </tr>
-            ) : (
-              pending.map((l) => {
-                const isAcademicViaHod = l.troopStatus === "N/A";
-                return (
-                  <tr key={l.id}>
-                    <td>{l.studentName}</td>
-                    <td>{l.indexNumber}</td>
-                    <td>
-                      {LEAVE_TYPE_LABELS[l.type]}
-                      {l.priority === "emergency" && (
-                        <span className="ml-1">
-                          <Badge tone="red">Emergency</Badge>
-                        </span>
-                      )}
-                    </td>
-                    <td>{l.startDate}</td>
-                    <td>{l.endDate}</td>
-                    <td>
-                      <Badge tone="green">{isAcademicViaHod ? "HOD Approved" : "Troop Approved"}</Badge>
-                    </td>
-                    <td className="space-x-1.5 whitespace-nowrap">
-                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                        View
-                      </Button>
-                      <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      {emergencyPending.length > 0 && (
+        <>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
+            🚨 Emergency Leaves <Badge tone="red">{emergencyPending.length}</Badge>
+          </h2>
+          <div className="mb-6">
+            <SquadranPendingTable leaves={emergencyPending} onView={setSelected} onApprove={approve} onReject={reject} />
+          </div>
+        </>
+      )}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
+        {emergencyPending.length > 0 ? "Other Pending — Awaiting Squadron" : "Pending — Awaiting Squadron"}
+      </h2>
+      <SquadranPendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+// Emergency Leave gets its own section above everything else, same
+// reasoning as hod/views.tsx PendingTable.
+function SquadranPendingTable({
+  leaves,
+  onView,
+  onApprove,
+  onReject,
+}: {
+  leaves: LeaveRequest[];
+  onView: (l: LeaveRequest) => void;
+  onApprove: (id: string) => Promise<void>;
+  onReject: (id: string, comment?: string) => Promise<void>;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Index</th>
+            <th>Leave Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Previous Stage</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leaves.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                No pending applications.
+              </td>
+            </tr>
+          ) : (
+            leaves.map((l) => {
+              const isAcademicViaHod = l.troopStatus === "N/A";
+              return (
+                <tr key={l.id}>
+                  <td>{l.studentName}</td>
+                  <td>{l.indexNumber}</td>
+                  <td>
+                    {LEAVE_TYPE_LABELS[l.type]}
+                    {l.priority === "emergency" && (
+                      <span className="ml-1">
+                        <Badge tone="red">Emergency</Badge>
+                      </span>
+                    )}
+                  </td>
+                  <td>{l.startDate}</td>
+                  <td>{l.endDate}</td>
+                  <td>
+                    <Badge tone="green">{isAcademicViaHod ? "HOD Approved" : "Troop Approved"}</Badge>
+                  </td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                      View
+                    </Button>
+                    <ApprovalActions onApprove={() => onApprove(l.id)} onReject={(remarks) => onReject(l.id, remarks)} />
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -180,13 +213,14 @@ export function History({ portal }: { portal: ReturnType<typeof useSquadranPorta
             <th>Leave Type</th>
             <th>From</th>
             <th>Your Decision</th>
+            <th>Reason</th>
             <th>Next Stage</th>
           </tr>
         </thead>
         <tbody>
           {history.length === 0 ? (
             <tr>
-              <td colSpan={5} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
                 No history.
               </td>
             </tr>
@@ -202,6 +236,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSquadranPorta
                 <td>
                   <Badge tone={tone(l.sqnStatus)}>{l.sqnStatus}</Badge>
                 </td>
+                <td className="max-w-[200px] text-[var(--muted)]">{l.sqnComment || "—"}</td>
                 <td className="text-[var(--muted)]">
                   {l.sqnStatus === "Rejected"
                     ? "Not Reached — rejected at Squadron"

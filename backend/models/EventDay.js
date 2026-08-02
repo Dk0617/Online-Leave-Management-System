@@ -1,14 +1,21 @@
 import mongoose from "mongoose";
 
-// A mandatory-attendance day an HOD marks on their calendar (e.g. a
-// workshop) — used to bulk-reject pending leave requests that overlap it
-// instead of the HOD rejecting each one individually. See
-// controllers/eventcontrol.js rejectOverlapping.
+// A day an HOD marks on their calendar — either a mandatory-attendance
+// Workshop, used to bulk-reject pending leave requests that overlap it
+// instead of the HOD rejecting each one individually (see
+// controllers/eventcontrol.js rejectOverlapping), or a purely informational
+// day (a Poya day, a general holiday, or a day with no lectures), which
+// doesn't offer that bulk action since there's nothing mandatory to
+// protect — a Poya day in particular is itself a public holiday, so
+// students are normally free to leave on it, not restricted.
+export const EVENT_CATEGORIES = ["WORKSHOP", "POYA", "HOLIDAY", "NO_LECTURE", "OTHER"];
+
 const eventDaySchema = new mongoose.Schema(
   {
     hodId: { type: mongoose.Schema.Types.ObjectId, ref: "Hod", required: true, index: true },
     date: { type: String, required: true }, // "YYYY-MM-DD"
     title: { type: String, required: true },
+    category: { type: String, enum: EVENT_CATEGORIES, default: "OTHER" },
   },
   { timestamps: true }
 );

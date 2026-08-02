@@ -38,7 +38,6 @@ export default function SquadranPage() {
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user?.designation}
-      locationLabel={user?.designation}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "history" && <History portal={portal} />}

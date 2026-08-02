@@ -15,6 +15,8 @@ import {
   LecturerUnavailability,
   Movement,
   NotificationEntry,
+  PhotoChangeRequest,
+  PhotoChangeRequestStatus,
   RefName,
   Role,
   StaffAccount,
@@ -28,6 +30,12 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
 const TOKEN_KEY = "ols_token";
+
+// No WebSocket/SSE infra in this app — every portal hook polls on this
+// interval instead, so a newly-submitted leave (or a decision made on one)
+// shows up for other roles without anyone having to manually reload the
+// page. 20s balances "feels prompt" against not hammering the API.
+export const POLL_INTERVAL_MS = 20_000;
 
 export class ApiError extends Error {
   status: number;
@@ -155,7 +163,31 @@ export function normalizeStudent(raw: Raw): Student {
     hodId: refName(raw.hodId),
     sqnId: refName(raw.sqnId),
     photo: raw.photo as string | undefined,
+    photoLocked: !!raw.photoLocked,
     mustChangePassword: !!raw.mustChangePassword,
+  };
+}
+
+// Handles both shapes: Admin's list has studentId populated to an object
+// (name/index/current photo for side-by-side comparison); a student's own
+// request list just has the raw id string, no populate needed since they
+// already know who they are.
+export function normalizePhotoChangeRequest(raw: Raw): PhotoChangeRequest {
+  const student = raw.studentId as Raw | string;
+  const studentObj = typeof student === "object" && student !== null ? (student as Raw) : undefined;
+  return {
+    id: String(raw._id ?? raw.id),
+    studentId: String(studentObj?._id ?? student),
+    studentName: studentObj ? `${studentObj.firstName as string} ${studentObj.lastName as string}` : undefined,
+    studentIndexNumber: studentObj?.indexNumber as string | undefined,
+    currentPhoto: studentObj?.photo as string | undefined,
+    requestedPhoto: raw.requestedPhoto as string,
+    reason: raw.reason as string | undefined,
+    status: raw.status as PhotoChangeRequestStatus,
+    decidedBy: raw.decidedBy as string | undefined,
+    decidedAt: raw.decidedAt as string | undefined,
+    decisionReason: raw.decisionReason as string | undefined,
+    createdAt: raw.createdAt as string,
   };
 }
 
@@ -254,6 +286,7 @@ export function normalizeEventDay(raw: Raw): EventDay {
     id: String(raw._id ?? raw.id),
     date: raw.date as string,
     title: raw.title as string,
+    category: (raw.category as EventDay["category"]) ?? "OTHER",
   };
 }
 
@@ -367,20 +400,6 @@ export function isToday(dateStr?: string): boolean {
 // use to exit/re-enter campus.
 export function isGateEligible(leave: LeaveRequest): boolean {
   return isApproved(leave) && leave.type !== "Academic Leave";
-}
-
-// The leave a student is out on right now, if any — mirrors backend
-// gatecontrol.js isCurrentlyValid. Used to show "currently at {address}"
-// in the dashboard header instead of the student's department while
-// they're actually off campus (see DashboardShell's locationLabel).
-export function currentlyOnLeave(leaves: LeaveRequest[]): LeaveRequest | undefined {
-  const now = new Date();
-  return leaves.find((l) => {
-    if (!isGateEligible(l)) return false;
-    const start = new Date(`${l.startDate}T${l.startTime || "00:00"}`);
-    const end = new Date(`${l.endDate}T${l.endTime || "23:59"}`);
-    return now >= start && now <= end;
-  });
 }
 
 // Day Scholar rule is unchanged; Cadets follow a different rule (see

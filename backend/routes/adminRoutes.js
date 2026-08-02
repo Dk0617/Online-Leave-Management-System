@@ -26,6 +26,9 @@ import {
   markNotificationRead,
   listAudit,
   clearAudit,
+  listPhotoRequests,
+  approvePhotoRequest,
+  rejectPhotoRequest,
 } from "../controllers/admincontrol.js";
 import {
   listHodUnavailability,
@@ -81,5 +84,9 @@ router.delete("/hod-unavailability/:id", deleteHodUnavailability);
 router.get("/lecturer-unavailability", listLecturerUnavailability);
 router.post("/lecturer-unavailability", createLecturerUnavailability);
 router.delete("/lecturer-unavailability/:id", deleteLecturerUnavailability);
+
+router.get("/photo-requests", listPhotoRequests);
+router.patch("/photo-requests/:id/approve", approvePhotoRequest);
+router.patch("/photo-requests/:id/reject", rejectPhotoRequest);
 
 export default router;

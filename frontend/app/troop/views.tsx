@@ -33,6 +33,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const rejectedTodayLeaves = history.filter((l) => l.troopStatus === "Rejected" && isToday(l.troopApprovedAt));
   const dsPendingLeaves = allPending.filter((l) => l.studentType === "DAY_SCHOLAR");
   const cdPendingLeaves = allPending.filter((l) => l.studentType === "CADET");
+  const emergencyPending = allPending.filter((l) => l.priority === "emergency");
+  const otherPending = allPending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
@@ -117,66 +119,97 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         />
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">All Pending — Your Troop</h2>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Type</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Stage</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allPending.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No pending applications.
-                </td>
-              </tr>
-            ) : (
-              allPending.map((l) => (
-                <tr key={l.id}>
-                  <td>
-                    {l.studentName}
-                    <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
-                  </td>
-                  <td>
-                    <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
-                      {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
-                    </Badge>
-                  </td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  <td className="text-xs text-[var(--muted)]">
-                    {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
-                  </td>
-                  <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {emergencyPending.length > 0 && (
+        <>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
+            🚨 Emergency Leaves <Badge tone="red">{emergencyPending.length}</Badge>
+          </h2>
+          <div className="mb-6">
+            <TroopPendingTable leaves={emergencyPending} onView={setSelected} onApprove={approve} onReject={reject} />
+          </div>
+        </>
+      )}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
+        {emergencyPending.length > 0 ? "Other Pending — Your Troop" : "All Pending — Your Troop"}
+      </h2>
+      <TroopPendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+// Emergency Leave gets its own section above everything else, same
+// reasoning as hod/views.tsx PendingTable.
+function TroopPendingTable({
+  leaves,
+  onView,
+  onApprove,
+  onReject,
+}: {
+  leaves: LeaveRequest[];
+  onView: (l: LeaveRequest) => void;
+  onApprove: (id: string) => Promise<void>;
+  onReject: (id: string, comment?: string) => Promise<void>;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Type</th>
+            <th>Leave Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Stage</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leaves.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                No pending applications.
+              </td>
+            </tr>
+          ) : (
+            leaves.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  {l.studentName}
+                  <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                </td>
+                <td>
+                  <Badge tone={l.studentType === "CADET" ? "purple" : "blue"}>
+                    {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
+                  </Badge>
+                </td>
+                <td>
+                  {LEAVE_TYPE_LABELS[l.type]}
+                  {l.priority === "emergency" && (
+                    <span className="ml-1">
+                      <Badge tone="red">Emergency</Badge>
+                    </span>
+                  )}
+                </td>
+                <td>{l.startDate}</td>
+                <td>{l.endDate}</td>
+                <td className="text-xs text-[var(--muted)]">
+                  {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
+                </td>
+                <td className="space-x-1.5 whitespace-nowrap">
+                  <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                    View
+                  </Button>
+                  <ApprovalActions onApprove={() => onApprove(l.id)} onReject={(remarks) => onReject(l.id, remarks)} />
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -327,13 +360,14 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
             <th>Leave Type</th>
             <th>From</th>
             <th>Your Decision</th>
+            <th>Reason</th>
             <th>Next Stage</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                 {emptyMessage}
               </td>
             </tr>
@@ -350,6 +384,7 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
                 <td>
                   <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
                 </td>
+                <td className="max-w-[200px] text-xs text-[var(--muted)]">{l.troopComment || "—"}</td>
                 <td className="text-xs text-[var(--muted)]">
                   {l.troopStatus === "Rejected"
                     ? "Not Reached — rejected at Troop"

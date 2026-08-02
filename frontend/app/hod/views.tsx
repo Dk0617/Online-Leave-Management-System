@@ -7,7 +7,13 @@ import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ClickableStatCard } from "@/src/components/exitStats";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
 import { isToday } from "@/src/api";
-import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
+import {
+  EVENT_CATEGORY_LABELS,
+  EventCategory,
+  LEAVE_TYPE_LABELS,
+  LeaveRequest,
+  MANDATORY_EVENT_CATEGORIES,
+} from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function tone(status: string) {
@@ -25,11 +31,18 @@ export function Dashboard({
   // currently covering someone else's queue.
   asLecturer?: boolean;
 }) {
-  const { pending, history, approve, reject, error, refresh } = portal;
+  const { pending, history, approve, reject, correctDateTime, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.hodStatus === "Approved" && isToday(l.hodApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.hodStatus === "Rejected" && isToday(l.hodApprovedAt));
+  const emergencyPending = pending.filter((l) => l.priority === "emergency");
+  const otherPending = pending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
+  const [correcting, setCorrecting] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+  // Date/time correction is an HOD-only action (see hodRoutes.js) — hidden
+  // entirely for a Lecturer covering the queue, rather than exposing a
+  // button that would just 403.
+  const onCorrect = asLecturer ? undefined : setCorrecting;
 
   return (
     <div>
@@ -82,62 +95,204 @@ export function Dashboard({
         />
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending Applications</h2>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Applied</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pending.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No applications.
-                </td>
-              </tr>
-            ) : (
-              pending.map((l) => (
-                <tr key={l.id}>
-                  <td>
-                    {l.studentName}
-                    <div className="text-[10px] text-[var(--muted)]">
-                      {l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}
-                    </div>
-                  </td>
-                  <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td>{l.startDate}</td>
-                  <td>{l.endDate}</td>
-                  <td>{l.appliedDate}</td>
-                  <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {emergencyPending.length > 0 && (
+        <>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
+            🚨 Emergency Leaves <Badge tone="red">{emergencyPending.length}</Badge>
+          </h2>
+          <div className="mb-6">
+            <PendingTable
+              leaves={emergencyPending}
+              onView={setSelected}
+              onApprove={approve}
+              onReject={reject}
+              onCorrect={onCorrect}
+            />
+          </div>
+        </>
+      )}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
+        {emergencyPending.length > 0 ? "Other Pending Applications" : "Pending Applications"}
+      </h2>
+      <PendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} onCorrect={onCorrect} />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
+      {correcting && (
+        <CorrectDateTimeModal
+          leave={correcting}
+          onSave={async (input) => {
+            await correctDateTime(correcting.id, input);
+            setCorrecting(null);
+          }}
+          onClose={() => setCorrecting(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Emergency Leave always gets its own section above everything else — an
+// approver scanning the page shouldn't have to hunt for it mixed in with
+// routine applications. Shared by the emergency and "other" sections above
+// so both render identically apart from which leaves they're given.
+function PendingTable({
+  leaves,
+  onView,
+  onApprove,
+  onReject,
+  onCorrect,
+}: {
+  leaves: LeaveRequest[];
+  onView: (l: LeaveRequest) => void;
+  onApprove: (id: string) => Promise<void>;
+  onReject: (id: string, comment?: string) => Promise<void>;
+  onCorrect?: (l: LeaveRequest) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Index</th>
+            <th>Leave Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Applied</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leaves.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                No applications.
+              </td>
+            </tr>
+          ) : (
+            leaves.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  {l.studentName}
+                  <div className="text-[10px] text-[var(--muted)]">
+                    {l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}
+                  </div>
+                </td>
+                <td>{l.indexNumber}</td>
+                <td>
+                  {LEAVE_TYPE_LABELS[l.type]}
+                  {l.priority === "emergency" && (
+                    <span className="ml-1">
+                      <Badge tone="red">Emergency</Badge>
+                    </span>
+                  )}
+                </td>
+                <td>{l.startDate}</td>
+                <td>{l.endDate}</td>
+                <td>{l.appliedDate}</td>
+                <td className="space-x-1.5 whitespace-nowrap">
+                  <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                    View
+                  </Button>
+                  {onCorrect && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="!px-2.5 !py-1 !text-[11px]"
+                      onClick={() => onCorrect(l)}
+                    >
+                      ✏️ Edit Date/Time
+                    </Button>
+                  )}
+                  <ApprovalActions onApprove={() => onApprove(l.id)} onReject={(remarks) => onReject(l.id, remarks)} />
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Lets the HOD fix a student's date/time entry mistake before approving —
+// e.g. they meant 08:00 not 18:00 — instead of rejecting and making them
+// reapply from scratch. Mirrors the same validation the student's own
+// Apply Leave form uses (see student/views.tsx ApplyLeave), since this is
+// effectively editing that same submission.
+function CorrectDateTimeModal({
+  leave,
+  onSave,
+  onClose,
+}: {
+  leave: LeaveRequest;
+  onSave: (input: { startDate: string; startTime: string; endDate: string; endTime: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [startDate, setStartDate] = useState(leave.startDate);
+  const [startTime, setStartTime] = useState(leave.startTime);
+  const [endDate, setEndDate] = useState(leave.endDate);
+  const [endTime, setEndTime] = useState(leave.endTime);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSave() {
+    if (!/^\d{2}:(00|30)$/.test(startTime) || !/^\d{2}:(00|30)$/.test(endTime)) {
+      setError("Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).");
+      return;
+    }
+    if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
+      setError("End date/time must be after start date/time — they can't be the same.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSave({ startDate, startTime, endDate, endTime });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save the correction");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm">
+      <div className="w-[90%] max-w-[440px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6">
+        <h3 className="mb-1 text-[15px] font-bold text-[var(--white)]">Correct Date/Time</h3>
+        <p className="mb-4 text-xs text-[var(--muted)]">
+          {leave.studentName} ({leave.indexNumber}) — use this only to fix a mistake in what the student
+          entered; it doesn&apos;t change anything else about their application.
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className={styles.label}>Start Date</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>Start Time</label>
+            <input type="time" step={1800} value={startTime} onChange={(e) => setStartTime(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>End Date</label>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>End Time</label>
+            <input type="time" step={1800} value={endTime} onChange={(e) => setEndTime(e.target.value)} className={styles.input} />
+          </div>
+        </div>
+        {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" onClick={handleSave} disabled={submitting}>
+            {submitting ? "Saving…" : "Save Correction"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -162,13 +317,14 @@ function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; empt
             <th>From</th>
             <th>To</th>
             <th>Your Decision</th>
+            <th>Reason</th>
             <th>Next Stage</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
                 {emptyMessage}
               </td>
             </tr>
@@ -188,6 +344,7 @@ function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; empt
                   <td>
                     <Badge tone={tone(l.hodStatus)}>{l.hodStatus}</Badge>
                   </td>
+                  <td className="max-w-[200px] text-[var(--muted)]">{l.hodComment || "—"}</td>
                   <td className="text-[var(--muted)]">
                     {l.hodStatus === "Rejected" ? (
                       <Badge tone="gray">Not Reached — rejected at HOD</Badge>
@@ -262,8 +419,72 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
+// Only Workshop is mandatory-attendance (red — the one worth protecting
+// with the bulk-reject action). Poya Day is a public holiday in its own
+// right, so it's colored the same green as Holiday, not red — students
+// are normally free to leave on it, nothing to restrict.
+const CATEGORY_CELL_CLASS: Record<EventCategory, string> = {
+  WORKSHOP: "border-[var(--err)] bg-[rgba(239,68,68,0.12)] text-[var(--err)]",
+  POYA: "border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]",
+  HOLIDAY: "border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]",
+  NO_LECTURE: "border-[var(--sky)] bg-[rgba(74,144,217,0.12)] text-[var(--sky)]",
+  OTHER: "border-[var(--border)] bg-[rgba(148,163,184,0.12)] text-[var(--muted)]",
+};
+const CATEGORY_BADGE_TONE: Record<EventCategory, "red" | "green" | "blue" | "gray"> = {
+  WORKSHOP: "red",
+  POYA: "green",
+  HOLIDAY: "green",
+  NO_LECTURE: "blue",
+  OTHER: "gray",
+};
+
+// Sourced from PublicHolidays.lk and CalendarLabs.com (cross-checked
+// against each other) — the "Add Sri Lanka Public Holidays" button below
+// bulk-adds these in one click instead of the HOD marking a dozen-plus
+// Poya days and national holidays by hand every year.
+const SRI_LANKA_2026_HOLIDAYS: { date: string; title: string; category: EventCategory }[] = [
+  { date: "2026-01-03", title: "Duruthu Full Moon Poya Day", category: "POYA" },
+  { date: "2026-01-15", title: "Tamil Thai Pongal Day", category: "HOLIDAY" },
+  { date: "2026-02-01", title: "Nawam Full Moon Poya Day", category: "POYA" },
+  { date: "2026-02-04", title: "Independence Day", category: "HOLIDAY" },
+  { date: "2026-02-15", title: "Mahasivarathri Day", category: "HOLIDAY" },
+  { date: "2026-03-02", title: "Madin Full Moon Poya Day", category: "POYA" },
+  { date: "2026-03-21", title: "Id-Ul-Fitr", category: "HOLIDAY" },
+  { date: "2026-04-01", title: "Bak Full Moon Poya Day", category: "POYA" },
+  { date: "2026-04-03", title: "Good Friday", category: "HOLIDAY" },
+  { date: "2026-04-13", title: "Day Prior to Sinhala & Tamil New Year", category: "HOLIDAY" },
+  { date: "2026-04-14", title: "Sinhala and Tamil New Year Day", category: "HOLIDAY" },
+  { date: "2026-05-01", title: "May Day / Vesak Full Moon Poya Day", category: "POYA" },
+  { date: "2026-05-02", title: "Day Following Vesak Full Moon Poya Day", category: "HOLIDAY" },
+  { date: "2026-05-28", title: "Id-Ul-Alha", category: "HOLIDAY" },
+  { date: "2026-05-30", title: "Adhi Full Moon Poya Day", category: "POYA" },
+  { date: "2026-06-29", title: "Poson Full Moon Poya Day", category: "POYA" },
+  { date: "2026-07-29", title: "Esala Full Moon Poya Day", category: "POYA" },
+  { date: "2026-08-26", title: "Milad-un-Nabi", category: "HOLIDAY" },
+  { date: "2026-08-27", title: "Nikini Full Moon Poya Day", category: "POYA" },
+  { date: "2026-09-26", title: "Binara Full Moon Poya Day", category: "POYA" },
+  { date: "2026-10-25", title: "Vap Full Moon Poya Day", category: "POYA" },
+  { date: "2026-11-08", title: "Deepavali Festival Day", category: "HOLIDAY" },
+  { date: "2026-11-24", title: "Il Full Moon Poya Day", category: "POYA" },
+  { date: "2026-12-23", title: "Unduvap Full Moon Poya Day", category: "POYA" },
+  { date: "2026-12-25", title: "Christmas Day", category: "HOLIDAY" },
+];
+
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// A day on the calendar, whichever source it came from: a Sri Lanka Poya
+// day/national holiday (fixed, read-only, always present — see
+// SRI_LANKA_2026_HOLIDAYS below) or a Workshop the HOD marked themselves
+// (editable, backed by a real EventDay document). The HOD has no part in
+// entering or maintaining the national ones — those just show up.
+interface CalendarEntry {
+  date: string;
+  title: string;
+  category: EventCategory;
+  isSystem: boolean;
+  id?: string; // only set for the HOD's own (real EventDay _id)
 }
 
 export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
@@ -272,6 +493,7 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<EventCategory>("WORKSHOP");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -281,7 +503,20 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   const month = cursor.getMonth();
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const eventsByDate = new Map(events.map((e) => [e.date, e]));
+
+  // Sri Lanka's national Poya/holiday calendar first, then the HOD's own
+  // Workshop days layered on top — the HOD's own entry wins on the rare
+  // date where both would otherwise collide, since it's the more specific,
+  // actionable one.
+  const eventsByDate = new Map<string, CalendarEntry>();
+  for (const h of SRI_LANKA_2026_HOLIDAYS) {
+    eventsByDate.set(h.date, { ...h, isSystem: true });
+  }
+  for (const e of events) {
+    eventsByDate.set(e.date, { date: e.date, title: e.title, category: e.category, isSystem: false, id: e.id });
+  }
+  const sortedEntries = Array.from(eventsByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+
   const cells: (number | null)[] = [
     ...Array(firstWeekday).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -293,8 +528,9 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     setSubmitting(true);
     setError(null);
     try {
-      await addEvent(selectedDate, title.trim());
+      await addEvent(selectedDate, title.trim(), category);
       setTitle("");
+      setCategory("WORKSHOP");
       setSelectedDate(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add event");
@@ -332,11 +568,13 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Event Calendar:</strong> Mark mandatory-attendance days here — e.g. a workshop every
-        student in your department must attend. Any Day Scholar or Officer Cadet Academic Leave still
-        pending your decision that overlaps that date can then be reviewed and rejected in bulk — you&apos;ll
-        see the full list first and can exclude specific requests (e.g. an Emergency Leave) before
-        confirming.
+        <strong>Event Calendar:</strong> Sri Lanka&apos;s Poya days and national holidays (niwadu dawasa)
+        are shown here automatically — nothing for you to add or maintain. You can additionally mark a
+        mandatory <strong>Workshop</strong> day yourself: any Day Scholar or Officer Cadet Academic Leave
+        still pending your decision that overlaps that date can then be reviewed and rejected in bulk —
+        you&apos;ll see the full list first and can exclude specific requests (Emergency Leave is excluded
+        by default) before confirming. Poya/Holiday days are informational only — students are normally
+        free to leave on those anyway.
       </div>
 
       <Card className="mb-6 max-w-lg p-5">
@@ -377,10 +615,10 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                 key={i}
                 type="button"
                 onClick={() => setSelectedDate(date)}
-                title={event?.title}
+                title={event ? `${event.title} (${EVENT_CATEGORY_LABELS[event.category]})` : undefined}
                 className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1 text-xs transition-all ${
                   event
-                    ? "border-[var(--err)] bg-[rgba(239,68,68,0.12)] font-bold text-[var(--err)]"
+                    ? `font-bold ${CATEGORY_CELL_CLASS[event.category]}`
                     : isToday
                     ? "border-[var(--sky)] text-[var(--sky)]"
                     : "border-[var(--border)] text-[var(--white)] hover:bg-[rgba(74,144,217,0.08)]"
@@ -403,7 +641,8 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
           <h3 className="mb-3 text-sm font-bold text-[var(--white)]">{selectedDate}</h3>
           {eventsByDate.has(selectedDate) ? (
             <p className="text-xs text-[var(--muted)]">
-              Already marked: {eventsByDate.get(selectedDate)!.title}
+              {eventsByDate.get(selectedDate)!.isSystem ? "Sri Lanka calendar: " : "Already marked: "}
+              {eventsByDate.get(selectedDate)!.title} ({EVENT_CATEGORY_LABELS[eventsByDate.get(selectedDate)!.category]})
             </p>
           ) : (
             <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
@@ -416,6 +655,20 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Mandatory Workshop"
                 />
+              </div>
+              <div className="min-w-[180px]">
+                <label className={styles.label}>Category</label>
+                <select
+                  className={styles.input}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as EventCategory)}
+                >
+                  {Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <Button type="submit" disabled={submitting || !title.trim()}>
                 {submitting ? "Adding…" : "Mark as Event Day"}
@@ -441,44 +694,61 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
             <tr>
               <th>Date</th>
               <th>Title</th>
+              <th>Category</th>
               <th>Pending Overlaps</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {events.length === 0 ? (
+            {sortedEntries.length === 0 ? (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-[var(--muted)]">
-                  No event days marked yet.
+                <td colSpan={5} className="py-8 text-center text-[var(--muted)]">
+                  No event days.
                 </td>
               </tr>
             ) : (
-              events.map((e) => {
+              sortedEntries.map((e) => {
                 const count = overlappingLeaves(e.date).length;
+                const isMandatory = !e.isSystem && MANDATORY_EVENT_CATEGORIES.includes(e.category);
                 return (
-                  <tr key={e.id}>
+                  <tr key={e.isSystem ? `system-${e.date}` : e.id}>
                     <td>{e.date}</td>
                     <td>{e.title}</td>
                     <td>
-                      <Badge tone={count > 0 ? "amber" : "gray"}>{count}</Badge>
+                      <Badge tone={CATEGORY_BADGE_TONE[e.category]}>{EVENT_CATEGORY_LABELS[e.category]}</Badge>
+                    </td>
+                    <td>
+                      {isMandatory ? (
+                        <Badge tone={count > 0 ? "amber" : "gray"}>{count}</Badge>
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">—</span>
+                      )}
                     </td>
                     <td className="space-x-1.5 whitespace-nowrap">
-                      <Button
-                        variant="danger"
-                        className="!px-2.5 !py-1 !text-[11px]"
-                        disabled={count === 0 || rejectingId === e.id}
-                        onClick={() => setReviewEvent({ id: e.id, date: e.date, title: e.title })}
-                      >
-                        {rejectingId === e.id ? "Rejecting…" : `Review & Reject (${count})`}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="!px-2.5 !py-1 !text-[11px]"
-                        onClick={() => removeEvent(e.id)}
-                      >
-                        Remove
-                      </Button>
+                      {e.isSystem ? (
+                        <Badge tone="gray">Sri Lanka Calendar</Badge>
+                      ) : (
+                        <>
+                          {isMandatory && (
+                            <Button
+                              variant="danger"
+                              className="!px-2.5 !py-1 !text-[11px]"
+                              disabled={count === 0 || rejectingId === e.id}
+                              onClick={() => setReviewEvent({ id: e.id!, date: e.date, title: e.title })}
+                            >
+                              {rejectingId === e.id ? "Rejecting…" : `Review & Reject (${count})`}
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="!px-2.5 !py-1 !text-[11px]"
+                            onClick={() => removeEvent(e.id!)}
+                          >
+                            Remove
+                          </Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
@@ -520,7 +790,13 @@ function ReviewRejectModal({
   onConfirm: (leaveIds: string[]) => void;
   onClose: () => void;
 }) {
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  // Emergency Leave is exempt from mandatory-event blocking by default — a
+  // genuine emergency still has to go out even on a workshop day — so it
+  // starts pre-excluded (kept) here. The HOD can still manually check one
+  // back in if they really do want to reject it too.
+  const [excluded, setExcluded] = useState<Set<string>>(
+    () => new Set(leaves.filter((l) => l.priority === "emergency").map((l) => l.id))
+  );
 
   function toggle(id: string) {
     setExcluded((prev) => {
@@ -541,8 +817,9 @@ function ReviewRejectModal({
             Review Before Rejecting — {event.title}
           </h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            {event.date} · Uncheck any leave you want to keep (e.g. an Emergency Leave) — it will stay
-            pending and continue on normally. Everything left checked gets rejected.
+            {event.date} · Emergency Leave is unchecked by default — it stays valid on a mandatory event
+            day and will continue on normally. Uncheck anything else you want to keep too. Everything left
+            checked gets rejected.
           </p>
         </div>
         <div className="px-6 py-4">

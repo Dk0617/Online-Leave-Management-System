@@ -4,6 +4,7 @@ import Leave from "../models/Leave.js";
 import Movement from "../models/Movement.js";
 import Hod from "../models/HOD.js";
 import Troop from "../models/Troop.js";
+import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import { writeAudit } from "../utils/audit.js";
 
 // Academic Leave never requires a supporting document, for either student
@@ -144,6 +145,9 @@ export const applyLeave = async (req, res) => {
     return res
       .status(400)
       .json({ message: "End date/time must be after start date/time — they can't be the same" });
+  }
+  if (new Date(`${startDate}T${startTime}`) < new Date()) {
+    return res.status(400).json({ message: "Start date/time can't be in the past" });
   }
   if (attachmentData && Buffer.byteLength(attachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
     return res.status(400).json({ message: "Attachment too large (max 2MB)" });
@@ -295,19 +299,18 @@ export const getProfile = async (req, res) => {
   res.json(student);
 };
 
-// Email, like indexNumber/department/studentType, is fixed once the
-// account is created — it's tied to OTP-based login, so letting a student
-// change it themselves would let them silently lock themselves out (or
-// hijack another account's OTP login) with no admin oversight. Only Admin
-// can change it, via updateStudent. Deliberately not read from req.body
-// here, same reasoning as the fields admincontrol.js already locks down.
+// firstName/lastName/email/indexNumber/department/studentType are all
+// fixed once the account is created — email is tied to OTP-based login (a
+// self-change could lock the student out or hijack another account's OTP
+// login), and name changes should go through Admin so the record stays
+// consistent with official documents. Mobile is the only field a student
+// can update themselves. Deliberately not read from req.body here, same
+// reasoning as the fields admincontrol.js already locks down.
 export const updateProfile = async (req, res) => {
-  const { firstName, lastName, mobile } = req.body;
+  const { mobile } = req.body;
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
 
-  if (firstName) student.firstName = firstName;
-  if (lastName) student.lastName = lastName;
   if (mobile) {
     if (!/^\d{10}$/.test(mobile)) {
       return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
@@ -322,12 +325,42 @@ export const updateProfile = async (req, res) => {
   res.json(safe);
 };
 
-export const updatePhoto = async (req, res) => {
-  const { photo } = req.body; // base64 data URL, already downscaled client-side
-  const student = await Student.findById(req.user.id);
-  if (!student) return res.status(404).json({ message: "Student not found" });
+// A student's initial (unlocked) photo set goes through the generic
+// /auth/photo route (logauthcontrol.js updateMyPhoto — shared by every
+// role, and what the dashboard-header avatar itself uses) rather than a
+// separate student-only endpoint, so the header updates immediately
+// instead of only on next login. That route enforces the same
+// photoLocked-after-first-set rule for students. Anything after that goes
+// through requestPhotoChange below for Admin approval instead.
 
-  student.photo = photo || undefined;
-  await student.save();
-  res.json({ message: "Photo updated" });
+// Submits a new photo for Admin approval — doesn't touch Student.photo
+// itself until admincontrol.js approvePhotoRequest does. Only one pending
+// request at a time so a student can't spam duplicates while waiting.
+export const requestPhotoChange = async (req, res) => {
+  const { photo, reason } = req.body;
+  if (!photo) return res.status(400).json({ message: "A new photo is required" });
+
+  const existing = await PhotoChangeRequest.findOne({ studentId: req.user.id, status: "PENDING" });
+  if (existing) {
+    return res
+      .status(409)
+      .json({ message: "You already have a photo change request awaiting Admin approval." });
+  }
+
+  const request = await PhotoChangeRequest.create({
+    studentId: req.user.id,
+    requestedPhoto: photo,
+    reason: reason?.trim() || undefined,
+  });
+  await writeAudit("STUDENT", req.user.name, "photo_change_requested", `student=${req.user.id}`);
+  res.status(201).json(request);
+};
+
+// The student's own request history, newest first — lets My Profile show
+// whether they have one pending/recently decided.
+export const myPhotoRequests = async (req, res) => {
+  const requests = await PhotoChangeRequest.find({ studentId: req.user.id })
+    .sort({ createdAt: -1 })
+    .limit(5);
+  res.json(requests);
 };

@@ -266,6 +266,47 @@ export const hod = buildRoleHandlers({
   scopeFilter: hodScopeFilter,
 });
 
+// Lets the HOD correct a student's own date/time entry mistake (e.g. they
+// meant 08:00 not 18:00) before approving, instead of having to reject and
+// send them back to reapply. Only touches a leave still Pending at the HOD
+// stage — once decided, the record should reflect what was actually
+// approved/rejected, not be editable after the fact. Cascades to the
+// linked Academic+Personal Leave companion (see studentcontrol.js
+// createLinkedPersonalLeave) since they're meant to share the same dates.
+export const hodCorrectDateTime = async (req, res) => {
+  const { startDate, startTime, endDate, endTime } = req.body;
+  if (!startDate || !startTime || !endDate || !endTime) {
+    return res.status(400).json({ message: "Start/end date and time are all required" });
+  }
+  if (!/^\d{2}:(00|30)$/.test(startTime) || !/^\d{2}:(00|30)$/.test(endTime)) {
+    return res.status(400).json({
+      message: "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).",
+    });
+  }
+  if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
+    return res.status(400).json({ message: "End date/time must be after start date/time — they can't be the same" });
+  }
+
+  const leave = await Leave.findOne({ _id: req.params.id, hodId: req.user.id });
+  if (!leave) return res.status(404).json({ message: "Leave not found" });
+  if (leave.hodStatus !== "Pending") {
+    return res.status(403).json({ message: "This leave is not pending your decision" });
+  }
+
+  leave.startDate = startDate;
+  leave.startTime = startTime;
+  leave.endDate = endDate;
+  leave.endTime = endTime;
+  await leave.save();
+
+  if (leave.linkedLeaveId) {
+    await Leave.findByIdAndUpdate(leave.linkedLeaveId, { startDate, startTime, endDate, endTime });
+  }
+
+  await writeAudit("HOD", req.user.name, "leave_datetime_corrected", `leave id=${leave._id}`);
+  res.json(leave);
+};
+
 // ── Squadron Commander — Cadet leaves. Normally only after Troop has
 // approved; Academic Leave skips Troop entirely and goes through HOD
 // instead (troopStatus stays "N/A", hodStatus carries the first-stage

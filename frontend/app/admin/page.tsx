@@ -4,7 +4,18 @@ import { useState } from "react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { MyProfile } from "@/src/components/MyProfile";
 import { useAdminPortal } from "@/src/hooks/useAdminPortal";
-import { Dashboard, Intakes, Students, StaffRole, Troop, PasswordChanges, AuditLog, Lecturers, HodCover } from "./views";
+import {
+  Dashboard,
+  Intakes,
+  Students,
+  StaffRole,
+  Troop,
+  PasswordChanges,
+  AuditLog,
+  Lecturers,
+  HodCover,
+  PhotoRequests,
+} from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
@@ -17,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "squadran", label: "Squadron Commander", icon: "⚔️" },
   { key: "sdd", label: "Senior Deputy Dean", icon: "⭐" },
   { key: "gate", label: "Gate Staff", icon: "🚧" },
+  { key: "photoRequests", label: "Photo Requests", icon: "🖼️" },
   { key: "profile", label: "My Profile", icon: "👤" },
   { key: "passwords", label: "Password Changes", icon: "🔑" },
   { key: "audit", label: "Audit Log", icon: "🛡️" },
@@ -33,6 +45,7 @@ const TITLES: Record<string, string> = {
   squadran: "Squadron Commander",
   sdd: "Senior Deputy Dean",
   gate: "Gate Staff",
+  photoRequests: "Photo Requests",
   profile: "My Profile",
   passwords: "Password Changes",
   audit: "Audit Log",
@@ -49,7 +62,6 @@ export default function AdminPage() {
       navItems={NAV_ITEMS}
       activeView={view}
       onNavigate={setView}
-      locationLabel="Administration"
     >
       {view === "dashboard" && <Dashboard portal={portal} />}
       {view === "intakes" && <Intakes portal={portal} />}
@@ -63,6 +75,7 @@ export default function AdminPage() {
       )}
       {view === "gate" && <StaffRole portal={portal} role="GATE" title="Gate Staff" extraLabel="Post" extraPlaceholder="e.g. Main Gate" />}
       {view === "troop" && <Troop portal={portal} />}
+      {view === "photoRequests" && <PhotoRequests portal={portal} />}
       {view === "profile" && <MyProfile />}
       {view === "passwords" && <PasswordChanges portal={portal} />}
       {view === "audit" && <AuditLog portal={portal} />}

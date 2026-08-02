@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave, normalizeMovement } from "@/src/api";
+import { api, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
 import { LeaveRequest, Movement } from "@/src/types";
 
 export interface VerifyResult {
@@ -37,6 +37,14 @@ export function useGatePortal() {
 
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // No push/websocket infra — poll instead, so a newly-approved leave (or
+  // a movement logged at another gate terminal) shows up here without a
+  // manual reload. See api.ts POLL_INTERVAL_MS.
+  useEffect(() => {
+    const id = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, [refresh]);
 
   async function verify(indexNumber: string): Promise<VerifyResult> {

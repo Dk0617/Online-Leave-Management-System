@@ -137,13 +137,14 @@ export function History({ portal }: { portal: ReturnType<typeof useSddPortal> })
             <th>Leave Type</th>
             <th>From</th>
             <th>Your Decision</th>
+            <th>Reason</th>
             <th>Date</th>
           </tr>
         </thead>
         <tbody>
           {history.length === 0 ? (
             <tr>
-              <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                 No history.
               </td>
             </tr>
@@ -157,6 +158,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSddPortal> })
                 <td>
                   <Badge tone={tone(l.sddStatus)}>{l.sddStatus}</Badge>
                 </td>
+                <td className="max-w-[200px] text-[var(--muted)]">{l.sddComment || "—"}</td>
                 <td className="text-[var(--muted)]">{l.sddApprovedAt || "—"}</td>
               </tr>
             ))

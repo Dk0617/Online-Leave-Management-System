@@ -6,7 +6,8 @@ import {
   leaveMovements,
   getProfile,
   updateProfile,
-  updatePhoto,
+  requestPhotoChange,
+  myPhotoRequests,
 } from "../controllers/studentcontrol.js";
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.get("/leaves/:leaveId/movements", leaveMovements);
 
 router.get("/profile", getProfile);
 router.patch("/profile", updateProfile);
-router.patch("/photo", updatePhoto);
+router.post("/photo-request", requestPhotoChange);
+router.get("/photo-requests", myPhotoRequests);
 
 export default router;
