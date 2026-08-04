@@ -5,6 +5,7 @@ import { Card, StatTile, Badge, Button, Toast } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
+import { TimeSelect } from "@/src/components/TimeSelect";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { isToday } from "@/src/api";
@@ -322,7 +323,7 @@ function CorrectDateTimeModal({
           </div>
           <div>
             <label className={styles.label}>Start Time</label>
-            <input type="time" step={1800} value={startTime} onChange={(e) => setStartTime(e.target.value)} className={styles.input} />
+            <TimeSelect value={startTime} onChange={setStartTime} className={styles.input} />
           </div>
           <div>
             <label className={styles.label}>End Date</label>
@@ -330,7 +331,7 @@ function CorrectDateTimeModal({
           </div>
           <div>
             <label className={styles.label}>End Time</label>
-            <input type="time" step={1800} value={endTime} onChange={(e) => setEndTime(e.target.value)} className={styles.input} />
+            <TimeSelect value={endTime} onChange={setEndTime} className={styles.input} />
           </div>
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
@@ -545,11 +546,9 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<EventCategory>("WORKSHOP");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const isMandatoryCategory = MANDATORY_EVENT_CATEGORIES.includes(category);
   const [error, setError] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
@@ -588,20 +587,23 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!selectedDate || !title.trim()) return;
-    if (isMandatoryCategory && (!startTime || !endTime)) {
-      setError("Start time and end time are required for a mandatory event.");
+    if (!startTime || !endTime) {
+      setError("Start time and end time are required.");
       return;
     }
-    if (isMandatoryCategory && endTime <= startTime) {
+    if (endTime <= startTime) {
       setError("End time must be after start time.");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      await addEvent(selectedDate, title.trim(), category, isMandatoryCategory ? startTime : undefined, isMandatoryCategory ? endTime : undefined);
+      // Every event an HOD marks is a mandatory Workshop — that's the only
+      // category with real effect (blocking student leave applications
+      // during its hours); the informational ones (Poya/Holiday/No Lecture)
+      // are already covered by the auto-populated Sri Lanka calendar below.
+      await addEvent(selectedDate, title.trim(), startTime, endTime);
       setTitle("");
-      setCategory("WORKSHOP");
       setStartTime("");
       setEndTime("");
       setSelectedDate(null);
@@ -750,44 +752,14 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                   placeholder="e.g. Mandatory Workshop"
                 />
               </div>
-              <div className="min-w-[180px]">
-                <label className={styles.label}>Category</label>
-                <select
-                  className={styles.input}
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as EventCategory)}
-                >
-                  {Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+              <div className="min-w-[130px]">
+                <label className={styles.label}>Start Time</label>
+                <TimeSelect value={startTime} onChange={setStartTime} className={styles.input} />
               </div>
-              {isMandatoryCategory && (
-                <>
-                  <div className="min-w-[130px]">
-                    <label className={styles.label}>Start Time</label>
-                    <input
-                      type="time"
-                      step={1800}
-                      className={styles.input}
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                    />
-                  </div>
-                  <div className="min-w-[130px]">
-                    <label className={styles.label}>End Time</label>
-                    <input
-                      type="time"
-                      step={1800}
-                      className={styles.input}
-                      value={endTime}
-                      onChange={(e) => setEndTime(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
+              <div className="min-w-[130px]">
+                <label className={styles.label}>End Time</label>
+                <TimeSelect value={endTime} onChange={setEndTime} className={styles.input} />
+              </div>
               <Button type="submit" disabled={submitting || !title.trim()}>
                 {submitting ? "Adding…" : "Mark as Event Day"}
               </Button>

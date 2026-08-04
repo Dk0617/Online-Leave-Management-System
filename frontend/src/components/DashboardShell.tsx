@@ -1,10 +1,9 @@
 "use client";
 
-import { ChangeEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthUser, Role } from "@/src/types";
 import { useAuth } from "@/src/AuthContext";
-import { PhotoCropModal } from "@/src/components/PhotoCropModal";
 import { Button } from "@/src/components/ui";
 
 export interface NavItem {
@@ -22,48 +21,12 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-// The header's own avatar — clicking it pops up the current photo (not the
-// OS file picker); "Change Photo" inside that popup is the deliberate next
-// step that opens the file picker, then a crop step to position it (shared
-// self-service endpoint, see logauthcontrol.js updateMyPhoto), instead of
-// needing a dedicated Profile page like Students already have.
+// The header's own avatar — clicking it just pops up the current photo,
+// view-only (no "Change Photo" here); every role changes their photo from
+// their own Profile page instead (Students: app/student/views.tsx Profile;
+// everyone else: MyProfile.tsx, both reachable from the nav).
 function HeaderAvatar({ user }: { user: AuthUser }) {
-  const { updatePhoto } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [pickedFile, setPickedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
-      setError("Please upload a JPG or PNG image.");
-      return;
-    }
-    if (file.size > 1.5 * 1024 * 1024) {
-      setError("Photo too large — under 1.5MB please.");
-      return;
-    }
-    setError(null);
-    setPreviewOpen(false);
-    setPickedFile(file);
-  }
-
-  async function handleCropConfirm(dataUrl: string) {
-    setPickedFile(null);
-    setUploading(true);
-    setError(null);
-    try {
-      await updatePhoto(dataUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update photo");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   return (
     <div className="relative">
@@ -73,24 +36,12 @@ function HeaderAvatar({ user }: { user: AuthUser }) {
         onClick={() => setPreviewOpen(true)}
         className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-xs font-bold text-white"
       >
-        {uploading ? "…" : user.photo ? (
+        {user.photo ? (
           <img src={user.photo} alt={user.name} className="h-full w-full object-cover" />
         ) : (
           initialsOf(user.name)
         )}
       </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg"
-        className="hidden"
-        onChange={handleFileSelected}
-      />
-      {error && (
-        <div className="absolute right-0 top-11 z-20 w-52 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[var(--card)] p-2 text-[10px] leading-snug text-[var(--err)] shadow-lg">
-          {error}
-        </div>
-      )}
       {previewOpen && (
         <div
           className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm"
@@ -108,19 +59,11 @@ function HeaderAvatar({ user }: { user: AuthUser }) {
               )}
             </div>
             <div className="mb-4 text-sm font-bold text-[var(--white)]">{user.name}</div>
-            <div className="flex justify-center gap-2">
-              <Button variant="ghost" onClick={() => setPreviewOpen(false)}>
-                Close
-              </Button>
-              <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
-                📷 Change Photo
-              </Button>
-            </div>
+            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>
+              ✕ Close
+            </Button>
           </div>
         </div>
-      )}
-      {pickedFile && (
-        <PhotoCropModal file={pickedFile} onCancel={() => setPickedFile(null)} onConfirm={handleCropConfirm} />
       )}
     </div>
   );

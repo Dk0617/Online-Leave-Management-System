@@ -1,5 +1,5 @@
 import Leave from "../models/Leave.js";
-import EventDay, { EVENT_CATEGORIES, MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
+import EventDay from "../models/EventDay.js";
 import { applyDecision } from "./leavecontrol.js";
 
 // A blocked event day defaults to the full day (00:00-23:59) when it has no
@@ -25,39 +25,34 @@ export const listEvents = async (req, res) => {
   res.json(events);
 };
 
+// Every event an HOD marks is a mandatory Workshop — the only category
+// with any real effect (blocking student leave applications during its
+// hours). The informational categories (Poya/Holiday/No Lecture/Other)
+// still exist on the model/schema for older entries and the read-only Sri
+// Lanka calendar shown on the frontend, but are no longer choosable here.
 export const createEvent = async (req, res) => {
-  const { date, title, category, startTime, endTime } = req.body;
+  const { date, title, startTime, endTime } = req.body;
   if (!date || !title?.trim()) {
     return res.status(400).json({ message: "Date and title are required" });
   }
-  if (category && !EVENT_CATEGORIES.includes(category)) {
-    return res.status(400).json({ message: "Invalid category" });
+  if (!startTime || !endTime) {
+    return res.status(400).json({ message: "Start time and end time are required." });
   }
-  const resolvedCategory = category || "OTHER";
-  // Only mandatory categories (Workshop) actually block students, so only
-  // those require a real time window — informational categories (Poya,
-  // Holiday, etc.) stay whole-day/no-time as before.
-  const isMandatory = MANDATORY_EVENT_CATEGORIES.includes(resolvedCategory);
-  if (isMandatory) {
-    if (!startTime || !endTime) {
-      return res.status(400).json({ message: "Start time and end time are required for a mandatory event." });
-    }
-    if (!/^\d{2}:(00|30)$/.test(startTime) || !/^\d{2}:(00|30)$/.test(endTime)) {
-      return res.status(400).json({
-        message: "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).",
-      });
-    }
-    if (endTime <= startTime) {
-      return res.status(400).json({ message: "End time must be after start time." });
-    }
+  if (!/^\d{2}:(00|30)$/.test(startTime) || !/^\d{2}:(00|30)$/.test(endTime)) {
+    return res.status(400).json({
+      message: "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).",
+    });
+  }
+  if (endTime <= startTime) {
+    return res.status(400).json({ message: "End time must be after start time." });
   }
   const event = await EventDay.create({
     hodId: req.user.id,
     date,
     title: title.trim(),
-    category: resolvedCategory,
-    startTime: isMandatory ? startTime : undefined,
-    endTime: isMandatory ? endTime : undefined,
+    category: "WORKSHOP",
+    startTime,
+    endTime,
   });
   res.status(201).json(event);
 };

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, normalizeEventDay, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
-import { EventCategory, EventDay, LeaveRequest, Movement } from "@/src/types";
+import { EventDay, LeaveRequest, Movement } from "@/src/types";
 
 export function useHodPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
@@ -63,17 +63,11 @@ export function useHodPortal() {
     await refresh();
   }
 
-  // startTime/endTime are only required (and only meaningful) for a
-  // mandatory category (Workshop) — see backend/controllers/eventcontrol.js
-  // createEvent.
-  async function addEvent(
-    date: string,
-    title: string,
-    category: EventCategory,
-    startTime?: string,
-    endTime?: string
-  ) {
-    await api.post("/hod/events", { date, title, category, startTime, endTime });
+  // Every HOD-marked event is a mandatory Workshop — see
+  // backend/controllers/eventcontrol.js createEvent — so startTime/endTime
+  // are always required.
+  async function addEvent(date: string, title: string, startTime: string, endTime: string) {
+    await api.post("/hod/events", { date, title, startTime, endTime });
     await refresh();
   }
   async function removeEvent(id: string) {

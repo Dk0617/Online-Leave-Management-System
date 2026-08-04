@@ -8,7 +8,7 @@ import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
-import { isApproved, isToday } from "@/src/api";
+import { isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -18,12 +18,6 @@ function tone(status: string) {
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
-}
-
-function tomorrowStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
 }
 
 export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
@@ -42,7 +36,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const { toast, notify } = useDecisionToast();
 
   const today = todayStr();
-  const tomorrow = tomorrowStr();
   const todayExitEntries: ExitEntry[] = movements
     .filter((m) => m.direction === "Exit" && m.timestamp.startsWith(today))
     .map((m) => ({
@@ -54,19 +47,8 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       direction: "Exit",
       timestamp: m.timestamp,
     }));
-  const tomorrowExitEntries: ExitEntry[] = history
-    .filter((l) => isApproved(l) && l.startDate === tomorrow)
-    .map((l) => ({
-      id: l.id,
-      indexNumber: l.indexNumber,
-      studentName: l.studentName,
-      studentType: l.studentType,
-      department: l.department,
-      direction: "Exit",
-      plannedDate: `${l.startDate} ${l.startTime}`,
-    }));
   // Students who've actually returned to campus today, from the real gate
-  // movement log — not a forecast, unlike tomorrowExitEntries above.
+  // movement log.
   const todayEntryEntries: ExitEntry[] = movements
     .filter((m) => m.direction === "Entry" && m.timestamp.startsWith(today))
     .map((m) => ({
@@ -131,9 +113,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Troop", entries: todayExitEntries })}>
           <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
-        </ClickableStatCard>
-        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow — Your Troop", entries: tomorrowExitEntries })}>
-          <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today — Your Troop", entries: todayEntryEntries })}>
           <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />

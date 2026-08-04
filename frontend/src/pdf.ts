@@ -165,14 +165,8 @@ export async function downloadLeavePassPdf(
   doc.setFontSize(6);
   doc.text("STUDENT PHOTO", boxX + boxW / 2, boxY + boxH - 2, { align: "center" });
 
-  // Inset to the inner frame line (x=8..pageW-8), not the outer one — a bar
-  // drawn flush to the outer line (x=6..pageW-6) paints over it, making the
-  // double-border look broken/exceeded right where this bar sits.
-  doc.setFillColor(...LIGHT);
-  doc.rect(8, 49.6, pageW - 16, 9, "F");
-  doc.setDrawColor(...BORDER);
-  doc.setLineWidth(0.2);
-  doc.rect(8, 49.6, pageW - 16, 9);
+  // Plain text, no boxed/framed background — just the reference and issued
+  // date/time sitting directly on the page.
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...NAVY);
@@ -197,19 +191,22 @@ export async function downloadLeavePassPdf(
   if (showVerifyBox) {
     const vY = 60.2;
     const boxH = qrData ? 20 : 9.5;
+    // Inset to the inner frame line (x=8..pageW-8), not the outer one (see
+    // the REF bar fix above) — otherwise this box's own border sits right
+    // on top of / crosses the page's double-border frame line.
     doc.setFillColor(255, 247, 230);
     doc.setDrawColor(...ORANGE);
     doc.setLineWidth(0.5);
-    doc.roundedRect(6, vY, pageW - 12, boxH, 1.5, 1.5, "FD");
+    doc.roundedRect(8, vY, pageW - 16, boxH, 1.5, 1.5, "FD");
 
     if (qrData) {
       try {
-        doc.addImage(qrData, "PNG", 10, vY + 2, 16, 16);
+        doc.addImage(qrData, "PNG", 12, vY + 2, 16, 16);
       } catch {
         /* ignore */
       }
     }
-    const textX = qrData ? 30 : 12;
+    const textX = qrData ? 32 : 14;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
@@ -226,7 +223,7 @@ export async function downloadLeavePassPdf(
         qrData
           ? "Gate staff: scan this QR with the SLMS Gate portal's camera scanner, or type the code above, to view the student's photo on file and confirm identity. Do not allow exit/entry without a photo match."
           : "Gate staff: enter this code in the SLMS Gate portal to view the student's photo on file and confirm identity. Do not allow exit/entry on this pass without a photo match.",
-        pageW - 12 - (textX - 6) - 4
+        pageW - 12 - textX
       ),
       textX,
       vY + 14.5

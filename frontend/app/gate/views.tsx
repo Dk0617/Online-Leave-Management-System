@@ -5,17 +5,11 @@ import jsQR from "jsqr";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
-import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
+import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
-}
-
-function tomorrowStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
 }
 
 function validity(l: { startDate: string; startTime: string; endDate: string; endTime: string }) {
@@ -63,15 +57,9 @@ function sequenceBlockReason(
   return null;
 }
 
-// Most time-critical for gate staff first; Academic Leave is never
-// gate-eligible (see backend isGateEligible) so it won't actually appear,
-// but is kept here in case that ever changes.
-const LEAVE_TYPE_ORDER: LeaveType[] = ["Emergency Leave", "Medical Leave", "Personal Leave", "Academic Leave"];
-
 export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
   const { approvedLeaves, movements, error, refresh } = portal;
   const today = todayStr();
-  const tomorrow = tomorrowStr();
   const todayMovements = movements.filter((m) => m.timestamp.startsWith(today));
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
 
@@ -85,18 +73,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       department: approvedLeaves.find((l) => l.id === m.leaveId)?.department,
       direction: "Exit",
       timestamp: m.timestamp,
-    }));
-
-  const tomorrowExitEntries: ExitEntry[] = approvedLeaves
-    .filter((l) => l.startDate === tomorrow)
-    .map((l) => ({
-      id: l.id,
-      indexNumber: l.indexNumber,
-      studentName: l.studentName,
-      studentType: l.studentType,
-      department: l.department,
-      direction: "Exit",
-      plannedDate: `${l.startDate} ${l.startTime}`,
     }));
 
   const todayEntryEntries: ExitEntry[] = todayMovements
@@ -120,20 +96,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
   const onLeaveNow = approvedLeaves.filter((l) => lastMovementFor(l.indexNumber, l.id)?.direction === "Exit");
 
-  // Whichever departure time is closest to right now (whether it's a few
-  // minutes away or a few minutes ago) sits at the top; departures far in
-  // the past or far in the future sink toward the bottom.
-  const now = Date.now();
-  function byClosenessToNow(a: LeaveRequest, b: LeaveRequest) {
-    const aDist = Math.abs(+new Date(`${a.startDate}T${a.startTime}`) - now);
-    const bDist = Math.abs(+new Date(`${b.startDate}T${b.startTime}`) - now);
-    return aDist - bDist;
-  }
-
-  const leavesByType = LEAVE_TYPE_ORDER.map((type) => ({
-    type,
-    leaves: approvedLeaves.filter((l) => l.type === type).sort(byClosenessToNow),
-  })).filter((group) => group.leaves.length > 0);
+  // Order received, not grouped by leave type — Mongo ObjectIds are
+  // time-ordered, so a plain string sort on `id` gives the exact order
+  // these applications came in without needing a separate timestamp field.
+  const orderedLeaves = [...approvedLeaves].sort((a, b) => a.id.localeCompare(b.id));
 
   return (
     <div>
@@ -157,9 +123,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today", entries: todayExitEntries })}>
           <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} />
         </ClickableStatCard>
-        <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow", entries: tomorrowExitEntries })}>
-          <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
-        </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today", entries: todayEntryEntries })}>
           <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
         </ClickableStatCard>
@@ -174,20 +137,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         />
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Leave Passes — Exit / Entry &amp; Validity Status</h2>
-      {leavesByType.length === 0 ? (
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
+        Leave Passes — Exit / Entry &amp; Validity Status ({orderedLeaves.length})
+      </h2>
+      {orderedLeaves.length === 0 ? (
         <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
           No approved leave passes in system.
         </div>
       ) : (
-        leavesByType.map((group) => (
-          <div key={group.type} className="mb-6">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
-              {LEAVE_TYPE_LABELS[group.type]} ({group.leaves.length})
-            </h3>
-            <LeavePassTable leaves={group.leaves} lastMovementFor={lastMovementFor} />
-          </div>
-        ))
+        <LeavePassTable leaves={orderedLeaves} lastMovementFor={lastMovementFor} />
       )}
     </div>
   );
@@ -207,6 +165,7 @@ function LeavePassTable({
           <tr>
             <th>Student</th>
             <th>Type</th>
+            <th>Leave Type</th>
             <th>From (Exit)</th>
             <th>To (Entry)</th>
             <th>Status</th>
@@ -224,6 +183,14 @@ function LeavePassTable({
                   <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                 </td>
                 <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
+                <td>
+                  {LEAVE_TYPE_LABELS[l.type]}
+                  {l.priority === "emergency" && (
+                    <span className="ml-1">
+                      <Badge tone="red">Emergency</Badge>
+                    </span>
+                  )}
+                </td>
                 <td className="font-mono text-xs">
                   {l.startDate} {l.startTime}
                 </td>

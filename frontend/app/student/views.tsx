@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { PhotoCropModal } from "@/src/components/PhotoCropModal";
+import { TimeSelect } from "@/src/components/TimeSelect";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
@@ -562,14 +563,7 @@ export function ApplyLeave({
               <label className={styles.label}>
                 Start Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input
-                type="time"
-                lang="en-GB"
-                step={1800}
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className={styles.input}
-              />
+              <TimeSelect value={startTime} onChange={setStartTime} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
@@ -581,14 +575,7 @@ export function ApplyLeave({
               <label className={styles.label}>
                 End Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input
-                type="time"
-                lang="en-GB"
-                step={1800}
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className={styles.input}
-              />
+              <TimeSelect value={endTime} onChange={setEndTime} className={styles.input} />
             </div>
           </div>
 
