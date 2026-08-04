@@ -64,6 +64,7 @@ export function Dashboard({
       department: m.department,
       direction: "Entry",
       timestamp: m.timestamp,
+      lateEntry: m.lateEntry,
     }));
 
   return (
@@ -534,6 +535,8 @@ interface CalendarEntry {
   category: EventCategory;
   isSystem: boolean;
   id?: string; // only set for the HOD's own (real EventDay _id)
+  startTime?: string;
+  endTime?: string;
 }
 
 export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
@@ -543,7 +546,10 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<EventCategory>("WORKSHOP");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const isMandatoryCategory = MANDATORY_EVENT_CATEGORIES.includes(category);
   const [error, setError] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
@@ -562,7 +568,15 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     eventsByDate.set(h.date, { ...h, isSystem: true });
   }
   for (const e of events) {
-    eventsByDate.set(e.date, { date: e.date, title: e.title, category: e.category, isSystem: false, id: e.id });
+    eventsByDate.set(e.date, {
+      date: e.date,
+      title: e.title,
+      category: e.category,
+      isSystem: false,
+      id: e.id,
+      startTime: e.startTime,
+      endTime: e.endTime,
+    });
   }
   const sortedEntries = Array.from(eventsByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -574,12 +588,22 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!selectedDate || !title.trim()) return;
+    if (isMandatoryCategory && (!startTime || !endTime)) {
+      setError("Start time and end time are required for a mandatory event.");
+      return;
+    }
+    if (isMandatoryCategory && endTime <= startTime) {
+      setError("End time must be after start time.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await addEvent(selectedDate, title.trim(), category);
+      await addEvent(selectedDate, title.trim(), category, isMandatoryCategory ? startTime : undefined, isMandatoryCategory ? endTime : undefined);
       setTitle("");
       setCategory("WORKSHOP");
+      setStartTime("");
+      setEndTime("");
       setSelectedDate(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add event");
@@ -588,11 +612,22 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
     }
   }
 
-  function overlappingLeaves(date: string): LeaveRequest[] {
-    return pending.filter((l) => l.startDate <= date && l.endDate >= date);
+  // Mirrors the backend's eventWindow/overlap logic (see
+  // backend/controllers/eventcontrol.js) — an event with no hours set
+  // defaults to blocking the whole day, same as before this field existed.
+  function overlappingLeaves(entry: { date: string; startTime?: string; endTime?: string }): LeaveRequest[] {
+    const eventStart = new Date(`${entry.date}T${entry.startTime || "00:00"}`);
+    const eventEnd = new Date(`${entry.date}T${entry.endTime || "23:59"}`);
+    return pending.filter((l) => {
+      const leaveStart = new Date(`${l.startDate}T${l.startTime}`);
+      const leaveEnd = new Date(`${l.endDate}T${l.endTime}`);
+      return leaveStart < eventEnd && leaveEnd > eventStart;
+    });
   }
 
-  const [reviewEvent, setReviewEvent] = useState<{ id: string; date: string; title: string } | null>(null);
+  const [reviewEvent, setReviewEvent] = useState<
+    { id: string; date: string; title: string; startTime?: string; endTime?: string } | null
+  >(null);
 
   async function handleConfirmReject(leaveIds: string[]) {
     if (!reviewEvent) return;
@@ -619,11 +654,12 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
       <div className={styles.infoBanner}>
         <strong>Event Calendar:</strong> Sri Lanka&apos;s Poya days and national holidays (niwadu dawasa)
         are shown here automatically — nothing for you to add or maintain. You can additionally mark a
-        mandatory <strong>Workshop</strong> day yourself: any Day Scholar or Officer Cadet Academic Leave
-        still pending your decision that overlaps that date can then be reviewed and rejected in bulk —
-        you&apos;ll see the full list first and can exclude specific requests (Emergency Leave is excluded
-        by default) before confirming. Poya/Holiday days are informational only — students are normally
-        free to leave on those anyway.
+        mandatory <strong>Workshop</strong> day yourself, with its actual start and end time — students
+        can&apos;t apply for ordinary leave during that window, but are free to once it ends, even on the
+        same day. Any Day Scholar or Officer Cadet Academic Leave still pending your decision that overlaps
+        that window can then be reviewed and rejected in bulk — you&apos;ll see the full list first and can
+        exclude specific requests (Emergency Leave is excluded by default) before confirming. Poya/Holiday
+        days are informational only — students are normally free to leave on those anyway.
       </div>
 
       <Card className="mb-6 max-w-lg p-5">
@@ -664,7 +700,13 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                 key={i}
                 type="button"
                 onClick={() => setSelectedDate(date)}
-                title={event ? `${event.title} (${EVENT_CATEGORY_LABELS[event.category]})` : undefined}
+                title={
+                  event
+                    ? `${event.title} (${EVENT_CATEGORY_LABELS[event.category]})${
+                        event.startTime && event.endTime ? ` ${event.startTime}–${event.endTime}` : ""
+                      }`
+                    : undefined
+                }
                 className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 py-1 text-xs transition-all ${
                   event
                     ? `font-bold ${CATEGORY_CELL_CLASS[event.category]}`
@@ -692,6 +734,9 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
             <p className="text-xs text-[var(--muted)]">
               {eventsByDate.get(selectedDate)!.isSystem ? "Sri Lanka calendar: " : "Already marked: "}
               {eventsByDate.get(selectedDate)!.title} ({EVENT_CATEGORY_LABELS[eventsByDate.get(selectedDate)!.category]})
+              {eventsByDate.get(selectedDate)!.startTime && eventsByDate.get(selectedDate)!.endTime && (
+                <> · {eventsByDate.get(selectedDate)!.startTime}–{eventsByDate.get(selectedDate)!.endTime}</>
+              )}
             </p>
           ) : (
             <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
@@ -719,6 +764,30 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                   ))}
                 </select>
               </div>
+              {isMandatoryCategory && (
+                <>
+                  <div className="min-w-[130px]">
+                    <label className={styles.label}>Start Time</label>
+                    <input
+                      type="time"
+                      step={1800}
+                      className={styles.input}
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="min-w-[130px]">
+                    <label className={styles.label}>End Time</label>
+                    <input
+                      type="time"
+                      step={1800}
+                      className={styles.input}
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
               <Button type="submit" disabled={submitting || !title.trim()}>
                 {submitting ? "Adding…" : "Mark as Event Day"}
               </Button>
@@ -757,11 +826,18 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
               </tr>
             ) : (
               sortedEntries.map((e) => {
-                const count = overlappingLeaves(e.date).length;
+                const count = overlappingLeaves(e).length;
                 const isMandatory = !e.isSystem && MANDATORY_EVENT_CATEGORIES.includes(e.category);
                 return (
                   <tr key={e.isSystem ? `system-${e.date}` : e.id}>
-                    <td>{e.date}</td>
+                    <td>
+                      {e.date}
+                      {e.startTime && e.endTime && (
+                        <div className="text-[10px] text-[var(--muted)]">
+                          {e.startTime}–{e.endTime}
+                        </div>
+                      )}
+                    </td>
                     <td>{e.title}</td>
                     <td>
                       <Badge tone={CATEGORY_BADGE_TONE[e.category]}>{EVENT_CATEGORY_LABELS[e.category]}</Badge>
@@ -783,7 +859,9 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
                               variant="danger"
                               className="!px-2.5 !py-1 !text-[11px]"
                               disabled={count === 0 || rejectingId === e.id}
-                              onClick={() => setReviewEvent({ id: e.id!, date: e.date, title: e.title })}
+                              onClick={() =>
+                                setReviewEvent({ id: e.id!, date: e.date, title: e.title, startTime: e.startTime, endTime: e.endTime })
+                              }
                             >
                               {rejectingId === e.id ? "Rejecting…" : `Review & Reject (${count})`}
                             </Button>
@@ -810,7 +888,7 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
       {reviewEvent && (
         <ReviewRejectModal
           event={reviewEvent}
-          leaves={overlappingLeaves(reviewEvent.date)}
+          leaves={overlappingLeaves(reviewEvent)}
           submitting={rejectingId === reviewEvent.id}
           onConfirm={handleConfirmReject}
           onClose={() => setReviewEvent(null)}
@@ -833,7 +911,7 @@ function ReviewRejectModal({
   onConfirm,
   onClose,
 }: {
-  event: { id: string; date: string; title: string };
+  event: { id: string; date: string; title: string; startTime?: string; endTime?: string };
   leaves: LeaveRequest[];
   submitting: boolean;
   onConfirm: (leaveIds: string[]) => void;
@@ -866,9 +944,10 @@ function ReviewRejectModal({
             Review Before Rejecting — {event.title}
           </h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            {event.date} · Emergency Leave is unchecked by default — it stays valid on a mandatory event
-            day and will continue on normally. Uncheck anything else you want to keep too. Everything left
-            checked gets rejected.
+            {event.date}
+            {event.startTime && event.endTime && ` · ${event.startTime}–${event.endTime}`} · Emergency Leave
+            is unchecked by default — it stays valid on a mandatory event day and will continue on
+            normally. Uncheck anything else you want to keep too. Everything left checked gets rejected.
           </p>
         </div>
         <div className="px-6 py-4">

@@ -261,6 +261,7 @@ export function normalizeMovement(raw: Raw): Movement {
     loggedBy: raw.loggedBy as string,
     timestamp: raw.createdAt as string,
     department: raw.department as string | undefined,
+    lateEntry: raw.lateEntry as boolean | undefined,
   };
 }
 
@@ -292,6 +293,8 @@ export function normalizeEventDay(raw: Raw): EventDay {
     date: raw.date as string,
     title: raw.title as string,
     category: (raw.category as EventDay["category"]) ?? "OTHER",
+    startTime: raw.startTime as string | undefined,
+    endTime: raw.endTime as string | undefined,
   };
 }
 

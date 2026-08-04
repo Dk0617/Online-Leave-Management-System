@@ -1,6 +1,16 @@
 import Leave from "../models/Leave.js";
-import EventDay, { EVENT_CATEGORIES } from "../models/EventDay.js";
+import EventDay, { EVENT_CATEGORIES, MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { applyDecision } from "./leavecontrol.js";
+
+// A blocked event day defaults to the full day (00:00-23:59) when it has no
+// explicit hours set — keeps any mandatory event created before startTime/
+// endTime existed blocking exactly as it always did. See EventDay.js.
+export function eventWindow(event) {
+  return {
+    start: new Date(`${event.date}T${event.startTime || "00:00"}`),
+    end: new Date(`${event.date}T${event.endTime || "23:59"}`),
+  };
+}
 
 // HOD-only calendar: workshop days (mandatory attendance — can be used to
 // bulk-reject every leave currently pending the HOD's decision that
@@ -16,18 +26,38 @@ export const listEvents = async (req, res) => {
 };
 
 export const createEvent = async (req, res) => {
-  const { date, title, category } = req.body;
+  const { date, title, category, startTime, endTime } = req.body;
   if (!date || !title?.trim()) {
     return res.status(400).json({ message: "Date and title are required" });
   }
   if (category && !EVENT_CATEGORIES.includes(category)) {
     return res.status(400).json({ message: "Invalid category" });
   }
+  const resolvedCategory = category || "OTHER";
+  // Only mandatory categories (Workshop) actually block students, so only
+  // those require a real time window — informational categories (Poya,
+  // Holiday, etc.) stay whole-day/no-time as before.
+  const isMandatory = MANDATORY_EVENT_CATEGORIES.includes(resolvedCategory);
+  if (isMandatory) {
+    if (!startTime || !endTime) {
+      return res.status(400).json({ message: "Start time and end time are required for a mandatory event." });
+    }
+    if (!/^\d{2}:(00|30)$/.test(startTime) || !/^\d{2}:(00|30)$/.test(endTime)) {
+      return res.status(400).json({
+        message: "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).",
+      });
+    }
+    if (endTime <= startTime) {
+      return res.status(400).json({ message: "End time must be after start time." });
+    }
+  }
   const event = await EventDay.create({
     hodId: req.user.id,
     date,
     title: title.trim(),
-    category: category || "OTHER",
+    category: resolvedCategory,
+    startTime: isMandatory ? startTime : undefined,
+    endTime: isMandatory ? endTime : undefined,
   });
   res.status(201).json(event);
 };
@@ -57,12 +87,23 @@ export const rejectOverlapping = async (req, res) => {
     return res.status(400).json({ message: "Select at least one leave to reject" });
   }
 
-  const leaves = await Leave.find({
+  const dateCandidates = await Leave.find({
     _id: { $in: leaveIds },
     hodId: req.user.id,
     hodStatus: "Pending",
     startDate: { $lte: event.date },
     endDate: { $gte: event.date },
+  });
+  // Date range narrows candidates via the index; the event's actual hours
+  // (or the whole-day default for an event with none set) decide which of
+  // those candidates truly overlap it — same rule applyLeave enforces
+  // against new applications, so a leave that no longer overlaps a
+  // time-limited workshop isn't swept up here either.
+  const { start: eventStart, end: eventEnd } = eventWindow(event);
+  const leaves = dateCandidates.filter((leave) => {
+    const leaveStart = new Date(`${leave.startDate}T${leave.startTime}`);
+    const leaveEnd = new Date(`${leave.endDate}T${leave.endTime}`);
+    return leaveStart < eventEnd && leaveEnd > eventStart;
   });
 
   for (const leave of leaves) {

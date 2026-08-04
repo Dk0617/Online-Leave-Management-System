@@ -202,6 +202,10 @@ export interface Movement {
   // backend/controllers/movementcontrol.js) — joined in from Student since
   // Movement itself doesn't store it.
   department?: string;
+  // Set on an Entry movement logged after the linked leave's own approved
+  // end date/time — gate staff still let the student back in, but this
+  // flags the late return. Always false/undefined for Exit movements.
+  lateEntry?: boolean;
 }
 
 // ── Admin: password-change notifications & audit log ─────────────────
@@ -245,6 +249,11 @@ export interface EventDay {
   date: string; // "YYYY-MM-DD"
   title: string;
   category: EventCategory;
+  // Only set (and required by the form) for mandatory categories — the
+  // actual hours the event runs, so blocking only applies during that
+  // window instead of the whole day. See backend/models/EventDay.js.
+  startTime?: string; // "HH:MM"
+  endTime?: string; // "HH:MM"
 }
 
 // A Senior or Junior Lecturer in the campus-wide HOD-cover seniority chain

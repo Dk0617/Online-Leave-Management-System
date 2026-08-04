@@ -63,8 +63,17 @@ export function useHodPortal() {
     await refresh();
   }
 
-  async function addEvent(date: string, title: string, category: EventCategory) {
-    await api.post("/hod/events", { date, title, category });
+  // startTime/endTime are only required (and only meaningful) for a
+  // mandatory category (Workshop) — see backend/controllers/eventcontrol.js
+  // createEvent.
+  async function addEvent(
+    date: string,
+    title: string,
+    category: EventCategory,
+    startTime?: string,
+    endTime?: string
+  ) {
+    await api.post("/hod/events", { date, title, category, startTime, endTime });
     await refresh();
   }
   async function removeEvent(id: string) {

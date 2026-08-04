@@ -225,20 +225,30 @@ export const applyLeave = async (req, res) => {
   }
   const troopIdsForLeave = troops.map((t) => t._id);
 
+  const newStart = new Date(`${startDate}T${startTime}`);
+  const newEnd = new Date(`${endDate}T${endTime}`);
+
   // A Workshop day (or other mandatory-attendance academic day) the HOD has
   // marked on the calendar blocks ordinary leave applications that overlap
-  // it — Emergency Leave is the one exception, same reasoning as the 2-day
-  // advance-notice rule above.
+  // its actual hours — not necessarily the whole day. An event created
+  // without hours (or one marked before this field existed) still falls
+  // back to blocking the full day. Emergency Leave is the one exception,
+  // same reasoning as the 2-day advance-notice rule above.
   if (hod && !isEmergency) {
-    const blockedDay = await EventDay.findOne({
+    const blockedDays = await EventDay.find({
       hodId: hod._id,
       category: { $in: MANDATORY_EVENT_CATEGORIES },
       date: { $gte: startDate, $lte: endDate },
     });
-    if (blockedDay) {
-      return res.status(400).json({
-        message: `Leave cannot be applied for ${blockedDay.date} — it's a mandatory-attendance day ("${blockedDay.title}") set by your HOD. Only Emergency Leave can be applied on that date.`,
-      });
+    for (const blockedDay of blockedDays) {
+      const dayStart = new Date(`${blockedDay.date}T${blockedDay.startTime || "00:00"}`);
+      const dayEnd = new Date(`${blockedDay.date}T${blockedDay.endTime || "23:59"}`);
+      if (dayStart < newEnd && dayEnd > newStart) {
+        const windowText = blockedDay.startTime && blockedDay.endTime ? ` (${blockedDay.startTime}–${blockedDay.endTime})` : "";
+        return res.status(400).json({
+          message: `Leave cannot be applied for ${blockedDay.date}${windowText} — it's a mandatory-attendance day ("${blockedDay.title}") set by your HOD. Only Emergency Leave can be applied during that window.`,
+        });
+      }
     }
   }
 
@@ -256,8 +266,6 @@ export const applyLeave = async (req, res) => {
     startDate: { $lte: endDate },
     endDate: { $gte: startDate },
   });
-  const newStart = new Date(`${startDate}T${startTime}`);
-  const newEnd = new Date(`${endDate}T${endTime}`);
   for (const candidate of overlapCandidates) {
     if (isRejected(candidate)) continue;
     const candidateStart = new Date(`${candidate.startDate}T${candidate.startTime}`);

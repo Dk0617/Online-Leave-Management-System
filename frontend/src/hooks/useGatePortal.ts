@@ -7,7 +7,7 @@ import { LeaveRequest, Movement } from "@/src/types";
 export interface VerifyResult {
   found: boolean;
   valid?: boolean;
-  reason?: "not_active" | "not_approved";
+  reason?: "not_active" | "not_approved" | "late_return";
   leave?: Record<string, unknown>;
   studentPhoto?: string;
 }

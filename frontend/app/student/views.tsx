@@ -330,12 +330,21 @@ export function ApplyLeave({
     : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   // Workshop days (or other mandatory-attendance academic days) the HOD has
-  // marked block ordinary leave applications that overlap them — Emergency
-  // Leave is the one exception. Mirrors the server-side check in
+  // marked block ordinary leave applications that overlap their actual
+  // hours — not necessarily the whole day (a day with no hours set still
+  // defaults to blocking the full day). Emergency Leave is the one
+  // exception. Mirrors the server-side check in
   // backend/controllers/studentcontrol.js applyLeave.
   const blockedDayInRange =
-    !isEmergency && startDate && endDate
-      ? portal.blockedDays.find((d) => d.date >= startDate && d.date <= endDate)
+    !isEmergency && startDate && startTime && endDate && endTime
+      ? portal.blockedDays.find((d) => {
+          if (d.date < startDate || d.date > endDate) return false;
+          const dayStart = new Date(`${d.date}T${d.startTime || "00:00"}`);
+          const dayEnd = new Date(`${d.date}T${d.endTime || "23:59"}`);
+          const newStart = new Date(`${startDate}T${startTime}`);
+          const newEnd = new Date(`${endDate}T${endTime}`);
+          return dayStart < newEnd && dayEnd > newStart;
+        })
       : undefined;
 
   // Recomputed on every keystroke/selection (not just at submit) so a wrong
@@ -402,8 +411,12 @@ export function ApplyLeave({
       return;
     }
     if (blockedDayInRange) {
+      const window =
+        blockedDayInRange.startTime && blockedDayInRange.endTime
+          ? ` (${blockedDayInRange.startTime}–${blockedDayInRange.endTime})`
+          : "";
       setError(
-        `Leave cannot be applied for ${blockedDayInRange.date} — it's a mandatory-attendance day ("${blockedDayInRange.title}") set by your HOD. Use Emergency Leave if this is urgent.`
+        `Leave cannot be applied for ${blockedDayInRange.date}${window} — it's a mandatory-attendance day ("${blockedDayInRange.title}") set by your HOD. Use Emergency Leave if this is urgent.`
       );
       return;
     }
@@ -587,8 +600,12 @@ export function ApplyLeave({
 
           {blockedDayInRange && (
             <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
-              ⛔ <strong>{blockedDayInRange.date}</strong> is a mandatory-attendance day (&quot;{blockedDayInRange.title}
-              &quot;) set by your HOD — ordinary leave can&apos;t be applied across it. Use{" "}
+              ⛔ <strong>{blockedDayInRange.date}</strong>
+              {blockedDayInRange.startTime && blockedDayInRange.endTime && (
+                <> ({blockedDayInRange.startTime}–{blockedDayInRange.endTime})</>
+              )}{" "}
+              is a mandatory-attendance day (&quot;{blockedDayInRange.title}
+              &quot;) set by your HOD — ordinary leave can&apos;t be applied during that window. Use{" "}
               <strong>Emergency Leave</strong> if this is urgent.
             </div>
           )}

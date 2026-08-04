@@ -109,6 +109,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       department: approvedLeaves.find((l) => l.id === m.leaveId)?.department,
       direction: "Entry",
       timestamp: m.timestamp,
+      lateEntry: m.lateEntry,
     }));
 
   function lastMovementFor(indexNumber: string, leaveId: string) {
@@ -443,6 +444,31 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
               </div>
             </>
           )}
+          {result.found && !result.valid && result.reason === "late_return" && result.leave && (() => {
+            const leave = result.leave as unknown as LeaveRequest;
+            return (
+              <>
+                <div className="mb-2 text-lg font-bold text-[var(--warn)]">⚠️ Returning Late</div>
+                <p className="mb-2 text-xs text-[var(--muted)]">
+                  This student&apos;s approved leave period already ended ({leave.endDate} {leave.endTime}).
+                  They can still be let back in — logging this records it as a late return, visible to
+                  their Troop Commander
+                  {leave.studentType === "CADET" ? ", Squadron Commander, and Senior Deputy Dean" : ""}.
+                </p>
+                <VerifyRows leave={leave} photo={result.studentPhoto} minimal />
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="success"
+                    className="!text-xs"
+                    disabled={loggingDirection !== null}
+                    onClick={() => quickLog("Entry")}
+                  >
+                    {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry (Late)"}
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
           {result.found && !result.valid && result.reason === "not_active" && result.leave && (
             <>
               <div className="mb-2 text-lg font-bold text-[var(--err)]">⚠️ Leave Pass Not Active</div>

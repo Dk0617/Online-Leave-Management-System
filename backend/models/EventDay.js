@@ -22,6 +22,15 @@ const eventDaySchema = new mongoose.Schema(
     date: { type: String, required: true }, // "YYYY-MM-DD"
     title: { type: String, required: true },
     category: { type: String, enum: EVENT_CATEGORIES, default: "OTHER" },
+    // Only set (and only required by the form) for mandatory categories —
+    // the actual hours the workshop runs, so blocking only applies during
+    // that window instead of the whole day (see studentcontrol.js
+    // applyLeave). Left unset for informational categories, and for any
+    // mandatory event created before this field existed — treated as
+    // blocking the full day (00:00-23:59) when missing, so old entries
+    // keep behaving exactly as before.
+    startTime: String, // "HH:MM"
+    endTime: String, // "HH:MM"
   },
   { timestamps: true }
 );

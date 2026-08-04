@@ -72,6 +72,23 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
       department: m.department,
       direction: "Entry",
       timestamp: m.timestamp,
+      lateEntry: m.lateEntry,
+    }));
+  // A standing record (not just today's) of every cadet who returned after
+  // their leave's own approved end date/time — gate staff still let them
+  // in (see backend/controllers/gatecontrol.js logMovement), but it's
+  // flagged here for oversight.
+  const lateReturnEntries: ExitEntry[] = movements
+    .filter((m) => m.direction === "Entry" && m.lateEntry)
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: m.department,
+      direction: "Entry",
+      timestamp: m.timestamp,
+      lateEntry: true,
     }));
 
   return (
@@ -111,6 +128,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today — Your Squadron", entries: todayEntryEntries })}>
           <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Late Returns — Your Squadron", entries: lateReturnEntries })}>
+          <StatTile label="Late Returns (click for details)" value={lateReturnEntries.length} tone="red" />
         </ClickableStatCard>
       </div>
 

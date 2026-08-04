@@ -12,6 +12,27 @@ function isCurrentlyValid(leave) {
   return now >= start && now <= end;
 }
 
+function hasEnded(leave) {
+  if (!isGateEligible(leave)) return false;
+  const end = new Date(`${leave.endDate}T${leave.endTime || "23:59"}`);
+  return new Date() > end;
+}
+
+// A student whose leave has already ended but who is still out (their last
+// movement was an unmatched Exit) is a late return, not just "not active" —
+// gate staff still need to be able to log their Entry, it just gets flagged
+// (see logMovement's lateEntry). Prefers the specific leave the Exit was
+// logged against if it's among the ended candidates, else the most
+// recently-ended one — same fallback logMovement itself uses when a
+// leaveId isn't given.
+async function findLateReturnLeave(leaves, indexNumber) {
+  const ended = leaves.filter(hasEnded);
+  if (!ended.length) return null;
+  const lastMovement = await Movement.findOne({ indexNumber }).sort({ createdAt: -1 });
+  if (!lastMovement || lastMovement.direction !== "Exit") return null;
+  return ended.find((l) => String(l._id) === String(lastMovement.leaveId)) || ended[0];
+}
+
 // Campus curfew: except Emergency Leave, students may only exit from 6:00 AM
 // onward and must re-enter by 6:00 PM. Checked against the actual moment of
 // the gate scan (not just the leave's own approved times) so it also catches
@@ -48,6 +69,11 @@ export const verifyByIndexNumber = async (req, res) => {
   const valid = leaves.find(isCurrentlyValid);
   if (valid) return res.json({ found: true, valid: true, leave: valid, studentPhoto });
 
+  const lateReturn = await findLateReturnLeave(leaves, indexNumber);
+  if (lateReturn) {
+    return res.json({ found: true, valid: false, reason: "late_return", leave: lateReturn, studentPhoto });
+  }
+
   const anyApproved = leaves.find(isGateEligible);
   if (anyApproved) {
     return res.json({ found: true, valid: false, reason: "not_active", leave: anyApproved, studentPhoto });
@@ -70,6 +96,10 @@ export const verifyByCode = async (req, res) => {
 
   if (isCurrentlyValid(leave)) {
     return res.json({ found: true, valid: true, leave, studentPhoto });
+  }
+  const lateReturn = await findLateReturnLeave([leave], leave.indexNumber);
+  if (lateReturn) {
+    return res.json({ found: true, valid: false, reason: "late_return", leave: lateReturn, studentPhoto });
   }
   if (isGateEligible(leave)) {
     return res.json({ found: true, valid: false, reason: "not_active", leave, studentPhoto });
@@ -158,6 +188,8 @@ export const logMovement = async (req, res) => {
     }
   }
 
+  const lateEntry = direction === "Entry" && hasEnded(leave);
+
   const movement = await Movement.create({
     indexNumber: indexNumber.toUpperCase(),
     studentName: leave.studentName,
@@ -166,9 +198,15 @@ export const logMovement = async (req, res) => {
     leaveId: leave._id,
     notes,
     loggedBy: req.user.name,
+    lateEntry,
   });
 
-  await writeAudit("GATE", req.user.name, "movement_logged", `${direction} for ${indexNumber}`);
+  await writeAudit(
+    "GATE",
+    req.user.name,
+    "movement_logged",
+    `${direction} for ${indexNumber}${lateEntry ? " [LATE RETURN]" : ""}`
+  );
   res.status(201).json(movement);
 };
 

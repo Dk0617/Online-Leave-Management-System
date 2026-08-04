@@ -16,6 +16,9 @@ export interface ExitEntry {
   direction: "Exit" | "Entry";
   timestamp?: string;
   plannedDate?: string;
+  // Set on an Entry logged after the leave's own approved end date/time —
+  // see backend/controllers/gatecontrol.js logMovement.
+  lateEntry?: boolean;
 }
 
 function matchesQuery(e: ExitEntry, query: string): boolean {
@@ -76,6 +79,11 @@ export function ExitDrilldownModal({
                     <Badge tone={e.direction === "Exit" ? "red" : "green"}>
                       {e.direction === "Exit" ? "🚪 Exit" : "🏫 Entry"}
                     </Badge>
+                    {e.lateEntry && (
+                      <div className="mt-1">
+                        <Badge tone="amber">⚠️ Late Return</Badge>
+                      </div>
+                    )}
                     <div className="mt-1 text-[10px] text-[var(--muted)]">
                       {e.plannedDate ? `Planned: ${e.plannedDate}` : e.timestamp ? new Date(e.timestamp).toLocaleString() : "—"}
                     </div>
