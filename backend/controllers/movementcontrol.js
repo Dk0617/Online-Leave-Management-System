@@ -1,6 +1,7 @@
 import Movement from "../models/Movement.js";
 import Student from "../models/Student.js";
 import Troop from "../models/Troop.js";
+import { hodScopeFilter } from "./leavecontrol.js";
 
 // Movement documents don't carry intake/department/sqnId (see
 // models/Movement.js) — scoped views join through Student by indexNumber to
@@ -29,4 +30,19 @@ export const troopMovements = async (req, res) => {
 // Scholars), matching their leave-approval scope (sqnId: req.user.id).
 export const squadranMovements = async (req, res) => {
   res.json(await scopedMovements({ studentType: "CADET", sqnId: req.user.id }));
+};
+
+// HOD — every movement for students in their own department, matching
+// their leave-approval scope. Reuses hodScopeFilter so a Lecturer actively
+// covering an unavailable HOD (see leavecontrol.js resolveActiveCoverer)
+// sees that HOD's movements too, not just their own (empty) scope — same
+// widening their leave queue already gets.
+export const hodMovements = async (req, res) => {
+  res.json(await scopedMovements(await hodScopeFilter(req)));
+};
+
+// Senior Deputy Dean — every Officer Cadet, no per-SDD ownership, same
+// global scope as their leave-approval queue (see leavecontrol.js sdd).
+export const sddMovements = async (req, res) => {
+  res.json(await scopedMovements({ studentType: "CADET" }));
 };

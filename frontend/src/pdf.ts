@@ -266,6 +266,31 @@ export async function downloadLeavePassPdf(
   fieldRow(10, "From (Exit)", `${leave.startDate}  ${leave.startTime}`);
   fieldRow(110, "To (Entry)", `${leave.endDate}  ${leave.endTime}`);
   y += 12;
+
+  // Flags an HOD date/time correction directly on the pass — the student
+  // should never be surprised, at the gate, that the printed dates differ
+  // from what they originally submitted. Same amber styling as the "Edited
+  // by HOD" badge in the web app's leave detail modal (see leave.tsx).
+  if (leave.dateTimeCorrectedByHod) {
+    const noteLines = doc.splitTextToSize(
+      `Originally applied for ${leave.originalStartDate}  ${leave.originalStartTime}  ->  ${leave.originalEndDate}  ${leave.originalEndTime}. The dates/times above were corrected by the HOD before approval.`,
+      182
+    );
+    const noteH = Math.max(9, 5 + noteLines.length * 4.2);
+    doc.setFillColor(254, 243, 199);
+    doc.setDrawColor(245, 158, 11);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(10, y - 4, 190, noteH, 1.5, 1.5, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(161, 98, 7);
+    doc.text("DATE/TIME CORRECTED BY HOD", 13, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text(noteLines, 13, y + 4.4);
+    y += noteH + 4;
+  }
+
   fieldRow(10, "Contact Number", leave.contactNumber);
   y += 12;
 

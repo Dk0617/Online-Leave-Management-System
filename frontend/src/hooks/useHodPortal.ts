@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeEventDay, normalizeLeave, POLL_INTERVAL_MS } from "@/src/api";
-import { EventCategory, EventDay, LeaveRequest } from "@/src/types";
+import { api, normalizeEventDay, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
+import { EventCategory, EventDay, LeaveRequest, Movement } from "@/src/types";
 
 export function useHodPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,14 +16,16 @@ export function useHodPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [p, h, e] = await Promise.all([
+      const [p, h, e, m] = await Promise.all([
         api.get<Record<string, unknown>[]>("/hod/leaves/pending"),
         api.get<Record<string, unknown>[]>("/hod/leaves/history"),
         api.get<Record<string, unknown>[]>("/hod/events"),
+        api.get<Record<string, unknown>[]>("/hod/movements"),
       ]);
       setPending(p.map(normalizeLeave));
       setHistory(h.map(normalizeLeave));
       setEvents(e.map(normalizeEventDay));
+      setMovements(m.map(normalizeMovement));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load HOD data");
     } finally {
@@ -83,6 +86,7 @@ export function useHodPortal() {
     pending,
     history,
     events,
+    movements,
     loading,
     error,
     refresh,

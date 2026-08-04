@@ -24,8 +24,8 @@ export interface NewLeaveInput {
   attachmentName?: string;
   attachmentData?: string;
   // Only used when type === "Academic Leave" — the linked Personal Leave
-  // applied together with it has its own independent reason/attachment.
-  personalReason?: string;
+  // applied together with it shares the reason above and has its own
+  // independent attachment only.
   personalAttachmentName?: string;
   personalAttachmentData?: string;
 }

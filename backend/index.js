@@ -18,9 +18,12 @@ const app = express();
 
 // Middleware
 app.use(cors());
-// Raised from the default 100kb — leave attachments and student photos are
-// stored as base64 (capped at ~2.7MB / ~2MB respectively) in the request body.
-app.use(express.json({ limit: "6mb" }));
+// Raised from the default 100kb — leave attachments (capped at 20MB raw,
+// ~27MB once base64-encoded — see MAX_ATTACHMENT_BYTES in studentcontrol.js)
+// and student photos (~2MB) are stored as base64 in the request body. An
+// Academic Leave application carries two attachments (its own + the linked
+// Personal Leave's) in the same request, so the limit needs headroom for both.
+app.use(express.json({ limit: "60mb" }));
 
 // Test route
 app.get("/", (req, res) => {

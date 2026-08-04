@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { Card, StatTile, Badge, Button, Toast } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
-import { ClickableStatCard } from "@/src/components/exitStats";
+import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { isToday } from "@/src/api";
@@ -21,6 +21,10 @@ function tone(status: string) {
   return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
 }
 
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export function Dashboard({
   portal,
   asLecturer,
@@ -32,7 +36,7 @@ export function Dashboard({
   // currently covering someone else's queue.
   asLecturer?: boolean;
 }) {
-  const { pending, history, approve, reject, correctDateTime, error, refresh } = portal;
+  const { pending, history, movements, approve, reject, correctDateTime, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.hodStatus === "Approved" && isToday(l.hodApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.hodStatus === "Rejected" && isToday(l.hodApprovedAt));
   const emergencyPending = pending.filter((l) => l.priority === "emergency");
@@ -40,11 +44,27 @@ export function Dashboard({
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [correcting, setCorrecting] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+  const [movementDrilldown, setMovementDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   // Date/time correction is an HOD-only action (see hodRoutes.js) — hidden
   // entirely for a Lecturer covering the queue, rather than exposing a
   // button that would just 403.
   const onCorrect = asLecturer ? undefined : setCorrecting;
   const { toast, notify } = useDecisionToast();
+
+  // Students from this department who've actually returned to campus
+  // today, from the real gate movement log.
+  const today = todayStr();
+  const todayEntryEntries: ExitEntry[] = movements
+    .filter((m) => m.direction === "Entry" && m.timestamp.startsWith(today))
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: m.department,
+      direction: "Entry",
+      timestamp: m.timestamp,
+    }));
 
   return (
     <div>
@@ -88,6 +108,11 @@ export function Dashboard({
           <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
         </ClickableStatCard>
         <StatTile label="Total" value={history.length + pending.length} />
+        <ClickableStatCard
+          onClick={() => setMovementDrilldown({ title: "Entries Today — Your Department", entries: todayEntryEntries })}
+        >
+          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+        </ClickableStatCard>
       </div>
 
       {drilldown && (
@@ -95,6 +120,13 @@ export function Dashboard({
           title={drilldown.title}
           leaves={drilldown.leaves}
           onClose={() => setDrilldown(null)}
+        />
+      )}
+      {movementDrilldown && (
+        <ExitDrilldownModal
+          title={movementDrilldown.title}
+          entries={movementDrilldown.entries}
+          onClose={() => setMovementDrilldown(null)}
         />
       )}
 

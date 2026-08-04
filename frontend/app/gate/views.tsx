@@ -99,6 +99,18 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       plannedDate: `${l.startDate} ${l.startTime}`,
     }));
 
+  const todayEntryEntries: ExitEntry[] = todayMovements
+    .filter((m) => m.direction === "Entry")
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: approvedLeaves.find((l) => l.id === m.leaveId)?.department,
+      direction: "Entry",
+      timestamp: m.timestamp,
+    }));
+
   function lastMovementFor(indexNumber: string, leaveId: string) {
     const forLeave = movements.filter((m) => m.leaveId === leaveId || m.indexNumber === indexNumber);
     if (!forLeave.length) return null;
@@ -147,7 +159,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow", entries: tomorrowExitEntries })}>
           <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
         </ClickableStatCard>
-        <StatTile label="Entries Today" value={todayMovements.filter((m) => m.direction === "Entry").length} tone="green" />
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today", entries: todayEntryEntries })}>
+          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+        </ClickableStatCard>
         <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" />
       </div>
 

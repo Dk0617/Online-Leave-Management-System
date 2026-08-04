@@ -142,6 +142,16 @@ export interface LeaveRequest {
   startTime: string;
   endDate: string;
   endTime: string;
+  // Set when an HOD uses "Edit Date/Time" to correct a mistaken entry
+  // before approving — original* holds what the student actually
+  // submitted, so the portal/PDF can flag the change instead of silently
+  // showing the corrected values as if the student had entered them. See
+  // backend/controllers/leavecontrol.js hodCorrectDateTime.
+  dateTimeCorrectedByHod?: boolean;
+  originalStartDate?: string;
+  originalStartTime?: string;
+  originalEndDate?: string;
+  originalEndTime?: string;
   reason: string;
   address: string;
   contactNumber: string;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { StatTile, Badge, Button, Toast } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
-import { ClickableStatCard } from "@/src/components/exitStats";
+import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { isApproved, isRejected, isToday } from "@/src/api";
@@ -15,13 +15,33 @@ function tone(status: string) {
   return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
 }
 
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
-  const { pending, history, pipeline, approve, reject, error, refresh } = portal;
+  const { pending, history, pipeline, movements, approve, reject, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.sddStatus === "Approved" && isToday(l.sddApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.sddStatus === "Rejected" && isToday(l.sddApprovedAt));
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+  const [movementDrilldown, setMovementDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const { toast, notify } = useDecisionToast();
+
+  // Officer cadets who've actually returned to campus today, from the real
+  // gate movement log.
+  const today = todayStr();
+  const todayEntryEntries: ExitEntry[] = movements
+    .filter((m) => m.direction === "Entry" && m.timestamp.startsWith(today))
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: m.department,
+      direction: "Entry",
+      timestamp: m.timestamp,
+    }));
 
   return (
     <div>
@@ -51,6 +71,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
           <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
         </ClickableStatCard>
         <StatTile label="In Progress" value={pipeline.length} />
+        <ClickableStatCard
+          onClick={() => setMovementDrilldown({ title: "Entries Today — Officer Cadets", entries: todayEntryEntries })}
+        >
+          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+        </ClickableStatCard>
       </div>
 
       {leaveDrilldown && (
@@ -58,6 +83,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
           title={leaveDrilldown.title}
           leaves={leaveDrilldown.leaves}
           onClose={() => setLeaveDrilldown(null)}
+        />
+      )}
+      {movementDrilldown && (
+        <ExitDrilldownModal
+          title={movementDrilldown.title}
+          entries={movementDrilldown.entries}
+          onClose={() => setMovementDrilldown(null)}
         />
       )}
 

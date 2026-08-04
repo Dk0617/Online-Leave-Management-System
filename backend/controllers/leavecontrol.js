@@ -246,7 +246,7 @@ async function resolveActiveCoverer(dateStr) {
   return { lecturerId: String(activeCoverer._id), hodIds: unavailableHods.map((u) => String(u.hodId)) };
 }
 
-async function hodScopeFilter(req) {
+export async function hodScopeFilter(req) {
   if (req.user.role === "LECTURER") {
     const today = new Date().toISOString().split("T")[0];
     const active = await resolveActiveCoverer(today);
@@ -293,6 +293,16 @@ export const hodCorrectDateTime = async (req, res) => {
     return res.status(403).json({ message: "This leave is not pending your decision" });
   }
 
+  // Keep the student's own first-submitted values (not overwritten by a
+  // second correction) so the "originally applied for" figure shown to the
+  // student stays accurate even if the HOD corrects the same leave twice.
+  if (!leave.dateTimeCorrectedByHod) {
+    leave.originalStartDate = leave.startDate;
+    leave.originalStartTime = leave.startTime;
+    leave.originalEndDate = leave.endDate;
+    leave.originalEndTime = leave.endTime;
+  }
+  leave.dateTimeCorrectedByHod = true;
   leave.startDate = startDate;
   leave.startTime = startTime;
   leave.endDate = endDate;
@@ -300,7 +310,21 @@ export const hodCorrectDateTime = async (req, res) => {
   await leave.save();
 
   if (leave.linkedLeaveId) {
-    await Leave.findByIdAndUpdate(leave.linkedLeaveId, { startDate, startTime, endDate, endTime });
+    const linked = await Leave.findById(leave.linkedLeaveId);
+    if (linked) {
+      if (!linked.dateTimeCorrectedByHod) {
+        linked.originalStartDate = linked.startDate;
+        linked.originalStartTime = linked.startTime;
+        linked.originalEndDate = linked.endDate;
+        linked.originalEndTime = linked.endTime;
+      }
+      linked.dateTimeCorrectedByHod = true;
+      linked.startDate = startDate;
+      linked.startTime = startTime;
+      linked.endDate = endDate;
+      linked.endTime = endTime;
+      await linked.save();
+    }
   }
 
   await writeAudit("HOD", req.user.name, "leave_datetime_corrected", `leave id=${leave._id}`);

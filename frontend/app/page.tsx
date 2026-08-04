@@ -57,10 +57,7 @@ export default function LoginPage() {
               <div className="text-[10px] font-bold uppercase tracking-[.2em] text-[#e07b20]">
                 KDU Southern Campus
               </div>
-              <div className="text-2xl font-black leading-none tracking-tight text-[#0d1b5e]">
-                SLMS
-              </div>
-              <div className="mt-1 text-xs text-[#94a3b8]">
+              <div className="mt-1 text-xl font-black leading-tight tracking-tight text-[#0d1b5e]">
                 Student Leave Management System
               </div>
             </div>

@@ -172,7 +172,18 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                         </span>
                       )}
                     </td>
-                    <td>{l.startDate}</td>
+                    <td>
+                      {l.startDate}
+                      {l.dateTimeCorrectedByHod && (
+                        <div className="mt-0.5">
+                          <span
+                            title={`Originally applied for ${l.originalStartDate} ${l.originalStartTime} → ${l.originalEndDate} ${l.originalEndTime}`}
+                          >
+                            <Badge tone="amber">✏️ HOD Edited</Badge>
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td>{l.endDate}</td>
                     {isCadet ? (
                       // Cadet Academic Leave routes HOD -> Squadron only (Troop
@@ -258,7 +269,7 @@ const LEAVE_TYPES: LeaveType[] = [
   "Emergency Leave",
 ];
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -290,8 +301,8 @@ export function ApplyLeave({
   const [contactNumber, setContactNumber] = useState("");
   const [file, setFile] = useState<File | null>(null);
   // Academic Leave always applies together with a linked Personal Leave —
-  // two separate leave records, each with its own reason/attachment.
-  const [personalReason, setPersonalReason] = useState("");
+  // two separate leave records, sharing the one reason typed above (no need
+  // to type it twice), each with its own attachment.
   const [personalFile, setPersonalFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -308,6 +319,11 @@ export function ApplyLeave({
   const isEmergency = type === "Emergency Leave";
   const isAcademic = type === "Academic Leave";
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
+  // The linked Personal Leave that always accompanies an Academic Leave
+  // follows the same document rule as a standalone Personal Leave —
+  // required for Cadets, optional for Day Scholars. Mirrors the backend
+  // check in studentcontrol.js applyLeave.
+  const personalDocRequired = isAcademic && isCadet;
   const today = new Date().toISOString().split("T")[0];
   const minStartDate = isEmergency
     ? today
@@ -321,6 +337,45 @@ export function ApplyLeave({
     !isEmergency && startDate && endDate
       ? portal.blockedDays.find((d) => d.date >= startDate && d.date <= endDate)
       : undefined;
+
+  // Recomputed on every keystroke/selection (not just at submit) so a wrong
+  // date/time is flagged the moment the student sets it — see the banner
+  // rendered right below the date/time fields. Mirrors the same rules the
+  // backend enforces in studentcontrol.js applyLeave, and handleSubmit below
+  // reuses this instead of re-checking, so the two can't drift apart.
+  const dateTimeIssue: string | null = (() => {
+    if (!startDate || !startTime || !endDate || !endTime) return null;
+    const startMinutePart = Number(startTime.split(":")[1]);
+    const endMinutePart = Number(endTime.split(":")[1]);
+    if ((startMinutePart !== 0 && startMinutePart !== 30) || (endMinutePart !== 0 && endMinutePart !== 30)) {
+      return "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).";
+    }
+    if (new Date(`${startDate}T${startTime}`) < new Date()) {
+      return "Start date/time can't be in the past.";
+    }
+    if (!isEmergency && startDate < minStartDate) {
+      return "Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.";
+    }
+    if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
+      return "End date/time must be after start date/time — they can't be the same.";
+    }
+    if (!isEmergency) {
+      const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+      if (new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
+        return "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.";
+      }
+      const [startHour, startMinute] = startTime.split(":").map(Number);
+      const [endHour, endMinute] = endTime.split(":").map(Number);
+      if (startHour * 60 + startMinute < 6 * 60) {
+        return "Leave start time must be 06.00 hrs or later — campus exit is only allowed from 06.00 hrs onward.";
+      }
+      if (endHour * 60 + endMinute > 18 * 60) {
+        return "Leave end time must be 18.00 hrs or earlier — campus entry must be logged by 18.00 hrs.";
+      }
+    }
+    return null;
+  })();
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const missing: string[] = [];
@@ -333,7 +388,7 @@ export function ApplyLeave({
     if (!address.trim()) missing.push("Address");
     if (!contactNumber.trim()) missing.push("Contact Number");
     if (docRequired && !file) missing.push("Supporting Document");
-    if (isAcademic && !personalReason.trim()) missing.push("Personal Leave Reason");
+    if (personalDocRequired && !personalFile) missing.push("Personal Leave Supporting Document");
     if (missing.length) {
       setError(`Please complete: ${missing.join(", ")}`);
       return;
@@ -342,22 +397,8 @@ export function ApplyLeave({
       setError("Contact number must be exactly 10 digits, numbers only.");
       return;
     }
-    const startMinutePart = Number(startTime.split(":")[1]);
-    const endMinutePart = Number(endTime.split(":")[1]);
-    if ((startMinutePart !== 0 && startMinutePart !== 30) || (endMinutePart !== 0 && endMinutePart !== 30)) {
-      setError("Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).");
-      return;
-    }
-    if (new Date(`${startDate}T${startTime}`) < new Date()) {
-      setError("Start date/time can't be in the past.");
-      return;
-    }
-   if (!isEmergency && startDate && startDate < minStartDate) {
-      setError("Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.");
-      return;
-    }
-    if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
-      setError("End date/time must be after start date/time — they can't be the same.");
+    if (dateTimeIssue) {
+      setError(dateTimeIssue);
       return;
     }
     if (blockedDayInRange) {
@@ -366,31 +407,12 @@ export function ApplyLeave({
       );
       return;
     }
-    if (!isEmergency) {
-      const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
-      if (new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
-        setError(
-          "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that."
-        );
-        return;
-      }
-      const [startHour, startMinute] = startTime.split(":").map(Number);
-      const [endHour, endMinute] = endTime.split(":").map(Number);
-      if (startHour * 60 + startMinute < 6 * 60) {
-        setError("Leave start time must be 06.00 hrs or later — campus exit is only allowed from 06.00 hrs onward.");
-        return;
-      }
-      if (endHour * 60 + endMinute > 18 * 60) {
-        setError("Leave end time must be 18.00 hrs or earlier — campus entry must be logged by 18.00 hrs.");
-        return;
-      }
-    }
     if (file && file.size > MAX_FILE_BYTES) {
-      setError("File too large (max 2MB). Please choose a smaller file.");
+      setError("File too large (max 20MB). Please choose a smaller file.");
       return;
     }
     if (personalFile && personalFile.size > MAX_FILE_BYTES) {
-      setError("Personal Leave file too large (max 2MB). Please choose a smaller file.");
+      setError("Personal Leave file too large (max 20MB). Please choose a smaller file.");
       return;
     }
 
@@ -412,7 +434,6 @@ export function ApplyLeave({
         attachmentData,
         ...(isAcademic
           ? {
-              personalReason: personalReason.trim(),
               personalAttachmentName: personalFile?.name,
               personalAttachmentData,
             }
@@ -427,7 +448,6 @@ export function ApplyLeave({
       setAddress("");
       setContactNumber("");
       setFile(null);
-      setPersonalReason("");
       setPersonalFile(null);
       onDone();
     } catch (err) {
@@ -559,6 +579,12 @@ export function ApplyLeave({
             </div>
           </div>
 
+          {dateTimeIssue && (
+            <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
+              ⛔ {dateTimeIssue}
+            </div>
+          )}
+
           {blockedDayInRange && (
             <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
               ⛔ <strong>{blockedDayInRange.date}</strong> is a mandatory-attendance day (&quot;{blockedDayInRange.title}
@@ -577,16 +603,19 @@ export function ApplyLeave({
               <label className={styles.label}>
                 Reason<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
+              <p className="mb-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                Used for both the Academic Leave and the linked Personal Leave below — one reason covers both.
+              </p>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
-                placeholder="Describe your academic reason…"
+                placeholder="Describe your reason…"
                 className={styles.input}
               />
               <div className="mt-2 flex items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
-                  📎 Upload Document
+                  📎 Upload Document (Academic Leave)
                   <input
                     type="file"
                     accept=".pdf,.jpg,.png,.doc,.docx"
@@ -603,19 +632,9 @@ export function ApplyLeave({
               <div className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--sky)]">
                 🧳 Personal Leave (linked)
               </div>
-              <label className={styles.label}>
-                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
-              </label>
-              <textarea
-                value={personalReason}
-                onChange={(e) => setPersonalReason(e.target.value)}
-                rows={3}
-                placeholder="Describe your reason for leaving campus…"
-                className={styles.input}
-              />
-              <div className="mt-2 flex items-center gap-3">
+              <div className="flex items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
-                  📎 Upload Document
+                  📎 Upload Document (Personal Leave)
                   <input
                     type="file"
                     accept=".pdf,.jpg,.png,.doc,.docx"
@@ -626,7 +645,7 @@ export function ApplyLeave({
                 <span className="truncate text-xs text-[var(--muted)]">
                   {personalFile ? personalFile.name : "No file chosen"}
                 </span>
-                <Badge tone="gray">Optional</Badge>
+                <Badge tone={personalDocRequired ? "red" : "gray"}>{personalDocRequired ? "Required" : "Optional"}</Badge>
               </div>
             </div>
           ) : (

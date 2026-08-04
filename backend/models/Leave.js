@@ -62,6 +62,17 @@ const leaveSchema = new mongoose.Schema(
     // dates) — this links the pair together for traceability. See
     // studentcontrol.js applyLeave / createLinkedPersonalLeave.
     linkedLeaveId: { type: mongoose.Schema.Types.ObjectId, ref: "Leave" },
+
+    // Set when an HOD uses the "Edit Date/Time" correction (see
+    // leavecontrol.js hodCorrectDateTime) — the original student-submitted
+    // values are kept so the student portal and leave-pass PDF can flag the
+    // change instead of silently showing the corrected dates as if the
+    // student had entered them.
+    dateTimeCorrectedByHod: { type: Boolean, default: false },
+    originalStartDate: String,
+    originalStartTime: String,
+    originalEndDate: String,
+    originalEndTime: String,
   },
   { timestamps: true }
 );

@@ -60,6 +60,19 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
       direction: "Exit",
       plannedDate: `${l.startDate} ${l.startTime}`,
     }));
+  // Students who've actually returned to campus today, from the real gate
+  // movement log — not a forecast, unlike tomorrowExitEntries above.
+  const todayEntryEntries: ExitEntry[] = movements
+    .filter((m) => m.direction === "Entry" && m.timestamp.startsWith(today))
+    .map((m) => ({
+      id: m.id,
+      indexNumber: m.indexNumber,
+      studentName: m.studentName,
+      studentType: m.studentType,
+      department: m.department,
+      direction: "Entry",
+      timestamp: m.timestamp,
+    }));
 
   return (
     <div>
@@ -95,6 +108,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Tomorrow — Your Squadron", entries: tomorrowExitEntries })}>
           <StatTile label="Exits Tomorrow (click for details)" value={tomorrowExitEntries.length} tone="blue" />
+        </ClickableStatCard>
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today — Your Squadron", entries: todayEntryEntries })}>
+          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
         </ClickableStatCard>
       </div>
 

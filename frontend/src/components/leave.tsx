@@ -311,8 +311,34 @@ export function LeaveDetailModal({
               </>
             }
           />
-          <Row label="From" value={`${leave.startDate} ${leave.startTime}`} />
+          <Row
+            label="From"
+            value={
+              <>
+                {leave.startDate} {leave.startTime}
+                {leave.dateTimeCorrectedByHod && (
+                  <span className="ml-2">
+                    <Badge tone="amber">✏️ Edited by HOD</Badge>
+                  </span>
+                )}
+              </>
+            }
+          />
           <Row label="To" value={`${leave.endDate} ${leave.endTime}`} />
+
+          {leave.dateTimeCorrectedByHod && (
+            <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--warn)]">
+                ✏️ Date/Time Corrected by HOD
+              </div>
+              <div className="mt-1 text-[13px] text-[var(--white)]">
+                You originally applied for {leave.originalStartDate} {leave.originalStartTime} →{" "}
+                {leave.originalEndDate} {leave.originalEndTime}. Your HOD corrected this to the dates/times
+                shown above before approving.
+              </div>
+            </div>
+          )}
+
           <Row label="Reason" value={leave.reason} />
           <LocationPinCard address={leave.address} />
           <Row label="Contact Number" value={leave.contactNumber} />

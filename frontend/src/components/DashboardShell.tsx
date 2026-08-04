@@ -177,11 +177,8 @@ export function DashboardShell({
               />
             </div>
             <div>
-              <div className="text-[15px] font-extrabold tracking-wide text-white">
-                SLMS
-              </div>
-              <div className="text-[10px] font-semibold tracking-widest text-[var(--orange2)]">
-                KDU SOUTHERN CAMPUS
+              <div className="text-[12px] font-extrabold leading-tight tracking-wide text-white">
+                Student Leave Management System
               </div>
             </div>
           </div>

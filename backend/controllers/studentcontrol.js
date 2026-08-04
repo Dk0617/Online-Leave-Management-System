@@ -6,6 +6,7 @@ import Hod from "../models/HOD.js";
 import Troop from "../models/Troop.js";
 import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
+import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
 
 // Academic Leave never requires a supporting document, for either student
@@ -26,8 +27,8 @@ function minutesFromTimeString(t) {
   return h * 60 + m;
 }
 
-// ~2MB of raw file becomes ~2.7MB once base64-encoded.
-const MAX_ATTACHMENT_BYTES = 2.7 * 1024 * 1024;
+// 20MB of raw file becomes ~26.7MB once base64-encoded.
+const MAX_ATTACHMENT_BYTES = (20 * 1024 * 1024 * 4) / 3;
 // Excludes ambiguous characters (0/O, 1/I/L) so gate staff can read/type it easily.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function generateVerifyCode() {
@@ -39,10 +40,11 @@ function generateVerifyCode() {
 
 // Academic Leave always requires a companion Personal Leave (same dates) —
 // for Day Scholars this is a standing policy; for Cadets it covers the
-// "going home during a lecture-day period" case. These are two separate,
-// independently-reasoned leave records (own Reason, own attachment — not
-// derived from the Academic Leave's), sharing only the dates/address/contact,
-// each with its own routing:
+// "going home during a lecture-day period" case. These are two separate
+// leave records with their own attachment each (not derived from the
+// Academic Leave's), sharing the Academic Leave's own reason (the student
+// only types it once) plus the dates/address/contact, each with its own
+// routing:
 //   - Cadet Academic Leave: HOD -> Squadron Commander (no Troop, no SDD).
 //     Cadet Personal Leave (this companion): Troop Commander -> Squadron
 //     Commander -> Senior Deputy Dean — the normal full Cadet chain. Since
@@ -51,7 +53,7 @@ function generateVerifyCode() {
 //   - Day Scholar Academic Leave: HOD -> Troop Commander. Day Scholar
 //     Personal Leave (this companion): HOD -> Troop Commander, same as the
 //     Academic Leave itself — both stages cascade from the Academic Leave.
-async function createLinkedPersonalLeave(primary, student, hodIdForLeave, troopIdsForLeave, personalReason, personalAttachmentName, personalAttachmentData) {
+async function createLinkedPersonalLeave(primary, student, hodIdForLeave, troopIdsForLeave, sharedReason, personalAttachmentName, personalAttachmentData) {
   const isCadet = student.studentType === "CADET";
   const linked = await Leave.create({
     studentId: student._id,
@@ -69,7 +71,7 @@ async function createLinkedPersonalLeave(primary, student, hodIdForLeave, troopI
     startTime: primary.startTime,
     endDate: primary.endDate,
     endTime: primary.endTime,
-    reason: personalReason,
+    reason: sharedReason,
     address: primary.address,
     contactNumber: primary.contactNumber,
     attachmentName: personalAttachmentName || undefined,
@@ -102,7 +104,6 @@ export const applyLeave = async (req, res) => {
     contactNumber,
     attachmentName,
     attachmentData,
-    personalReason,
     personalAttachmentName,
     personalAttachmentData,
   } = req.body;
@@ -122,12 +123,13 @@ export const applyLeave = async (req, res) => {
     missing.push("Supporting Document");
   }
   // Academic Leave always applies together with a linked Personal Leave —
-  // two separate, independently-reasoned leave records, not one derived
-  // from the other. Its document is always optional, even for Cadets
-  // (unlike a standalone Personal Leave, which still requires one) — the
-  // Academic Leave's own document already covers the reason for both.
-  if (isAcademicRequest && (!personalReason || !personalReason.trim())) {
-    missing.push("Personal Leave Reason");
+  // two separate leave records, but sharing the one reason the student typed
+  // above (no need to type it twice). Its own document stays optional for
+  // both student types, but the linked Personal Leave's document follows
+  // the same rule as a standalone Personal Leave — required for Cadets,
+  // optional for Day Scholars.
+  if (isAcademicRequest && student.studentType === "CADET" && !personalAttachmentData) {
+    missing.push("Personal Leave Supporting Document");
   }
   if (missing.length) {
     return res
@@ -151,7 +153,10 @@ export const applyLeave = async (req, res) => {
     return res.status(400).json({ message: "Start date/time can't be in the past" });
   }
   if (attachmentData && Buffer.byteLength(attachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
-    return res.status(400).json({ message: "Attachment too large (max 2MB)" });
+    return res.status(400).json({ message: "Attachment too large (max 20MB)" });
+  }
+  if (personalAttachmentData && Buffer.byteLength(personalAttachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
+    return res.status(400).json({ message: "Personal Leave attachment too large (max 20MB)" });
   }
 
   // Every leave type except Emergency Leave must be submitted at least 2
@@ -237,6 +242,39 @@ export const applyLeave = async (req, res) => {
     }
   }
 
+  // A student can't be on two leaves at once — block a new application that
+  // overlaps the date/time window of one of their own still-active leaves
+  // (Pending, or Approved and not yet returned from). Applies to every
+  // type, including Emergency Leave — this is a physical-presence
+  // constraint, not a notice-period policy Emergency Leave is meant to skip.
+  // A gate-eligible leave the student has already exited-and-re-entered for
+  // (an early return, logged by gate staff before its approved end date)
+  // stops blocking from that actual return time onward, not just once its
+  // original end date/time passes.
+  const overlapCandidates = await Leave.find({
+    studentId: student._id,
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate },
+  });
+  const newStart = new Date(`${startDate}T${startTime}`);
+  const newEnd = new Date(`${endDate}T${endTime}`);
+  for (const candidate of overlapCandidates) {
+    if (isRejected(candidate)) continue;
+    const candidateStart = new Date(`${candidate.startDate}T${candidate.startTime}`);
+    let candidateEnd = new Date(`${candidate.endDate}T${candidate.endTime}`);
+    if (isGateEligible(candidate)) {
+      const returnedEntry = await Movement.findOne({ leaveId: candidate._id, direction: "Entry" }).sort({
+        createdAt: 1,
+      });
+      if (returnedEntry) candidateEnd = returnedEntry.createdAt;
+    }
+    if (candidateStart < newEnd && candidateEnd > newStart) {
+      return res.status(400).json({
+        message: `You already have a ${candidate.type} leave for ${candidate.startDate} ${candidate.startTime} – ${candidate.endDate} ${candidate.endTime} that overlaps with these dates/times. You can apply again once that leave is completed or you've returned to campus for it.`,
+      });
+    }
+  }
+
   const leave = await Leave.create({
     studentId: student._id,
     studentName: student.name,
@@ -273,7 +311,7 @@ export const applyLeave = async (req, res) => {
       student,
       isCadet ? undefined : hodIdForLeave,
       troopIdsForLeave,
-      personalReason.trim(),
+      reason.trim(),
       personalAttachmentName || undefined,
       personalAttachmentData || undefined
     );
