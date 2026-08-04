@@ -4,11 +4,11 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
+import { PhotoCropModal } from "@/src/components/PhotoCropModal";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
 import { downloadLeavePassPdf } from "@/src/pdf";
-import { downscalePhoto } from "@/src/photo";
 import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "./student.module.css";
 
@@ -761,9 +761,11 @@ export function SetProfilePhoto({
   const { refresh } = portal;
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
 
-  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       setMessage("Please upload a JPG or PNG image.");
@@ -773,10 +775,15 @@ export function SetProfilePhoto({
       setMessage("Photo too large — please use an image under 1.5MB.");
       return;
     }
+    setMessage(null);
+    setPickedFile(file);
+  }
+
+  async function handleCropConfirm(dataUrl: string) {
+    setPickedFile(null);
     setSubmitting(true);
     setMessage(null);
     try {
-      const dataUrl = await downscalePhoto(file);
       await updatePhoto(dataUrl);
       await refresh();
       onDone?.();
@@ -784,7 +791,6 @@ export function SetProfilePhoto({
       setMessage(err instanceof Error ? err.message : "Failed to update photo");
     } finally {
       setSubmitting(false);
-      e.target.value = "";
     }
   }
 
@@ -805,11 +811,14 @@ export function SetProfilePhoto({
           type="file"
           accept="image/png,image/jpeg"
           className="hidden"
-          onChange={handlePhotoChange}
+          onChange={handleFileSelected}
           disabled={submitting}
         />
       </label>
       {message && <p className="mt-3 text-xs text-[var(--err)]">{message}</p>}
+      {pickedFile && (
+        <PhotoCropModal file={pickedFile} onCancel={() => setPickedFile(null)} onConfirm={handleCropConfirm} />
+      )}
     </Card>
   );
 }
@@ -827,8 +836,10 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [requestingChange, setRequestingChange] = useState(false);
-  const [requestFile, setRequestFile] = useState<File | null>(null);
+  const [requestPickedFile, setRequestPickedFile] = useState<File | null>(null);
+  const [requestPhotoDataUrl, setRequestPhotoDataUrl] = useState<string | null>(null);
   const [requestReason, setRequestReason] = useState("");
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
@@ -856,8 +867,9 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
 
   const initials = `${profile.firstName[0] ?? ""}${profile.lastName[0] ?? ""}`.toUpperCase();
 
-  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       setMessage("Please upload a JPG or PNG image.");
@@ -867,15 +879,19 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
       setMessage("Photo too large — please use an image under 1.5MB.");
       return;
     }
+    setMessage(null);
+    setPickedFile(file);
+  }
+
+  async function handleCropConfirm(dataUrl: string) {
+    setPickedFile(null);
     try {
-      const dataUrl = await downscalePhoto(file);
       await updatePhoto(dataUrl);
       await refresh();
       setMessage("📷 Profile photo updated!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to update photo");
     }
-    e.target.value = "";
   }
 
   async function handleRemovePhoto() {
@@ -893,27 +909,34 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
     }
   }
 
-  async function handleRequestPhotoChange(e: FormEvent) {
-    e.preventDefault();
-    if (!requestFile) {
-      setMessage("Choose a photo first.");
-      return;
-    }
-    if (!/^image\/(png|jpe?g)$/i.test(requestFile.type)) {
+  function handleRequestFileSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       setMessage("Please upload a JPG or PNG image.");
       return;
     }
-    if (requestFile.size > 1.5 * 1024 * 1024) {
+    if (file.size > 1.5 * 1024 * 1024) {
       setMessage("Photo too large — please use an image under 1.5MB.");
+      return;
+    }
+    setMessage(null);
+    setRequestPickedFile(file);
+  }
+
+  async function handleRequestPhotoChange(e: FormEvent) {
+    e.preventDefault();
+    if (!requestPhotoDataUrl) {
+      setMessage("Choose a photo first.");
       return;
     }
     setRequestSubmitting(true);
     try {
-      const dataUrl = await downscalePhoto(requestFile);
-      await requestPhotoChange(dataUrl, requestReason.trim() || undefined);
+      await requestPhotoChange(requestPhotoDataUrl, requestReason.trim() || undefined);
       setMessage("Request submitted — an Admin will review it.");
       setRequestingChange(false);
-      setRequestFile(null);
+      setRequestPhotoDataUrl(null);
       setRequestReason("");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to submit request");
@@ -956,7 +979,7 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
               </p>
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
                 📷 Upload Photo
-                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileSelected} />
               </label>
               <button
                 onClick={handleRemovePhoto}
@@ -964,6 +987,9 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
               >
                 🗑️ Remove
               </button>
+              {pickedFile && (
+                <PhotoCropModal file={pickedFile} onCancel={() => setPickedFile(null)} onConfirm={handleCropConfirm} />
+              )}
             </>
           ) : pendingPhotoRequest ? (
             <p className="text-xs leading-relaxed text-[var(--warn)]">
@@ -972,15 +998,24 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
             </p>
           ) : requestingChange ? (
             <form onSubmit={handleRequestPhotoChange} className="flex flex-col gap-2">
-              <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
-                📷 {requestFile ? requestFile.name : "Choose New Photo"}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  className="hidden"
-                  onChange={(e) => setRequestFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
+              <div className="flex items-center gap-2">
+                {requestPhotoDataUrl && (
+                  <img
+                    src={requestPhotoDataUrl}
+                    alt="New photo preview"
+                    className="h-10 w-10 shrink-0 rounded-full border border-[rgba(74,144,217,0.35)] object-cover"
+                  />
+                )}
+                <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+                  📷 {requestPhotoDataUrl ? "Change Photo" : "Choose New Photo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={handleRequestFileSelected}
+                  />
+                </label>
+              </div>
               <textarea
                 value={requestReason}
                 onChange={(e) => setRequestReason(e.target.value)}
@@ -996,12 +1031,25 @@ export function Profile({ portal }: { portal: ReturnType<typeof useStudentPortal
                   type="button"
                   variant="ghost"
                   className="!text-xs"
-                  onClick={() => setRequestingChange(false)}
+                  onClick={() => {
+                    setRequestingChange(false);
+                    setRequestPhotoDataUrl(null);
+                  }}
                   disabled={requestSubmitting}
                 >
                   Cancel
                 </Button>
               </div>
+              {requestPickedFile && (
+                <PhotoCropModal
+                  file={requestPickedFile}
+                  onCancel={() => setRequestPickedFile(null)}
+                  onConfirm={(dataUrl) => {
+                    setRequestPickedFile(null);
+                    setRequestPhotoDataUrl(dataUrl);
+                  }}
+                />
+              )}
             </form>
           ) : (
             <>

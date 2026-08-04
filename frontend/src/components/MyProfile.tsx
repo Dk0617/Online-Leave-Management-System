@@ -2,8 +2,8 @@
 
 import { ChangeEvent, useState } from "react";
 import { Card, Button } from "@/src/components/ui";
+import { PhotoCropModal } from "@/src/components/PhotoCropModal";
 import { useAuth } from "@/src/AuthContext";
-import { downscalePhoto } from "@/src/photo";
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -35,11 +35,13 @@ export function MyProfile() {
   const { user, updatePhoto } = useAuth();
   const [message, setMessage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
 
   if (!user) return null;
 
-  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       setMessage("Please upload a JPG or PNG image.");
@@ -49,17 +51,21 @@ export function MyProfile() {
       setMessage("Photo too large — please use an image under 1.5MB.");
       return;
     }
+    setMessage(null);
+    setPickedFile(file);
+  }
+
+  async function handleCropConfirm(dataUrl: string) {
+    setPickedFile(null);
     setUploading(true);
     setMessage(null);
     try {
-      const dataUrl = await downscalePhoto(file);
       await updatePhoto(dataUrl);
       setMessage("📷 Profile photo updated!");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to update photo");
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   }
 
@@ -99,7 +105,7 @@ export function MyProfile() {
               type="file"
               accept="image/png,image/jpeg"
               className="hidden"
-              onChange={handlePhotoChange}
+              onChange={handleFileSelected}
               disabled={uploading}
             />
           </label>
@@ -110,6 +116,9 @@ export function MyProfile() {
       </div>
 
       {message && <p className="mb-4 text-xs text-[var(--sky)]">{message}</p>}
+      {pickedFile && (
+        <PhotoCropModal file={pickedFile} onCancel={() => setPickedFile(null)} onConfirm={handleCropConfirm} />
+      )}
 
       <div className="grid gap-4 border-t border-[var(--border)] pt-4 sm:grid-cols-2">
         <Field label="Name" value={user.name} />

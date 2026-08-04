@@ -1,10 +1,11 @@
 "use client";
 
-import { ChangeEvent, ReactNode, useEffect, useState } from "react";
+import { ChangeEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthUser, Role } from "@/src/types";
 import { useAuth } from "@/src/AuthContext";
-import { downscalePhoto } from "@/src/photo";
+import { PhotoCropModal } from "@/src/components/PhotoCropModal";
+import { Button } from "@/src/components/ui";
 
 export interface NavItem {
   key: string;
@@ -21,16 +22,22 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-// The header's own avatar — every role can click it to upload their photo
-// (shared self-service endpoint, see logauthcontrol.js updateMyPhoto),
-// instead of needing a dedicated Profile page like Students already have.
+// The header's own avatar — clicking it pops up the current photo (not the
+// OS file picker); "Change Photo" inside that popup is the deliberate next
+// step that opens the file picker, then a crop step to position it (shared
+// self-service endpoint, see logauthcontrol.js updateMyPhoto), instead of
+// needing a dedicated Profile page like Students already have.
 function HeaderAvatar({ user }: { user: AuthUser }) {
   const { updatePhoto } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleFileSelected(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       setError("Please upload a JPG or PNG image.");
@@ -40,36 +47,80 @@ function HeaderAvatar({ user }: { user: AuthUser }) {
       setError("Photo too large — under 1.5MB please.");
       return;
     }
+    setError(null);
+    setPreviewOpen(false);
+    setPickedFile(file);
+  }
+
+  async function handleCropConfirm(dataUrl: string) {
+    setPickedFile(null);
     setUploading(true);
     setError(null);
     try {
-      const dataUrl = await downscalePhoto(file);
       await updatePhoto(dataUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update photo");
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   }
 
   return (
     <div className="relative">
-      <label
-        title="Click to update your photo"
-        className="flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-xs font-bold text-white"
+      <button
+        type="button"
+        title="View your photo"
+        onClick={() => setPreviewOpen(true)}
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-xs font-bold text-white"
       >
         {uploading ? "…" : user.photo ? (
           <img src={user.photo} alt={user.name} className="h-full w-full object-cover" />
         ) : (
           initialsOf(user.name)
         )}
-        <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handlePhotoChange} />
-      </label>
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
       {error && (
         <div className="absolute right-0 top-11 z-20 w-52 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[var(--card)] p-2 text-[10px] leading-snug text-[var(--err)] shadow-lg">
           {error}
         </div>
+      )}
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="w-[90%] max-w-[320px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-48 w-48 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--orange)] bg-gradient-to-br from-[var(--navy2)] to-[var(--blue)] text-4xl font-bold text-white">
+              {user.photo ? (
+                <img src={user.photo} alt={user.name} className="h-full w-full object-cover" />
+              ) : (
+                initialsOf(user.name)
+              )}
+            </div>
+            <div className="mb-4 text-sm font-bold text-[var(--white)]">{user.name}</div>
+            <div className="flex justify-center gap-2">
+              <Button variant="ghost" onClick={() => setPreviewOpen(false)}>
+                Close
+              </Button>
+              <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+                📷 Change Photo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pickedFile && (
+        <PhotoCropModal file={pickedFile} onCancel={() => setPickedFile(null)} onConfirm={handleCropConfirm} />
       )}
     </div>
   );

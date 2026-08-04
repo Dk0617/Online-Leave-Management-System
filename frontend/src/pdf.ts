@@ -165,11 +165,14 @@ export async function downloadLeavePassPdf(
   doc.setFontSize(6);
   doc.text("STUDENT PHOTO", boxX + boxW / 2, boxY + boxH - 2, { align: "center" });
 
+  // Inset to the inner frame line (x=8..pageW-8), not the outer one — a bar
+  // drawn flush to the outer line (x=6..pageW-6) paints over it, making the
+  // double-border look broken/exceeded right where this bar sits.
   doc.setFillColor(...LIGHT);
-  doc.rect(6, 49.6, pageW - 12, 9, "F");
+  doc.rect(8, 49.6, pageW - 16, 9, "F");
   doc.setDrawColor(...BORDER);
   doc.setLineWidth(0.2);
-  doc.rect(6, 49.6, pageW - 12, 9);
+  doc.rect(8, 49.6, pageW - 16, 9);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...NAVY);
