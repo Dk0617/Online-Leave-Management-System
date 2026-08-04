@@ -132,6 +132,41 @@ export function StatTile({
 }
 
 // ==================================================================
+// Toast
+// ==================================================================
+
+type ToastTone = "green" | "red";
+
+// Solid, saturated fills (not the low-opacity tints used elsewhere in the
+// app) — this one needs to grab the eye immediately since it's the only
+// confirmation the approver gets naming who they just decided on before the
+// row vanishes from the pending list.
+const TOAST_TONE_CLASSES: Record<ToastTone, string> = {
+  green:
+    "bg-gradient-to-r from-[#15803d] to-[#22c55e] ring-2 ring-[rgba(255,255,255,0.3)] shadow-[0_10px_30px_rgba(21,128,61,0.5)]",
+  red: "bg-gradient-to-r from-[#b91c1c] to-[#ef4444] ring-2 ring-[rgba(255,255,255,0.3)] shadow-[0_10px_30px_rgba(185,28,28,0.5)]",
+};
+
+const TOAST_TONE_ICON: Record<ToastTone, string> = {
+  green: "✅",
+  red: "⛔",
+};
+
+// A transient confirmation banner — see useDecisionToast, used by every
+// approver portal to confirm which student's leave was just decided (the
+// row itself just silently disappears from the pending list otherwise).
+export function Toast({ message, tone = "green" }: { message: string; tone?: ToastTone }) {
+  return (
+    <div
+      className={`mb-4 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-bold text-white ${TOAST_TONE_CLASSES[tone]}`}
+    >
+      <span className="text-lg leading-none">{TOAST_TONE_ICON[tone]}</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+// ==================================================================
 // Crest
 // ==================================================================
 

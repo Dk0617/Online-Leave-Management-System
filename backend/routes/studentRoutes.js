@@ -2,6 +2,7 @@ import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
 import {
   applyLeave,
+  myBlockedDays,
   myLeaves,
   leaveMovements,
   getProfile,
@@ -16,6 +17,7 @@ router.use(verifyToken, requireRole("STUDENT"));
 
 router.post("/leaves", applyLeave);
 router.get("/leaves", myLeaves);
+router.get("/blocked-days", myBlockedDays);
 router.get("/leaves/:leaveId/movements", leaveMovements);
 
 router.get("/profile", getProfile);

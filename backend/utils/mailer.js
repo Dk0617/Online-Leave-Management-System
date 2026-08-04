@@ -24,14 +24,6 @@ async function sendMail(to, subject, text) {
   await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text });
 }
 
-export async function sendOtpEmail(to, code) {
-  await sendMail(
-    to,
-    "SLMS Login Code",
-    `Your SLMS login code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this email.`
-  );
-}
-
 export async function sendApprovalEmail(to, studentName, leave) {
   await sendMail(
     to,

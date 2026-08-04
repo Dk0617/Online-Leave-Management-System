@@ -28,8 +28,6 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<AuthUser | null>;
-  requestOtp: (email: string) => Promise<void>;
-  loginWithOtp: (email: string, code: string) => Promise<AuthUser | null>;
   logout: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updatePhoto: (photo: string | null) => Promise<void>;
@@ -73,22 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (err instanceof ApiError) return null;
       throw err;
     }
-  }
-
-  async function requestOtp(email: string): Promise<void> {
-    await api.post("/auth/otp/request", { email });
-  }
-
-  async function loginWithOtp(email: string, code: string): Promise<AuthUser | null> {
-    const data = await api.post<{ token: string; user: Record<string, unknown> }>(
-      "/auth/otp/verify",
-      { email, code }
-    );
-    const normalized = normalizeAuthUser(data.user);
-    setToken(data.token);
-    window.localStorage.setItem(USER_KEY, JSON.stringify(normalized));
-    setUser(normalized);
-    return normalized;
   }
 
   function logout() {
@@ -151,8 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
-        requestOtp,
-        loginWithOtp,
         logout,
         changePassword,
         updatePhoto,

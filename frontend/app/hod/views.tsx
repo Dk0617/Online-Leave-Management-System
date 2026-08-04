@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Card, StatTile, Badge, Button } from "@/src/components/ui";
+import { Card, StatTile, Badge, Button, Toast } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ClickableStatCard } from "@/src/components/exitStats";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
+import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { isToday } from "@/src/api";
 import {
   EVENT_CATEGORY_LABELS,
@@ -43,9 +44,11 @@ export function Dashboard({
   // entirely for a Lecturer covering the queue, rather than exposing a
   // button that would just 403.
   const onCorrect = asLecturer ? undefined : setCorrecting;
+  const { toast, notify } = useDecisionToast();
 
   return (
     <div>
+      {toast && <Toast message={toast.message} tone={toast.tone} />}
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load HOD data: {error}</span>
@@ -107,6 +110,7 @@ export function Dashboard({
               onApprove={approve}
               onReject={reject}
               onCorrect={onCorrect}
+              notify={notify}
             />
           </div>
         </>
@@ -115,7 +119,14 @@ export function Dashboard({
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
         {emergencyPending.length > 0 ? "Other Pending Applications" : "Pending Applications"}
       </h2>
-      <PendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} onCorrect={onCorrect} />
+      <PendingTable
+        leaves={otherPending}
+        onView={setSelected}
+        onApprove={approve}
+        onReject={reject}
+        onCorrect={onCorrect}
+        notify={notify}
+      />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
       {correcting && (
@@ -142,12 +153,14 @@ function PendingTable({
   onApprove,
   onReject,
   onCorrect,
+  notify,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
   onCorrect?: (l: LeaveRequest) => void;
+  notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
@@ -205,7 +218,11 @@ function PendingTable({
                       ✏️ Edit Date/Time
                     </Button>
                   )}
-                  <ApprovalActions onApprove={() => onApprove(l.id)} onReject={(remarks) => onReject(l.id, remarks)} />
+                  <ApprovalActions
+                    onApprove={() => onApprove(l.id)}
+                    onReject={(remarks) => onReject(l.id, remarks)}
+                    onSuccess={(decision) => notify(l, decision)}
+                  />
                 </td>
               </tr>
             ))

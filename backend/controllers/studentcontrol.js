@@ -5,6 +5,7 @@ import Movement from "../models/Movement.js";
 import Hod from "../models/HOD.js";
 import Troop from "../models/Troop.js";
 import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
+import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { writeAudit } from "../utils/audit.js";
 
 // Academic Leave never requires a supporting document, for either student
@@ -191,10 +192,14 @@ export const applyLeave = async (req, res) => {
   // existing student records. Squadron Commander has no equivalent
   // derivation (Squadron accounts aren't tied to a department or intake),
   // so it's still the student's directly-assigned sqnId.
+  // Looked up unconditionally (not just when needsHod) because the
+  // mandatory-event-day check below applies to every leave type routed
+  // through this department, regardless of whether this particular leave
+  // itself needs an HOD decision.
   // These two lookups don't depend on each other — running them concurrently
   // instead of one after another halves this part of the request's latency.
   const [hod, troops] = await Promise.all([
-    needsHod ? Hod.findOne({ department: student.department }) : Promise.resolve(null),
+    Hod.findOne({ department: student.department }),
     Troop.find({ intakes: student.intake }).select("_id"),
   ]);
 
@@ -214,6 +219,23 @@ export const applyLeave = async (req, res) => {
     });
   }
   const troopIdsForLeave = troops.map((t) => t._id);
+
+  // A Workshop day (or other mandatory-attendance academic day) the HOD has
+  // marked on the calendar blocks ordinary leave applications that overlap
+  // it — Emergency Leave is the one exception, same reasoning as the 2-day
+  // advance-notice rule above.
+  if (hod && !isEmergency) {
+    const blockedDay = await EventDay.findOne({
+      hodId: hod._id,
+      category: { $in: MANDATORY_EVENT_CATEGORIES },
+      date: { $gte: startDate, $lte: endDate },
+    });
+    if (blockedDay) {
+      return res.status(400).json({
+        message: `Leave cannot be applied for ${blockedDay.date} — it's a mandatory-attendance day ("${blockedDay.title}") set by your HOD. Only Emergency Leave can be applied on that date.`,
+      });
+    }
+  }
 
   const leave = await Leave.create({
     studentId: student._id,
@@ -268,6 +290,27 @@ export const applyLeave = async (req, res) => {
   res.status(201).json(leave);
 };
 
+// Lets the leave-application form warn the student (and block the relevant
+// dates client-side, mirroring the server-side check in applyLeave above)
+// before they even submit — mandatory event days only, from their own
+// department's HOD, and only future-dated ones (past workshop days are of
+// no use to the form).
+export const myBlockedDays = async (req, res) => {
+  const student = await Student.findById(req.user.id);
+  if (!student) return res.status(404).json({ message: "Student not found" });
+
+  const hod = await Hod.findOne({ department: student.department });
+  if (!hod) return res.json([]);
+
+  const today = new Date().toISOString().split("T")[0];
+  const days = await EventDay.find({
+    hodId: hod._id,
+    category: { $in: MANDATORY_EVENT_CATEGORIES },
+    date: { $gte: today },
+  }).sort({ date: 1 });
+  res.json(days);
+};
+
 export const myLeaves = async (req, res) => {
   // Newest application first (descending by submission date/time) — the
   // most recently applied leave always appears at the top of the dashboard.
@@ -300,12 +343,12 @@ export const getProfile = async (req, res) => {
 };
 
 // firstName/lastName/email/indexNumber/department/studentType are all
-// fixed once the account is created — email is tied to OTP-based login (a
-// self-change could lock the student out or hijack another account's OTP
-// login), and name changes should go through Admin so the record stays
-// consistent with official documents. Mobile is the only field a student
-// can update themselves. Deliberately not read from req.body here, same
-// reasoning as the fields admincontrol.js already locks down.
+// fixed once the account is created — email is used for approval/rejection
+// notifications (a self-change could redirect those to the wrong inbox),
+// and name changes should go through Admin so the record stays consistent
+// with official documents. Mobile is the only field a student can update
+// themselves. Deliberately not read from req.body here, same reasoning as
+// the fields admincontrol.js already locks down.
 export const updateProfile = async (req, res) => {
   const { mobile } = req.body;
   const student = await Student.findById(req.user.id);

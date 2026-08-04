@@ -312,6 +312,15 @@ export function ApplyLeave({
   const minStartDate = isEmergency
     ? today
     : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  // Workshop days (or other mandatory-attendance academic days) the HOD has
+  // marked block ordinary leave applications that overlap them — Emergency
+  // Leave is the one exception. Mirrors the server-side check in
+  // backend/controllers/studentcontrol.js applyLeave.
+  const blockedDayInRange =
+    !isEmergency && startDate && endDate
+      ? portal.blockedDays.find((d) => d.date >= startDate && d.date <= endDate)
+      : undefined;
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const missing: string[] = [];
@@ -349,6 +358,12 @@ export function ApplyLeave({
     }
     if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
       setError("End date/time must be after start date/time — they can't be the same.");
+      return;
+    }
+    if (blockedDayInRange) {
+      setError(
+        `Leave cannot be applied for ${blockedDayInRange.date} — it's a mandatory-attendance day ("${blockedDayInRange.title}") set by your HOD. Use Emergency Leave if this is urgent.`
+      );
       return;
     }
     if (!isEmergency) {
@@ -544,6 +559,14 @@ export function ApplyLeave({
             </div>
           </div>
 
+          {blockedDayInRange && (
+            <div className="rounded-lg border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] px-3.5 py-2.5 text-xs text-[var(--err-soft)]">
+              ⛔ <strong>{blockedDayInRange.date}</strong> is a mandatory-attendance day (&quot;{blockedDayInRange.title}
+              &quot;) set by your HOD — ordinary leave can&apos;t be applied across it. Use{" "}
+              <strong>Emergency Leave</strong> if this is urgent.
+            </div>
+          )}
+
           {isAcademic ? (
             <div className="relative overflow-hidden rounded-lg border border-[rgba(74,144,217,0.3)] bg-[rgba(74,144,217,0.05)] py-4 pl-6 pr-4">
               <div className="absolute inset-y-0 left-0 w-1.5 bg-[var(--sky)]" />
@@ -682,6 +705,76 @@ export function ApplyLeave({
         </form>
       </Card>
     </div>
+  );
+}
+
+// Forced on first login, before mustChangePassword's own forced step (see
+// student/page.tsx) is done and while the student has no photo set yet —
+// once uploaded here it's immediately locked server-side (see
+// backend/controllers/logauthcontrol.js updateMyPhoto), same as a
+// self-service upload from the Profile tab; any change after that needs
+// Admin approval via requestPhotoChange.
+export function SetProfilePhoto({
+  portal,
+  onDone,
+}: {
+  portal: ReturnType<typeof useStudentPortal>;
+  onDone?: () => void;
+}) {
+  const { updatePhoto } = useAuth();
+  const { refresh } = portal;
+  const [message, setMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
+      setMessage("Please upload a JPG or PNG image.");
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      setMessage("Photo too large — please use an image under 1.5MB.");
+      return;
+    }
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const dataUrl = await downscalePhoto(file);
+      await updatePhoto(dataUrl);
+      await refresh();
+      onDone?.();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to update photo");
+    } finally {
+      setSubmitting(false);
+      e.target.value = "";
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4 rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.12)] px-3.5 py-2.5 text-xs font-semibold text-[var(--warn)]">
+        🔒 This is your first login. You must set a profile photo before you can use the system. Once set, any
+        change needs Admin approval.
+      </div>
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📷 Set Your Profile Photo</h2>
+      <p className="mb-3 text-xs leading-relaxed text-[var(--muted)]">
+        Upload a clear passport-style photo (JPG or PNG, under 1.5MB). This photo appears on your official
+        Leave Pass PDF and your dashboard avatar.
+      </p>
+      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
+        📷 {submitting ? "Uploading…" : "Upload Photo"}
+        <input
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={handlePhotoChange}
+          disabled={submitting}
+        />
+      </label>
+      {message && <p className="mt-3 text-xs text-[var(--err)]">{message}</p>}
+    </Card>
   );
 }
 

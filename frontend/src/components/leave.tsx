@@ -51,9 +51,15 @@ export function Timeline({ steps }: { steps: TimelineStep[] }) {
 export function ApprovalActions({
   onApprove,
   onReject,
+  onSuccess,
 }: {
   onApprove: () => Promise<void>;
   onReject: (remarks: string) => Promise<void>;
+  // Fired right after a decision succeeds — lets the caller show a
+  // confirmation naming the student (see useDecisionToast), since the row
+  // itself just disappears from the pending list once the portal hook's
+  // refresh() runs.
+  onSuccess?: (decision: "Approved" | "Rejected") => void;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [remarks, setRemarks] = useState("");
@@ -65,6 +71,7 @@ export function ApprovalActions({
     setError(null);
     try {
       await onApprove();
+      onSuccess?.("Approved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to approve");
     } finally {
@@ -79,6 +86,7 @@ export function ApprovalActions({
       await onReject(remarks.trim());
       setRejecting(false);
       setRemarks("");
+      onSuccess?.("Rejected");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to reject");
     } finally {

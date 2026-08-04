@@ -5,7 +5,7 @@ import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { Dashboard, ApplyLeave, Profile } from "./views";
+import { Dashboard, ApplyLeave, Profile, SetProfilePhoto } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   applyLeave: "Apply for Leave",
   profile: "My Profile",
   changePass: "Change Password",
+  setPhoto: "Set Profile Photo",
 };
 
 export default function StudentPage() {
@@ -26,8 +27,15 @@ export default function StudentPage() {
   const [view, setView] = useState("dashboard");
   const portal = useStudentPortal();
 
-  const forced = !!user?.mustChangePassword;
-  const activeView = forced ? "changePass" : view;
+  const forcedPassword = !!user?.mustChangePassword;
+  // Only forced once the profile has actually loaded (so this doesn't flash
+  // before useStudentPortal's initial fetch resolves) and only after the
+  // password step above is done — a brand-new student always has no photo
+  // yet (see backend/controllers/admincontrol.js createStudent, which never
+  // sets one), so this is effectively "every student, once, on first login".
+  const forcedPhoto = !forcedPassword && !!portal.profile && !portal.profile.photo;
+  const forced = forcedPassword || forcedPhoto;
+  const activeView = forcedPassword ? "changePass" : forcedPhoto ? "setPhoto" : view;
 
   // Keeps the header avatar in sync with whatever the portal's own polling
   // (see useStudentPortal POLL_INTERVAL_MS) just fetched — covers the case
@@ -50,7 +58,10 @@ export default function StudentPage() {
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "applyLeave" && <ApplyLeave portal={portal} onDone={() => setView("dashboard")} />}
       {activeView === "profile" && <Profile portal={portal} />}
-      {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
+      {activeView === "changePass" && (
+        <ChangePasswordForm forced={forcedPassword} onDone={() => setView("dashboard")} />
+      )}
+      {activeView === "setPhoto" && <SetProfilePhoto portal={portal} onDone={() => setView("dashboard")} />}
     </DashboardShell>
   );
 }

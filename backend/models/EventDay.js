@@ -10,6 +10,12 @@ import mongoose from "mongoose";
 // students are normally free to leave on it, not restricted.
 export const EVENT_CATEGORIES = ["WORKSHOP", "POYA", "HOLIDAY", "NO_LECTURE", "OTHER"];
 
+// Only Workshop is mandatory-attendance — the one category that blocks
+// students from applying for ordinary leave on that date (see
+// controllers/studentcontrol.js applyLeave). Emergency Leave is the one
+// exception, same as the 2-day advance-notice rule elsewhere in that file.
+export const MANDATORY_EVENT_CATEGORIES = ["WORKSHOP"];
+
 const eventDaySchema = new mongoose.Schema(
   {
     hodId: { type: mongoose.Schema.Types.ObjectId, ref: "Hod", required: true, index: true },

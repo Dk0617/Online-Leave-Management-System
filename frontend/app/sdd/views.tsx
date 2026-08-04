@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { StatTile, Badge, Button } from "@/src/components/ui";
+import { StatTile, Badge, Button, Toast } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ClickableStatCard } from "@/src/components/exitStats";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
+import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { isApproved, isRejected, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
@@ -20,9 +21,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
   const rejectedTodayLeaves = history.filter((l) => l.sddStatus === "Rejected" && isToday(l.sddApprovedAt));
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+  const { toast, notify } = useDecisionToast();
 
   return (
     <div>
+      {toast && <Toast message={toast.message} tone={toast.tone} />}
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load SDD data: {error}</span>
@@ -110,7 +113,11 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
                       View
                     </Button>
-                    <ApprovalActions onApprove={() => approve(l.id)} onReject={(remarks) => reject(l.id, remarks)} />
+                    <ApprovalActions
+                      onApprove={() => approve(l.id)}
+                      onReject={(remarks) => reject(l.id, remarks)}
+                      onSuccess={(decision) => notify(l, decision)}
+                    />
                   </td>
                 </tr>
               ))

@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave, normalizePhotoChangeRequest, normalizeStudent, POLL_INTERVAL_MS } from "@/src/api";
-import { LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
+import {
+  api,
+  normalizeEventDay,
+  normalizeLeave,
+  normalizePhotoChangeRequest,
+  normalizeStudent,
+  POLL_INTERVAL_MS,
+} from "@/src/api";
+import { EventDay, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
 import { PassVerification } from "@/src/pdf";
 
 export interface NewLeaveInput {
@@ -34,6 +41,7 @@ export function useStudentPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profile, setProfile] = useState<Student | null>(null);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
+  const [blockedDays, setBlockedDays] = useState<EventDay[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,14 +49,16 @@ export function useStudentPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [leavesRaw, profileRaw, photoRequestsRaw] = await Promise.all([
+      const [leavesRaw, profileRaw, photoRequestsRaw, blockedDaysRaw] = await Promise.all([
         api.get<Record<string, unknown>[]>("/student/leaves"),
         api.get<Record<string, unknown>>("/student/profile"),
         api.get<Record<string, unknown>[]>("/student/photo-requests"),
+        api.get<Record<string, unknown>[]>("/student/blocked-days"),
       ]);
       setLeaves(leavesRaw.map(normalizeLeave));
       setProfile(normalizeStudent(profileRaw));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
+      setBlockedDays(blockedDaysRaw.map(normalizeEventDay));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -95,6 +105,7 @@ export function useStudentPortal() {
     leaves,
     profile,
     photoRequests,
+    blockedDays,
     loading,
     error,
     refresh,
