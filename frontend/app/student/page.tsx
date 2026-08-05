@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FileText, KeyRound, LayoutDashboard, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
@@ -8,10 +9,10 @@ import { useStudentPortal } from "@/src/hooks/useStudentPortal";
 import { Dashboard, ApplyLeave, Profile, SetProfilePhoto } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "applyLeave", label: "Apply Leave", icon: "📝" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "changePass", label: "Change Password", icon: "🔑" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "applyLeave", label: "Apply Leave", icon: FileText },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "changePass", label: "Change Password", icon: KeyRound },
 ];
 
 const TITLES: Record<string, string> = {

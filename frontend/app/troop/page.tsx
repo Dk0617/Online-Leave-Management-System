@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Archive, Home, KeyRound, LayoutDashboard, Medal, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { MyProfile } from "@/src/components/MyProfile";
@@ -9,12 +10,12 @@ import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { Dashboard, DayScholarQueue, CadetQueue, AllRecords } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "dayscholar", label: "Day Scholar Queue", icon: "🏠" },
-  { key: "cadet", label: "Officer Cadet Queue", icon: "🎖️" },
-  { key: "records", label: "All Records", icon: "🗄️" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "changePass", label: "Change Password", icon: "🔑" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "dayscholar", label: "Day Scholar Queue", icon: Home },
+  { key: "cadet", label: "Officer Cadet Queue", icon: Medal },
+  { key: "records", label: "All Records", icon: Archive },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "changePass", label: "Change Password", icon: KeyRound },
 ];
 
 const TITLES: Record<string, string> = {

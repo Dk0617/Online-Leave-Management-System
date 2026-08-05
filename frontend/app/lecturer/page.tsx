@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { History as HistoryIcon, KeyRound, LayoutDashboard, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { MyProfile } from "@/src/components/MyProfile";
@@ -17,10 +18,10 @@ import { Dashboard, History } from "@/app/hod/views";
 // deliberately left out of this portal's nav.
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "history", label: "History", icon: "📋" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "changePass", label: "Change Password", icon: "🔑" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "history", label: "History", icon: HistoryIcon },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "changePass", label: "Change Password", icon: KeyRound },
 ];
 
 const TITLES: Record<string, string> = {

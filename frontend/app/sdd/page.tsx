@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FolderOpen, History as HistoryIcon, KeyRound, LayoutDashboard, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { MyProfile } from "@/src/components/MyProfile";
@@ -9,11 +10,11 @@ import { useSddPortal } from "@/src/hooks/useSddPortal";
 import { Dashboard, History, Overview } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "overview", label: "Overview", icon: "🗂️" },
-  { key: "history", label: "History", icon: "📋" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "changePass", label: "Change Password", icon: "🔑" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "overview", label: "Overview", icon: FolderOpen },
+  { key: "history", label: "History", icon: HistoryIcon },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "changePass", label: "Change Password", icon: KeyRound },
 ];
 
 const TITLES: Record<string, string> = {

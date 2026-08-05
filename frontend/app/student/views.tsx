@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CheckCircle2, ClipboardList, Hourglass, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { PhotoCropModal } from "@/src/components/PhotoCropModal";
@@ -133,10 +134,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile icon="📋" label="Total Applied" value={total} />
-        <StatTile icon="⏳" label="Pending" value={pending} tone="amber" />
-        <StatTile icon="✅" label="Fully Approved" value={approved} tone="green" />
-        <StatTile icon="❌" label="Rejected" value={rejected} tone="red" />
+        <StatTile icon={<ClipboardList size={20} />} label="Total Applied" value={total} />
+        <StatTile icon={<Hourglass size={20} />} label="Pending" value={pending} tone="amber" />
+        <StatTile icon={<CheckCircle2 size={20} />} label="Fully Approved" value={approved} tone="green" />
+        <StatTile icon={<XCircle size={20} />} label="Rejected" value={rejected} tone="red" />
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">

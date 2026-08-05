@@ -1,6 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import {
+  BookOpen,
+  CalendarRange,
+  Construction,
+  GraduationCap,
+  Image as ImageIcon,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  Medal,
+  RefreshCw,
+  ShieldCheck,
+  Star,
+  Swords,
+  User,
+} from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { MyProfile } from "@/src/components/MyProfile";
 import { useAdminPortal } from "@/src/hooks/useAdminPortal";
@@ -18,20 +34,20 @@ import {
 } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "intakes", label: "Intakes", icon: "🗓️" },
-  { key: "students", label: "Students", icon: "🎓" },
-  { key: "hod", label: "HODs", icon: "🏛️" },
-  { key: "lecturers", label: "Lecturers", icon: "📖" },
-  { key: "hodCover", label: "HOD Cover", icon: "🔄" },
-  { key: "troop", label: "Troop Commanders", icon: "🎖️" },
-  { key: "squadran", label: "Squadron Commander", icon: "⚔️" },
-  { key: "sdd", label: "Senior Deputy Dean", icon: "⭐" },
-  { key: "gate", label: "Gate Staff", icon: "🚧" },
-  { key: "photoRequests", label: "Photo Requests", icon: "🖼️" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "passwords", label: "Password Changes", icon: "🔑" },
-  { key: "audit", label: "Audit Log", icon: "🛡️" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "intakes", label: "Intakes", icon: CalendarRange },
+  { key: "students", label: "Students", icon: GraduationCap },
+  { key: "hod", label: "HODs", icon: Landmark },
+  { key: "lecturers", label: "Lecturers", icon: BookOpen },
+  { key: "hodCover", label: "HOD Cover", icon: RefreshCw },
+  { key: "troop", label: "Troop Commanders", icon: Medal },
+  { key: "squadran", label: "Squadron Commander", icon: Swords },
+  { key: "sdd", label: "Senior Deputy Dean", icon: Star },
+  { key: "gate", label: "Gate Staff", icon: Construction },
+  { key: "photoRequests", label: "Photo Requests", icon: ImageIcon },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "passwords", label: "Password Changes", icon: KeyRound },
+  { key: "audit", label: "Audit Log", icon: ShieldCheck },
 ];
 
 const TITLES: Record<string, string> = {

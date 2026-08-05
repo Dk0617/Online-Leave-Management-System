@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, ReactNode } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 // ==================================================================
 // Badge
@@ -106,7 +107,7 @@ export function StatTile({
   label: string;
   value: string | number;
   tone?: "default" | "amber" | "green" | "red" | "blue";
-  icon?: string;
+  icon?: ReactNode;
 }) {
   const toneClass =
     tone === "amber"
@@ -122,7 +123,7 @@ export function StatTile({
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-4">
       <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${STAT_TILE_BAR_GRADIENTS[tone]}`} />
-      {icon && <div className="mb-2 text-xl">{icon}</div>}
+      {icon && <div className="mb-2 text-[var(--muted)]">{icon}</div>}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
         {label}
       </p>
@@ -147,20 +148,21 @@ const TOAST_TONE_CLASSES: Record<ToastTone, string> = {
   red: "bg-gradient-to-r from-[#b91c1c] to-[#ef4444] ring-2 ring-[rgba(255,255,255,0.3)] shadow-[0_10px_30px_rgba(185,28,28,0.5)]",
 };
 
-const TOAST_TONE_ICON: Record<ToastTone, string> = {
-  green: "✅",
-  red: "⛔",
+const TOAST_TONE_ICON: Record<ToastTone, typeof CheckCircle2> = {
+  green: CheckCircle2,
+  red: XCircle,
 };
 
 // A transient confirmation banner — see useDecisionToast, used by every
 // approver portal to confirm which student's leave was just decided (the
 // row itself just silently disappears from the pending list otherwise).
 export function Toast({ message, tone = "green" }: { message: string; tone?: ToastTone }) {
+  const Icon = TOAST_TONE_ICON[tone];
   return (
     <div
       className={`mb-4 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-bold text-white ${TOAST_TONE_CLASSES[tone]}`}
     >
-      <span className="text-lg leading-none">{TOAST_TONE_ICON[tone]}</span>
+      <Icon size={20} className="shrink-0" />
       <span>{message}</span>
     </div>
   );

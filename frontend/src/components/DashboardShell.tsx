@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Clock, Moon, Sun, X, type LucideIcon } from "lucide-react";
 import { AuthUser, Role } from "@/src/types";
 import { useAuth } from "@/src/AuthContext";
 import { Button } from "@/src/components/ui";
@@ -9,7 +10,7 @@ import { Button } from "@/src/components/ui";
 export interface NavItem {
   key: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 function initialsOf(name: string): string {
@@ -60,7 +61,7 @@ function HeaderAvatar({ user }: { user: AuthUser }) {
             </div>
             <div className="mb-4 text-sm font-bold text-[var(--white)]">{user.name}</div>
             <Button variant="ghost" onClick={() => setPreviewOpen(false)}>
-              ✕ Close
+              <X size={14} /> Close
             </Button>
           </div>
         </div>
@@ -88,7 +89,7 @@ export function DigitalClock() {
       title={now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
       className="hidden shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card2)] px-3.5 py-1.5 sm:flex"
     >
-      <span className="text-sm leading-none">🕐</span>
+      <Clock size={14} className="text-[var(--sky)]" />
       <span className="font-mono text-sm font-semibold tabular-nums text-[var(--white)]">
         {hours}:{minutes}
       </span>
@@ -176,7 +177,7 @@ export function DashboardShell({
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[rgba(255,255,255,0.06)] text-sm hover:bg-[rgba(74,144,217,0.18)]"
           >
-            {theme === "dark" ? "☀️" : "🌙"}
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </div>
 
@@ -204,7 +205,7 @@ export function DashboardShell({
                   : "border-transparent text-[rgba(200,215,255,0.65)] hover:bg-[rgba(74,144,217,0.12)] hover:text-white"
               }`}
             >
-              <span>{item.icon}</span> {item.label}
+              <item.icon size={16} className="shrink-0" /> {item.label}
             </button>
           ))}
         </nav>

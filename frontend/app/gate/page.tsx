@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ClipboardList, KeyRound, LayoutDashboard, Search, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { MyProfile } from "@/src/components/MyProfile";
@@ -9,11 +10,11 @@ import { useGatePortal } from "@/src/hooks/useGatePortal";
 import { Dashboard, Verify, MovementLog } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
-  { key: "verify", label: "Verify Leave Pass", icon: "🔍" },
-  { key: "movements", label: "Movement Log", icon: "📋" },
-  { key: "profile", label: "My Profile", icon: "👤" },
-  { key: "changePass", label: "Change Password", icon: "🔑" },
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "verify", label: "Verify Leave Pass", icon: Search },
+  { key: "movements", label: "Movement Log", icon: ClipboardList },
+  { key: "profile", label: "My Profile", icon: User },
+  { key: "changePass", label: "Change Password", icon: KeyRound },
 ];
 
 const TITLES: Record<string, string> = {
