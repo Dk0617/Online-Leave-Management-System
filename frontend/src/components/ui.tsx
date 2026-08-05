@@ -40,9 +40,9 @@ type ButtonVariant = "primary" | "accent" | "secondary" | "success" | "danger" |
 
 const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-gradient-to-br from-[var(--navy)] to-[var(--blue)] text-white shadow-[0_6px_20px_rgba(13,27,94,0.4)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_10px_28px_rgba(13,27,94,0.5)]",
+    "bg-gradient-to-br from-[var(--navy)] to-[var(--blue)] text-white shadow-[0_3px_10px_rgba(13,27,94,0.25)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_6px_16px_rgba(13,27,94,0.32)]",
   accent:
-    "bg-gradient-to-br from-[var(--orange)] to-[var(--orange2)] text-white shadow-[0_6px_20px_rgba(224,123,32,0.35)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_10px_28px_rgba(224,123,32,0.45)]",
+    "bg-gradient-to-br from-[var(--orange)] to-[var(--orange2)] text-white shadow-[0_3px_10px_rgba(224,123,32,0.22)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_6px_16px_rgba(224,123,32,0.3)]",
   secondary:
     "bg-[var(--card2)] text-[var(--white)] ring-1 ring-inset ring-[var(--border)] hover:bg-[rgba(74,144,217,0.12)]",
   success:
@@ -64,7 +64,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLASSES[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLASSES[variant]} ${className}`}
       {...rest}
     />
   );
@@ -83,7 +83,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_4px_16px_rgba(0,0,0,0.18)] ${className}`}
+      className={`rounded-[28px] border border-[var(--border)] bg-[var(--card)] shadow-[0_4px_16px_rgba(0,0,0,0.18)] ${className}`}
     >
       {children}
     </div>
@@ -96,6 +96,17 @@ const STAT_TILE_BAR_GRADIENTS: Record<string, string> = {
   green: "from-[#22c55e] to-[#16a34a]",
   red: "from-[#ef4444] to-[#b91c1c]",
   blue: "from-[var(--blue)] to-[var(--sky)]",
+};
+
+// Tone-matched circular backdrop behind a StatTile's icon (soft tint, not a
+// solid fill) — same low-opacity-tint convention Badge already uses, so an
+// amber tile's icon sits in a soft amber circle instead of floating bare.
+const STAT_TILE_ICON_CHIP_CLASSES: Record<string, string> = {
+  default: "bg-[rgba(224,123,32,0.14)] text-[var(--orange)]",
+  amber: "bg-[rgba(245,158,11,0.14)] text-[var(--warn)]",
+  green: "bg-[rgba(34,197,94,0.14)] text-[var(--ok)]",
+  red: "bg-[rgba(239,68,68,0.14)] text-[var(--err)]",
+  blue: "bg-[rgba(74,144,217,0.14)] text-[var(--sky)]",
 };
 
 export function StatTile({
@@ -121,9 +132,13 @@ export function StatTile({
       : "text-[var(--white)]";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-4 shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
+    <div className="relative overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] px-5 py-4 shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
       <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${STAT_TILE_BAR_GRADIENTS[tone]}`} />
-      {icon && <div className="mb-2 text-[var(--muted)]">{icon}</div>}
+      {icon && (
+        <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full ${STAT_TILE_ICON_CHIP_CLASSES[tone]}`}>
+          {icon}
+        </div>
+      )}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
         {label}
       </p>

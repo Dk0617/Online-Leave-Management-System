@@ -199,10 +199,10 @@ export function DashboardShell({
             <button
               key={item.key}
               onClick={() => onNavigate(item.key)}
-              className={`mx-2.5 mb-0.5 flex w-[calc(100%-20px)] items-center gap-3 rounded-lg border-l-2 px-5 py-2.5 text-left text-[13px] font-medium transition-all ${
+              className={`mx-2.5 mb-0.5 flex w-[calc(100%-20px)] items-center gap-3 rounded-full px-5 py-2.5 text-left text-[13px] font-medium transition-all ${
                 activeView === item.key
-                  ? "border-[var(--orange)] bg-gradient-to-br from-[rgba(37,99,176,0.4)] to-[rgba(74,144,217,0.2)] font-semibold text-white shadow-[inset_0_0_0_1px_rgba(74,144,217,0.3)]"
-                  : "border-transparent text-[rgba(200,215,255,0.65)] hover:translate-x-0.5 hover:bg-[rgba(74,144,217,0.12)] hover:text-white"
+                  ? "bg-gradient-to-r from-[var(--orange)] to-[var(--orange2)] font-semibold text-white shadow-[0_4px_12px_rgba(224,123,32,0.35)]"
+                  : "text-[rgba(200,215,255,0.65)] hover:translate-x-0.5 hover:bg-[rgba(74,144,217,0.12)] hover:text-white"
               }`}
             >
               <item.icon size={16} className="shrink-0" /> {item.label}
@@ -221,11 +221,11 @@ export function DashboardShell({
       </aside>
 
       <div className="ml-64 flex flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-[62px] items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-7 shadow-[0_2px_20px_rgba(0,0,0,0.2)]">
+        <header className="sticky top-0 z-10 flex h-[76px] items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-8 shadow-[0_2px_20px_rgba(0,0,0,0.2)]">
           <div>
-            <div className="text-base font-bold text-[var(--white)]">{title}</div>
+            <div className="text-xl font-semibold text-[var(--white)]">{title}</div>
             {subtitle && (
-              <div className="mt-0.5 text-[11px] text-[var(--muted)]">{subtitle}</div>
+              <div className="mt-1 text-[11px] text-[var(--muted)]">{subtitle}</div>
             )}
           </div>
           <div className="flex items-center gap-3">
