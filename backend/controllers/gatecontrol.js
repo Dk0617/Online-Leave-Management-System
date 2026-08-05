@@ -119,7 +119,7 @@ export const verifyByCode = async (req, res) => {
 // against the actual moment of the scan for both Exit and Entry, except for
 // Emergency Leave.
 export const logMovement = async (req, res) => {
-  const { indexNumber, direction, leaveId, notes } = req.body;
+  const { indexNumber, direction, leaveId, notes, confirmLate } = req.body;
   if (!indexNumber || !["Exit", "Entry"].includes(direction)) {
     return res
       .status(400)
@@ -178,17 +178,30 @@ export const logMovement = async (req, res) => {
       message: `Exit is only allowed within the approved leave period (${leave.startDate} ${leave.startTime} to ${leave.endDate} ${leave.endTime}). It is currently outside that window.`,
     });
   }
+  // A student physically standing at the gate past curfew still needs to
+  // get back onto campus — permanently refusing the Entry just leaves them
+  // locked out. So this doesn't hard-block: the first attempt returns the
+  // warning (same as before) and stops there; only once the caller
+  // explicitly re-submits with confirmLate does it go through, flagged as
+  // a late entry either way. Exit stays a hard block — letting someone out
+  // early is a preventable mistake, not a "they're stuck outside" problem.
+  let pastCurfewEntry = false;
   if (leave.type !== "Emergency Leave") {
     const nowMinutes = minutesSinceMidnight(new Date());
     if (direction === "Exit" && nowMinutes < CAMPUS_EXIT_EARLIEST_MINUTES) {
       return res.status(403).json({ message: "Campus exit is only allowed from 6:00 AM onward." });
     }
     if (direction === "Entry" && nowMinutes > CAMPUS_ENTRY_LATEST_MINUTES) {
-      return res.status(403).json({ message: "Campus entry must be logged by 6:00 PM." });
+      pastCurfewEntry = true;
+      if (!confirmLate) {
+        return res.status(403).json({
+          message: "Campus entry is past the 6:00 PM curfew. Click Log Entry again to confirm and record this as a late entry.",
+        });
+      }
     }
   }
 
-  const lateEntry = direction === "Entry" && hasEnded(leave);
+  const lateEntry = direction === "Entry" && (hasEnded(leave) || pastCurfewEntry);
 
   const movement = await Movement.create({
     indexNumber: indexNumber.toUpperCase(),
@@ -196,7 +209,7 @@ export const logMovement = async (req, res) => {
     studentType: leave.studentType,
     direction,
     leaveId: leave._id,
-    notes,
+    notes: pastCurfewEntry ? `${notes ? `${notes} — ` : ""}confirmed past 6:00 PM curfew` : notes,
     loggedBy: req.user.name,
     lateEntry,
   });
@@ -205,7 +218,7 @@ export const logMovement = async (req, res) => {
     "GATE",
     req.user.name,
     "movement_logged",
-    `${direction} for ${indexNumber}${lateEntry ? " [LATE RETURN]" : ""}`
+    `${direction} for ${indexNumber}${lateEntry ? " [LATE RETURN]" : ""}${pastCurfewEntry ? " [CURFEW OVERRIDE]" : ""}`
   );
   res.status(201).json(movement);
 };

@@ -96,6 +96,23 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
   const onLeaveNow = approvedLeaves.filter((l) => lastMovementFor(l.indexNumber, l.id)?.direction === "Exit");
 
+  // Still out, but their approved leave window has already ended — they're
+  // overdue and haven't been logged back in yet. Distinct from the
+  // Troop/Squadron/SDD "Late Returns" tile (see backend
+  // gatecontrol.js/models/Movement.js lateEntry), which only fires after
+  // the student has actually come back — this is the "before they've even
+  // returned" visibility gate staff need.
+  const overdueLeaves = onLeaveNow.filter((l) => validity(l) === "expired");
+  const overdueEntries: ExitEntry[] = overdueLeaves.map((l) => ({
+    id: l.id,
+    indexNumber: l.indexNumber,
+    studentName: l.studentName,
+    studentType: l.studentType,
+    department: l.department,
+    direction: "Exit",
+    plannedDate: `${l.endDate} ${l.endTime}`,
+  }));
+
   // Order received, not grouped by leave type — Mongo ObjectIds are
   // time-ordered, so a plain string sort on `id` gives the exact order
   // these applications came in without needing a separate timestamp field.
@@ -127,6 +144,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
           <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
         </ClickableStatCard>
         <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" />
+        <ClickableStatCard onClick={() => setDrilldown({ title: "Overdue — Still Out", entries: overdueEntries })}>
+          <StatTile label="Overdue (click for details)" value={overdueEntries.length} tone="red" />
+        </ClickableStatCard>
       </div>
 
       {drilldown && (
@@ -176,11 +196,19 @@ function LeavePassTable({
           {leaves.map((l) => {
             const last = lastMovementFor(l.indexNumber, l.id);
             const state = validity(l);
+            // Still out (exited, not yet returned) and past their approved
+            // end date/time — overdue. Flagged on the whole row, not just
+            // the individual badges, so it's impossible to miss scanning
+            // down the table.
+            const isOverdue = last?.direction === "Exit" && state === "expired";
             return (
-              <tr key={l.id}>
-                <td>
+              <tr key={l.id} className={isOverdue ? "bg-[rgba(239,68,68,0.1)]" : undefined}>
+                <td className={isOverdue ? "text-[var(--err)]" : undefined}>
+                  {isOverdue && "⚠️ "}
                   {l.studentName}
-                  <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                  <div className={isOverdue ? "text-xs text-[var(--err-soft)]" : "text-xs text-[var(--muted)]"}>
+                    {l.indexNumber}
+                  </div>
                 </td>
                 <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
                 <td>
@@ -194,7 +222,7 @@ function LeavePassTable({
                 <td className="font-mono text-xs">
                   {l.startDate} {l.startTime}
                 </td>
-                <td className="font-mono text-xs">
+                <td className={isOverdue ? "font-mono text-xs font-bold text-[var(--err)]" : "font-mono text-xs"}>
                   {l.endDate} {l.endTime}
                 </td>
                 <td>
@@ -230,6 +258,12 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loggingDirection, setLoggingDirection] = useState<"Exit" | "Entry" | null>(null);
+  // Set after a curfew-blocked Entry attempt — clicking Log Entry again
+  // while this is set confirms and logs it as a late entry instead of
+  // blocking it a second time. Exit has no equivalent: it stays a hard
+  // block, see quickLog below. Cleared on every fresh verification so it
+  // never carries over to a different student.
+  const [pendingCurfewOverride, setPendingCurfewOverride] = useState(false);
   // A ref (not state) so it's set synchronously on the very first click —
   // state updates are batched/async and wouldn't block a same-tick second
   // click from also passing the guard.
@@ -250,12 +284,14 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
     setMode(next);
     setQuery("");
     setResult(null);
+    setPendingCurfewOverride(false);
   }
 
   async function runVerify(rawQuery: string, viaMode: "code" | "index") {
     if (!rawQuery.trim()) return;
     setLoading(true);
     setError(null);
+    setPendingCurfewOverride(false);
     try {
       const res =
         viaMode === "code" ? await verifyByCode(rawQuery.trim()) : await verify(rawQuery.trim().toUpperCase());
@@ -282,17 +318,38 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   async function quickLog(direction: "Exit" | "Entry") {
     if (!result?.leave || loggingRef.current) return;
     const leave = result.leave as unknown as LeaveRequest;
-    const blockReason =
-      sequenceBlockReason(direction, leave.indexNumber, movements) || curfewBlockReason(direction, leave.type);
-    if (blockReason) {
-      setError(blockReason);
+    const sequenceReason = sequenceBlockReason(direction, leave.indexNumber, movements);
+    if (sequenceReason) {
+      setError(sequenceReason);
+      setPendingCurfewOverride(false);
+      return;
+    }
+    const curfewReason = curfewBlockReason(direction, leave.type);
+    const confirmLate = direction === "Entry" && pendingCurfewOverride;
+    // Exit past curfew stays a hard block every time — letting someone out
+    // early is a preventable mistake, not a "they're stuck outside"
+    // problem. Entry gets one warning, then a second click confirms it.
+    if (curfewReason && !confirmLate) {
+      setError(
+        direction === "Entry"
+          ? `${curfewReason} Click "Log Entry" again to confirm and record this as a late entry.`
+          : curfewReason
+      );
+      setPendingCurfewOverride(direction === "Entry");
       return;
     }
     setError(null);
+    setPendingCurfewOverride(false);
     loggingRef.current = true;
     setLoggingDirection(direction);
     try {
-      await logMovement({ indexNumber: leave.indexNumber, direction, leaveId: leave.id, notes: "Verified at gate" });
+      await logMovement({
+        indexNumber: leave.indexNumber,
+        direction,
+        leaveId: leave.id,
+        notes: "Verified at gate",
+        confirmLate: confirmLate || undefined,
+      });
       await handleVerify();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log movement");
@@ -406,7 +463,11 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
                   disabled={loggingDirection !== null}
                   onClick={() => quickLog("Entry")}
                 >
-                  {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry"}
+                  {loggingDirection === "Entry"
+                    ? "Logging…"
+                    : pendingCurfewOverride
+                    ? "⚠️ Confirm Late Entry"
+                    : "🏫 Log Entry"}
                 </Button>
               </div>
             </>
@@ -430,7 +491,11 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
                     disabled={loggingDirection !== null}
                     onClick={() => quickLog("Entry")}
                   >
-                    {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry (Late)"}
+                    {loggingDirection === "Entry"
+                      ? "Logging…"
+                      : pendingCurfewOverride
+                      ? "⚠️ Confirm Late Entry"
+                      : "🏫 Log Entry (Late)"}
                   </Button>
                 </div>
               </>

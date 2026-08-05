@@ -17,6 +17,7 @@ router.get("/leaves/pending", hod.pending);
 router.get("/leaves/history", hod.history);
 router.patch("/leaves/:id/approve", hod.approve);
 router.patch("/leaves/:id/reject", hod.reject);
+router.patch("/leaves/:id/datetime", requireRole("HOD"), hodCorrectDateTime);
 // Left open to LECTURER too (unlike the HOD-only routes above) since the
 // Lecturer portal reuses this same Dashboard/useHodPortal wholesale (see
 // app/lecturer/page.tsx) — its refresh() Promise.all would otherwise 403 and
