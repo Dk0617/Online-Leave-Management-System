@@ -34,7 +34,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="loginBg relative flex flex-1 items-center justify-center overflow-hidden px-6 py-10">
+    <div className="loginBg relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10">
       <div className="relative w-full max-w-[420px]">
         <div className="loginCard rounded-[28px] bg-[rgba(255,255,255,0.5)] px-10 py-11 shadow-[0_24px_80px_rgba(13,27,94,0.5)]">
           <div className="mb-6 flex items-center gap-4 border-b-2 border-[#e8edf5] pb-5">
