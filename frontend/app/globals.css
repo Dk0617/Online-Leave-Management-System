@@ -65,80 +65,32 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* Login page — the KDU crest itself, huge and faint, slowly turning behind
-   the card with a gentle breathing glow around it: the university's own
-   identity as the backdrop rather than a generic scene, plus a fade-up
-   entrance for the sign-in card. Kept slow/faint on purpose since this is a
-   login screen, not a hero banner, and the crest must stay legible. */
+/* Login page — the campus's own entrance photo as the backdrop (a real
+   place, not an abstract gradient), shifted right so its subject sits off
+   from the centered sign-in card, with a light navy tint just strong
+   enough to keep the white card and its text legible without washing out
+   the photo's own colors. The two brand-color accents drift slowly across
+   the tint layer for a bit of life; the photo itself stays fixed at its
+   shifted position (drifting the photo too would look like it was sliding
+   around, not "alive"). */
 @keyframes gradientDrift {
   0%,
   100% {
-    background-position: 20% 0%, 80% 100%, 0% 0%;
+    background-position: 20% 0%, 80% 100%, 0% 0%, 85% center;
   }
   50% {
-    background-position: 30% 10%, 70% 90%, 0% 0%;
+    background-position: 30% 10%, 70% 90%, 0% 0%, 85% center;
   }
 }
 
 .loginBg {
-  background-image: radial-gradient(ellipse 80% 60% at 20% 0%, rgba(37, 99, 176, 0.45) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(224, 123, 32, 0.3) 0%, transparent 55%),
-    linear-gradient(160deg, #050d1f 0%, #0a1540 50%, #0d1b5e 100%);
-  background-size: 160% 160%, 160% 160%, 100% 100%;
+  background-image: radial-gradient(ellipse 80% 60% at 20% 0%, rgba(37, 99, 176, 0.4) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(224, 123, 32, 0.28) 0%, transparent 55%),
+    linear-gradient(160deg, rgba(5, 13, 31, 0.55) 0%, rgba(10, 21, 64, 0.42) 50%, rgba(13, 27, 94, 0.5) 100%),
+    url("/kdu-campus-entrance.jpg");
+  background-size: 160% 160%, 160% 160%, 100% 100%, cover;
+  background-repeat: no-repeat;
   animation: gradientDrift 18s ease-in-out infinite;
-}
-
-/* Anchored in the open top-right corner of the background (see page.tsx),
-   clear of the card entirely, so the motion stays purely in the ambient
-   space around the sign-in form rather than behind or inside it. Rotation
-   alone doesn't read as "animated" on a mostly-symmetric round crest — the
-   eye can't tell 2°/s of turn apart from standing still — so the crest
-   image itself also visibly breathes (scale + opacity) on its own
-   fast-enough cycle, layered on top of the slower spin. */
-@keyframes crestSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loginCrestSpin {
-  animation: crestSpin 25s linear infinite;
-}
-
-@keyframes crestBreathe {
-  0%,
-  100% {
-    opacity: 0.22;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.16);
-  }
-}
-
-.loginCrestBreathe {
-  animation: crestBreathe 3.5s ease-in-out infinite;
-}
-
-@keyframes crestGlow {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.75;
-    transform: scale(1.25);
-  }
-}
-
-.loginCrestGlow {
-  opacity: 0.35;
-  animation: crestGlow 3.5s ease-in-out infinite;
 }
 
 @keyframes cardEnter {
@@ -173,9 +125,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .loginBg,
-  .loginCrestSpin,
-  .loginCrestBreathe,
-  .loginCrestGlow,
   .loginCard,
   .loginLogo {
     animation: none !important;

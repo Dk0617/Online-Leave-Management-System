@@ -5,14 +5,12 @@ import { Button } from "@/src/components/ui";
 
 // Shown after a file is picked for any profile photo (student self-service,
 // student's photo-change request, and every other role's header avatar) —
-// lets the person drag/zoom to choose which part of their photo ends up in
-// the circular crop, instead of the old behavior of always taking a fixed
+// lets the person drag to choose which part of their photo ends up in the
+// circular crop, instead of the old behavior of always taking a fixed
 // center-square (which cuts off faces on a tall/portrait photo — see
 // downscalePhoto, which this replaces for interactive uploads).
 const DISPLAY_SIZE = 280;
 const OUTPUT_SIZE = 400;
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
 
 interface LoadedImage {
   img: HTMLImageElement;
@@ -52,7 +50,6 @@ export function PhotoCropModal({
 }) {
   const [loaded, setLoaded] = useState<LoadedImage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(MIN_ZOOM);
   const [center, setCenter] = useState({ x: 0, y: 0 }); // natural-image pixel coords
   const dragRef = useRef<{ startX: number; startY: number; centerX: number; centerY: number } | null>(null);
 
@@ -70,14 +67,14 @@ export function PhotoCropModal({
     };
   }, [file]);
 
-  const cropSize = loaded ? loaded.minSide / zoom : 0;
+  const cropSize = loaded ? loaded.minSide : 0;
   const displayScale = loaded && cropSize ? DISPLAY_SIZE / cropSize : 1;
 
   function clampCenter(x: number, y: number, size: number, w: number, h: number) {
     const half = size / 2;
-    // If the crop is larger than the image on an axis (can happen briefly
-    // while zoom is changing), just center it on that axis instead of
-    // clamping into an inverted (min > max) range.
+    // If the crop is larger than the image on an axis (can't happen since
+    // size is always the image's own min side, but keeps this safe against
+    // an inverted min > max range regardless), just center it on that axis.
     return {
       x: size >= w ? w / 2 : clamp(x, half, w - half),
       y: size >= h ? h / 2 : clamp(y, half, h - half),
@@ -110,13 +107,6 @@ export function PhotoCropModal({
     dragRef.current = null;
   }
 
-  function handleZoomChange(next: number) {
-    if (!loaded) return;
-    setZoom(next);
-    const nextCropSize = loaded.minSide / next;
-    setCenter((prev) => clampCenter(prev.x, prev.y, nextCropSize, loaded.naturalW, loaded.naturalH));
-  }
-
   function handleConfirm() {
     if (!loaded) return;
     const canvas = document.createElement("canvas");
@@ -134,47 +124,33 @@ export function PhotoCropModal({
       <div className="w-[90%] max-w-[380px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6">
         <h3 className="mb-1 text-[15px] font-bold text-[var(--white)]">Position Your Photo</h3>
         <p className="mb-4 text-xs text-[var(--muted)]">
-          Drag the photo to center it the way you want, and use the slider to zoom in or out.
+          Drag the photo to center it the way you want.
         </p>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         {loaded && (
-          <>
-            <div
-              className="mx-auto mb-4 overflow-hidden rounded-full border-2 border-[var(--orange)]"
-              style={{ width: DISPLAY_SIZE, height: DISPLAY_SIZE, touchAction: "none", cursor: "grab" }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            >
-              <img
-                src={loaded.img.src}
-                alt="Preview"
-                draggable={false}
-                className="pointer-events-none select-none"
-                style={{
-                  position: "relative",
-                  maxWidth: "none",
-                  width: loaded.naturalW * displayScale,
-                  height: loaded.naturalH * displayScale,
-                  left: -(center.x - cropSize / 2) * displayScale,
-                  top: -(center.y - cropSize / 2) * displayScale,
-                }}
-              />
-            </div>
-            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
-              Zoom
-            </label>
-            <input
-              type="range"
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              step={0.05}
-              value={zoom}
-              onChange={(e) => handleZoomChange(Number(e.target.value))}
-              className="mb-4 w-full"
+          <div
+            className="mx-auto mb-4 overflow-hidden rounded-full border-2 border-[var(--orange)]"
+            style={{ width: DISPLAY_SIZE, height: DISPLAY_SIZE, touchAction: "none", cursor: "grab" }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            <img
+              src={loaded.img.src}
+              alt="Preview"
+              draggable={false}
+              className="pointer-events-none select-none"
+              style={{
+                position: "relative",
+                maxWidth: "none",
+                width: loaded.naturalW * displayScale,
+                height: loaded.naturalH * displayScale,
+                left: -(center.x - cropSize / 2) * displayScale,
+                top: -(center.y - cropSize / 2) * displayScale,
+              }}
             />
-          </>
+          </div>
         )}
         <div className="flex gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
