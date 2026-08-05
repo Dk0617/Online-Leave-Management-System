@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { StatTile, Badge, Button, Toast } from "@/src/components/ui";
+import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, LogIn, LogOut, XCircle } from "lucide-react";
+import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
+import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
@@ -23,8 +25,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
   const { pending, history, movements, approve, reject, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.sqnStatus === "Approved" && isToday(l.sqnApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.sqnStatus === "Rejected" && isToday(l.sqnApprovedAt));
-  const emergencyPending = pending.filter((l) => l.priority === "emergency");
-  const otherPending = pending.filter((l) => l.priority !== "emergency");
+  const { query: pendingQuery, setQuery: setPendingQuery, filtered: searchedPending } = useSearchFilter(
+    pending,
+    (l) => [l.studentName, l.indexNumber]
+  );
+  const pendingSort = useSort();
+  const emergencyPending = searchedPending.filter((l) => l.priority === "emergency");
+  const otherPending = searchedPending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
@@ -93,23 +100,43 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
 
       <div className={styles.statGrid}>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Pending", leaves: pending })}>
-          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" />
+          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" icon={<Hourglass size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
-          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+          <StatTile
+            label="Approved Today (click for details)"
+            value={approvedTodayLeaves.length}
+            tone="green"
+            icon={<CheckCircle2 size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
-          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+          <StatTile
+            label="Rejected Today (click for details)"
+            value={rejectedTodayLeaves.length}
+            tone="red"
+            icon={<XCircle size={20} />}
+          />
         </ClickableStatCard>
-        <StatTile label="Total" value={history.length + pending.length} />
+        <StatTile label="Total" value={history.length + pending.length} icon={<ClipboardList size={20} />} />
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Squadron", entries: todayExitEntries })}>
-          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
+          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" icon={<LogOut size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today — Your Squadron", entries: todayEntryEntries })}>
-          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+          <StatTile
+            label="Entries Today (click for details)"
+            value={todayEntryEntries.length}
+            tone="green"
+            icon={<LogIn size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Late Returns — Your Squadron", entries: lateReturnEntries })}>
-          <StatTile label="Late Returns (click for details)" value={lateReturnEntries.length} tone="red" />
+          <StatTile
+            label="Late Returns (click for details)"
+            value={lateReturnEntries.length}
+            tone="red"
+            icon={<AlertTriangle size={20} />}
+          />
         </ClickableStatCard>
       </div>
 
@@ -128,6 +155,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         />
       )}
 
+      <div className="mb-4 flex justify-end">
+        <SearchInput
+          value={pendingQuery}
+          onChange={setPendingQuery}
+          placeholder="Search pending by name or index…"
+          className="w-full sm:w-72"
+        />
+      </div>
+
       {emergencyPending.length > 0 && (
         <>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
@@ -140,6 +176,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
               onApprove={approve}
               onReject={reject}
               notify={notify}
+              sort={pendingSort}
             />
           </div>
         </>
@@ -148,7 +185,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
         {emergencyPending.length > 0 ? "Other Pending — Awaiting Squadron" : "Pending — Awaiting Squadron"}
       </h2>
-      <SquadranPendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} notify={notify} />
+      <SquadranPendingTable
+        leaves={otherPending}
+        onView={setSelected}
+        onApprove={approve}
+        onReject={reject}
+        notify={notify}
+        sort={pendingSort}
+      />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
@@ -163,36 +207,45 @@ function SquadranPendingTable({
   onApprove,
   onReject,
   notify,
+  sort,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
   notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
+  sort: ReturnType<typeof useSort>;
 }) {
+  const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Index</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>To</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Index" sortKey="index" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="To" sortKey="to" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <th>Previous Stage</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {leaves.length === 0 ? (
+          {sorted.length === 0 ? (
             <tr>
               <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                No pending applications.
+                {leaves.length === 0 ? "No pending applications." : "No applications match your search."}
               </td>
             </tr>
           ) : (
-            leaves.map((l) => {
+            sorted.map((l) => {
               const isAcademicViaHod = l.troopStatus === "N/A";
               return (
                 <tr key={l.id}>
@@ -233,29 +286,41 @@ function SquadranPendingTable({
 
 export function History({ portal }: { portal: ReturnType<typeof useSquadranPortal> }) {
   const { history } = portal;
+  const { query, setQuery, filtered } = useSearchFilter(history, (l) => [l.studentName, l.indexNumber]);
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sorted = sortRows(filtered, sortKey, sortDir, {
+    student: (l) => l.studentName,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    decision: (l) => l.sqnStatus,
+  });
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>Your Decision</th>
-            <th>Reason</th>
-            <th>Next Stage</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.length === 0 ? (
+    <div>
+      <div className="mb-3 flex justify-end">
+        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
             <tr>
-              <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                No history.
-              </td>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Your Decision" sortKey="decision" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th>Reason</th>
+              <th>Next Stage</th>
             </tr>
-          ) : (
-            history.map((l) => (
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  {history.length === 0 ? "No history." : "No history matches your search."}
+                </td>
+              </tr>
+            ) : (
+              sorted.map((l) => (
               <tr key={l.id}>
                 <td>
                   {l.studentName}
@@ -279,6 +344,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSquadranPorta
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

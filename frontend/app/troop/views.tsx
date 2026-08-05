@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { StatTile, Badge, Button, Toast } from "@/src/components/ui";
+import { AlertTriangle, CheckCircle2, Home, LogIn, LogOut, Medal, XCircle } from "lucide-react";
+import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
+import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
 import { isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
@@ -28,8 +30,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const rejectedTodayLeaves = history.filter((l) => l.troopStatus === "Rejected" && isToday(l.troopApprovedAt));
   const dsPendingLeaves = allPending.filter((l) => l.studentType === "DAY_SCHOLAR");
   const cdPendingLeaves = allPending.filter((l) => l.studentType === "CADET");
-  const emergencyPending = allPending.filter((l) => l.priority === "emergency");
-  const otherPending = allPending.filter((l) => l.priority !== "emergency");
+  const { query: pendingQuery, setQuery: setPendingQuery, filtered: searchedPending } = useSearchFilter(
+    allPending,
+    (l) => [l.studentName, l.indexNumber]
+  );
+  const pendingSort = useSort();
+  const emergencyPending = searchedPending.filter((l) => l.priority === "emergency");
+  const otherPending = searchedPending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
@@ -100,25 +107,50 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
 
       <div className={styles.statGrid}>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Day Scholar Pending", leaves: dsPendingLeaves })}>
-          <StatTile label="DS Pending (click for details)" value={dsPendingLeaves.length} tone="amber" />
+          <StatTile label="DS Pending (click for details)" value={dsPendingLeaves.length} tone="amber" icon={<Home size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Officer Cadet Pending", leaves: cdPendingLeaves })}>
-          <StatTile label="Officer Cadet Pending (click for details)" value={cdPendingLeaves.length} tone="amber" />
+          <StatTile
+            label="Officer Cadet Pending (click for details)"
+            value={cdPendingLeaves.length}
+            tone="amber"
+            icon={<Medal size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
-          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+          <StatTile
+            label="Approved Today (click for details)"
+            value={approvedTodayLeaves.length}
+            tone="green"
+            icon={<CheckCircle2 size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
-          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+          <StatTile
+            label="Rejected Today (click for details)"
+            value={rejectedTodayLeaves.length}
+            tone="red"
+            icon={<XCircle size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today — Your Troop", entries: todayExitEntries })}>
-          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" />
+          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} tone="blue" icon={<LogOut size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today — Your Troop", entries: todayEntryEntries })}>
-          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+          <StatTile
+            label="Entries Today (click for details)"
+            value={todayEntryEntries.length}
+            tone="green"
+            icon={<LogIn size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Late Returns — Your Troop", entries: lateReturnEntries })}>
-          <StatTile label="Late Returns (click for details)" value={lateReturnEntries.length} tone="red" />
+          <StatTile
+            label="Late Returns (click for details)"
+            value={lateReturnEntries.length}
+            tone="red"
+            icon={<AlertTriangle size={20} />}
+          />
         </ClickableStatCard>
       </div>
 
@@ -137,6 +169,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         />
       )}
 
+      <div className="mb-4 flex justify-end">
+        <SearchInput
+          value={pendingQuery}
+          onChange={setPendingQuery}
+          placeholder="Search pending by name or index…"
+          className="w-full sm:w-72"
+        />
+      </div>
+
       {emergencyPending.length > 0 && (
         <>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
@@ -149,6 +190,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
               onApprove={approve}
               onReject={reject}
               notify={notify}
+              sort={pendingSort}
             />
           </div>
         </>
@@ -157,7 +199,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
       <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
         {emergencyPending.length > 0 ? "Other Pending — Your Troop" : "All Pending — Your Troop"}
       </h2>
-      <TroopPendingTable leaves={otherPending} onView={setSelected} onApprove={approve} onReject={reject} notify={notify} />
+      <TroopPendingTable
+        leaves={otherPending}
+        onView={setSelected}
+        onApprove={approve}
+        onReject={reject}
+        notify={notify}
+        sort={pendingSort}
+      />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
@@ -172,36 +221,51 @@ function TroopPendingTable({
   onApprove,
   onReject,
   notify,
+  sort,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
   notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
+  sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
 }) {
+  const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    studentType: (l) => l.studentType,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Type</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>To</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh
+              label="Type"
+              sortKey="studentType"
+              activeSortKey={sort.sortKey}
+              sortDir={sort.sortDir}
+              onSort={sort.toggleSort}
+            />
+            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="To" sortKey="to" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <th>Stage</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {leaves.length === 0 ? (
+          {sorted.length === 0 ? (
             <tr>
               <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                No pending applications.
+                {leaves.length === 0 ? "No pending applications." : "No applications match your search."}
               </td>
             </tr>
           ) : (
-            leaves.map((l) => (
+            sorted.map((l) => (
               <tr key={l.id}>
                 <td>
                   {l.studentName}
@@ -248,6 +312,14 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
   const { dayScholarPending, approve, reject } = portal;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const { toast, notify } = useDecisionToast();
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sortedPending = sortRows(dayScholarPending, sortKey, sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+  });
 
   return (
     <div>
@@ -260,24 +332,24 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Index" sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="To" sortKey="to" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th>HOD Decision</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {dayScholarPending.length === 0 ? (
+            {sortedPending.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                   No Day Scholar leaves awaiting approval.
                 </td>
               </tr>
             ) : (
-              dayScholarPending.map((l) => (
+              sortedPending.map((l) => (
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
@@ -320,6 +392,14 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   const { cadetPending, approve, reject } = portal;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const { toast, notify } = useDecisionToast();
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sortedPending = sortRows(cadetPending, sortKey, sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+  });
 
   return (
     <div>
@@ -331,23 +411,23 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Index" sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="To" sortKey="to" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {cadetPending.length === 0 ? (
+            {sortedPending.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
                   No Officer Cadet leaves awaiting approval.
                 </td>
               </tr>
             ) : (
-              cadetPending.map((l) => (
+              sortedPending.map((l) => (
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
@@ -385,36 +465,51 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
 
 type TroopHistoryEntry = ReturnType<typeof useTroopPortal>["history"][number];
 
-function matchesSearch(l: TroopHistoryEntry, query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return l.studentName.toLowerCase().includes(q) || l.indexNumber.toLowerCase().includes(q);
-}
-
-function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; emptyMessage: string }) {
+function HistoryTable({
+  rows,
+  emptyMessage,
+  sort,
+}: {
+  rows: TroopHistoryEntry[];
+  emptyMessage: string;
+  sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
+}) {
+  const sorted = sortRows(rows, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    intake: (l) => l.intake ?? "",
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    decision: (l) => l.troopStatus,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Intake</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>Your Decision</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Intake" sortKey="intake" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh
+              label="Your Decision"
+              sortKey="decision"
+              activeSortKey={sort.sortKey}
+              sortDir={sort.sortDir}
+              onSort={sort.toggleSort}
+            />
             <th>Reason</th>
             <th>Next Stage</th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {sorted.length === 0 ? (
             <tr>
               <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            rows.map((l) => (
+            sorted.map((l) => (
               <tr key={l.id}>
                 <td>
                   {l.studentName}
@@ -445,41 +540,33 @@ function HistoryTable({ rows, emptyMessage }: { rows: TroopHistoryEntry[]; empty
 
 export function History({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { history } = portal;
-  const [dsQuery, setDsQuery] = useState("");
-  const [cdQuery, setCdQuery] = useState("");
+  const dayScholarSource = history.filter((l) => l.studentType === "DAY_SCHOLAR");
+  const cadetSource = history.filter((l) => l.studentType === "CADET");
 
-  const dayScholarHistory = history.filter(
-    (l) => l.studentType === "DAY_SCHOLAR" && matchesSearch(l, dsQuery)
+  const { query: dsQuery, setQuery: setDsQuery, filtered: dayScholarHistory } = useSearchFilter(
+    dayScholarSource,
+    (l) => [l.studentName, l.indexNumber]
   );
-  const cadetHistory = history.filter((l) => l.studentType === "CADET" && matchesSearch(l, cdQuery));
+  const { query: cdQuery, setQuery: setCdQuery, filtered: cadetHistory } = useSearchFilter(cadetSource, (l) => [
+    l.studentName,
+    l.indexNumber,
+  ]);
+  const dsSort = useSort();
+  const cdSort = useSort();
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--white)]">Day Scholar History</h2>
-        <div className="w-64">
-          <input
-            value={dsQuery}
-            onChange={(e) => setDsQuery(e.target.value)}
-            placeholder="🔍 Search by name or index number..."
-            className={styles.input}
-          />
-        </div>
+        <SearchInput value={dsQuery} onChange={setDsQuery} placeholder="Search by name or index number…" className="w-64" />
       </div>
-      <HistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
+      <HistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." sort={dsSort} />
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
-        <div className="w-64">
-          <input
-            value={cdQuery}
-            onChange={(e) => setCdQuery(e.target.value)}
-            placeholder="🔍 Search by name or index number..."
-            className={styles.input}
-          />
-        </div>
+        <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
       </div>
-      <HistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." />
+      <HistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
     </div>
   );
 }
@@ -498,7 +585,6 @@ function recordStatus(l: LeaveRequest): "Fully Approved" | "Rejected" | "In Prog
 // dashboard visit) since it's a system-wide, unbounded query.
 export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { records, recordsLoading, recordsLoaded, recordsError, loadRecords } = portal;
-  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
 
   useEffect(() => {
@@ -506,10 +592,15 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = records.filter((l) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return l.studentName.toLowerCase().includes(q) || l.indexNumber.toLowerCase().includes(q);
+  const { query, setQuery, filtered } = useSearchFilter(records, (l) => [l.studentName, l.indexNumber]);
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sorted = sortRows(filtered, sortKey, sortDir, {
+    student: (l) => l.studentName,
+    studentType: (l) => l.studentType,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+    status: (l) => recordStatus(l),
   });
 
   return (
@@ -520,14 +611,7 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
       </div>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="w-64">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="🔍 Search by name or index number..."
-            className={styles.input}
-          />
-        </div>
+        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
         <Button variant="secondary" className="!text-xs" onClick={() => loadRecords()} disabled={recordsLoading}>
           {recordsLoading ? "Loading…" : "🔄 Refresh"}
         </Button>
@@ -543,12 +627,18 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Student</th>
-              <th>Type</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Status</th>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh
+                label="Type"
+                sortKey="studentType"
+                activeSortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="To" sortKey="to" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Status" sortKey="status" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th>Actions</th>
             </tr>
           </thead>
@@ -559,14 +649,14 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
                   Loading records…
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                   No records found.
                 </td>
               </tr>
             ) : (
-              filtered.map((l) => {
+              sorted.map((l) => {
                 const status = recordStatus(l);
                 return (
                   <tr key={l.id}>

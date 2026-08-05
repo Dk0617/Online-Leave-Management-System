@@ -202,7 +202,7 @@ export function DashboardShell({
               className={`mx-2.5 mb-0.5 flex w-[calc(100%-20px)] items-center gap-3 rounded-lg border-l-2 px-5 py-2.5 text-left text-[13px] font-medium transition-all ${
                 activeView === item.key
                   ? "border-[var(--orange)] bg-gradient-to-br from-[rgba(37,99,176,0.4)] to-[rgba(74,144,217,0.2)] font-semibold text-white shadow-[inset_0_0_0_1px_rgba(74,144,217,0.3)]"
-                  : "border-transparent text-[rgba(200,215,255,0.65)] hover:bg-[rgba(74,144,217,0.12)] hover:text-white"
+                  : "border-transparent text-[rgba(200,215,255,0.65)] hover:translate-x-0.5 hover:bg-[rgba(74,144,217,0.12)] hover:text-white"
               }`}
             >
               <item.icon size={16} className="shrink-0" /> {item.label}
@@ -233,7 +233,9 @@ export function DashboardShell({
             <HeaderAvatar user={user} />
           </div>
         </header>
-        <main className="flex-1 p-7">{children}</main>
+        <main key={activeView} className="viewFade flex-1 p-7">
+          {children}
+        </main>
       </div>
     </div>
   );

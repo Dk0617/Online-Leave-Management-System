@@ -89,6 +89,12 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--white);
 }
+.table tbody tr {
+  transition: background-color 0.12s ease;
+}
+.table tbody tr:hover {
+  background: rgba(74, 144, 217, 0.07);
+}
 
 .chkGroup {
   display: flex;
