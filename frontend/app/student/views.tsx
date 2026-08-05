@@ -374,11 +374,11 @@ export function ApplyLeave({
   // Workshop days (or other mandatory-attendance academic days) the HOD has
   // marked block ordinary leave applications that overlap their actual
   // hours — not necessarily the whole day (a day with no hours set still
-  // defaults to blocking the full day). Emergency Leave is the one
-  // exception. Mirrors the server-side check in
+  // defaults to blocking the full day). Emergency Leave and Medical Leave
+  // are the two exceptions. Mirrors the server-side check in
   // backend/controllers/studentcontrol.js applyLeave.
   const blockedDayInRange =
-    !isEmergency && startDate && startTime && endDate && endTime
+    !isEmergency && !isMedical && startDate && startTime && endDate && endTime
       ? portal.blockedDays.find((d) => {
           if (d.date < startDate || d.date > endDate) return false;
           const dayStart = new Date(`${d.date}T${d.startTime || "00:00"}`);
@@ -463,7 +463,7 @@ export function ApplyLeave({
           ? ` (${blockedDayInRange.startTime}–${blockedDayInRange.endTime})`
           : "";
       setError(
-        `Leave cannot be applied for ${blockedDayInRange.date}${window} — it's a mandatory-attendance day ("${blockedDayInRange.title}") set by your HOD. Use Emergency Leave if this is urgent.`
+        `Leave cannot be applied for ${blockedDayInRange.date}${window} — it's a mandatory-attendance day ("${blockedDayInRange.title}") set by your HOD. Use Emergency Leave or Medical Leave if this is urgent.`
       );
       return;
     }

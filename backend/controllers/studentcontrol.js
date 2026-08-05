@@ -194,6 +194,7 @@ export const applyLeave = async (req, res) => {
 
   const isCadet = student.studentType === "CADET";
   const isEmergency = type === "Emergency Leave";
+  const isMedical = type === "Medical Leave";
   const isAcademic = type === "Academic Leave";
   const skipTroop = isCadet && isAcademic;
   const needsHod = !isCadet || isAcademic;
@@ -241,9 +242,11 @@ export const applyLeave = async (req, res) => {
   // marked on the calendar blocks ordinary leave applications that overlap
   // its actual hours — not necessarily the whole day. An event created
   // without hours (or one marked before this field existed) still falls
-  // back to blocking the full day. Emergency Leave is the one exception,
-  // same reasoning as the 2-day advance-notice rule above.
-  if (hod && !isEmergency) {
+  // back to blocking the full day. Emergency Leave and Medical Leave are
+  // the two exceptions — same reasoning as the 2-day advance-notice rule
+  // above: genuine emergencies and sickness can't wait for the workshop to
+  // end.
+  if (hod && !isEmergency && !isMedical) {
     const blockedDays = await EventDay.find({
       hodId: hod._id,
       category: { $in: MANDATORY_EVENT_CATEGORIES },
@@ -255,7 +258,7 @@ export const applyLeave = async (req, res) => {
       if (dayStart < newEnd && dayEnd > newStart) {
         const windowText = blockedDay.startTime && blockedDay.endTime ? ` (${blockedDay.startTime}–${blockedDay.endTime})` : "";
         return res.status(400).json({
-          message: `Leave cannot be applied for ${blockedDay.date}${windowText} — it's a mandatory-attendance day ("${blockedDay.title}") set by your HOD. Only Emergency Leave can be applied during that window.`,
+          message: `Leave cannot be applied for ${blockedDay.date}${windowText} — it's a mandatory-attendance day ("${blockedDay.title}") set by your HOD. Only Emergency Leave or Medical Leave can be applied during that window.`,
         });
       }
     }

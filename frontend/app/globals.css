@@ -65,11 +65,11 @@ body {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* Login page — a night-time gate-checkpoint scene: two searchlight beams
-   sweeping the sky in the brand's own gold/orange (bright enough to read
-   against the very dark base, unlike the earlier pale-blue radar tint) and
-   a field of twinkling stars, plus a fade-up entrance for the sign-in card.
-   Kept slow on purpose since this is a login screen, not a hero banner. */
+/* Login page — the KDU crest itself, huge and faint, slowly turning behind
+   the card with a gentle breathing glow around it: the university's own
+   identity as the backdrop rather than a generic scene, plus a fade-up
+   entrance for the sign-in card. Kept slow/faint on purpose since this is a
+   login screen, not a hero banner, and the crest must stay legible. */
 @keyframes gradientDrift {
   0%,
   100% {
@@ -88,47 +88,59 @@ body {
   animation: gradientDrift 18s ease-in-out infinite;
 }
 
-@keyframes beamSweep {
+/* Rotation alone doesn't read as "animated" on a mostly-symmetric round
+   crest — the eye can't tell 2°/s of turn apart from standing still. Split
+   the motion across two nested layers instead: the outer wrapper turns
+   slowly (still there, still adds life over time), while the crest image
+   itself visibly breathes (scale + opacity) on its own fast-enough cycle,
+   so there's always something obviously moving regardless of the crest's
+   own symmetry. */
+@keyframes crestSpin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.loginCrestSpin {
+  transform: translate(-50%, -50%);
+  animation: crestSpin 60s linear infinite;
+}
+
+@keyframes crestBreathe {
   0%,
   100% {
-    transform: rotate(-30deg);
+    opacity: 0.16;
+    transform: scale(1);
   }
   50% {
-    transform: rotate(30deg);
+    opacity: 0.28;
+    transform: scale(1.08);
   }
 }
 
-.loginBeam {
-  position: absolute;
-  bottom: -15%;
-  width: 220px;
-  height: 145%;
-  transform-origin: bottom center;
-  background: linear-gradient(
-    to top,
-    rgba(212, 160, 23, 0.4) 0%,
-    rgba(224, 123, 32, 0.16) 35%,
-    transparent 72%
-  );
-  filter: blur(1px);
-  mix-blend-mode: screen;
-  animation: beamSweep 10s ease-in-out infinite;
+.loginCrestBreathe {
+  animation: crestBreathe 4.5s ease-in-out infinite;
 }
 
-@keyframes twinkle {
+@keyframes crestGlow {
   0%,
   100% {
-    opacity: 0.15;
-    transform: scale(0.85);
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.15);
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.12);
   }
 }
 
-.loginStar {
-  animation: twinkle ease-in-out infinite;
+.loginCrestGlow {
+  transform: translate(-50%, -50%);
+  opacity: 0.3;
+  animation: crestGlow 4.5s ease-in-out infinite;
 }
 
 @keyframes cardEnter {
@@ -163,8 +175,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .loginBg,
-  .loginBeam,
-  .loginStar,
+  .loginCrestSpin,
+  .loginCrestBreathe,
+  .loginCrestGlow,
   .loginCard,
   .loginLogo {
     animation: none !important;
