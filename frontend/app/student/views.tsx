@@ -375,10 +375,12 @@ export function ApplyLeave({
   // marked block ordinary leave applications that overlap their actual
   // hours — not necessarily the whole day (a day with no hours set still
   // defaults to blocking the full day). Emergency Leave and Medical Leave
-  // are the two exceptions. Mirrors the server-side check in
-  // backend/controllers/studentcontrol.js applyLeave.
+  // are exceptions, and Cadets are exempt entirely (a Day Scholar
+  // lecture-attendance constraint that never applies to Cadet routing).
+  // Mirrors the server-side check in backend/controllers/studentcontrol.js
+  // applyLeave.
   const blockedDayInRange =
-    !isEmergency && !isMedical && startDate && startTime && endDate && endTime
+    !isEmergency && !isMedical && !isCadet && startDate && startTime && endDate && endTime
       ? portal.blockedDays.find((d) => {
           if (d.date < startDate || d.date > endDate) return false;
           const dayStart = new Date(`${d.date}T${d.startTime || "00:00"}`);

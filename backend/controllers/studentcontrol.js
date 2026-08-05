@@ -243,10 +243,13 @@ export const applyLeave = async (req, res) => {
   // its actual hours — not necessarily the whole day. An event created
   // without hours (or one marked before this field existed) still falls
   // back to blocking the full day. Emergency Leave and Medical Leave are
-  // the two exceptions — same reasoning as the 2-day advance-notice rule
-  // above: genuine emergencies and sickness can't wait for the workshop to
-  // end.
-  if (hod && !isEmergency && !isMedical) {
+  // two exceptions — same reasoning as the 2-day advance-notice rule above:
+  // genuine emergencies and sickness can't wait for the workshop to end.
+  // Cadets are exempt entirely: this is a Day Scholar lecture-attendance
+  // constraint (even Cadet Academic Leave only routes HOD -> Squadron, with
+  // no lecture seat to protect the way a Day Scholar's does), so it never
+  // applies to any Cadet leave regardless of type.
+  if (hod && !isEmergency && !isMedical && !isCadet) {
     const blockedDays = await EventDay.find({
       hodId: hod._id,
       category: { $in: MANDATORY_EVENT_CATEGORIES },

@@ -36,18 +36,20 @@ export default function LoginPage() {
   return (
     <div className="loginBg relative flex flex-1 items-center justify-center overflow-hidden px-6 py-10">
       {/* Decorative ambient layer — the KDU crest itself, huge and faint,
-          turning slowly behind the card with a soft breathing glow around
-          it: the campus's own identity as the backdrop, not a generic
-          scene. Non-interactive, behind the card. */}
+          turning slowly with a soft breathing glow around it: the campus's
+          own identity as the backdrop, not a generic scene. Anchored off in
+          a top-right corner, clear of the card entirely, so the motion
+          stays purely in the open background rather than behind/inside the
+          sign-in card. Non-interactive. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
-          className="loginCrestGlow absolute left-1/2 top-1/2 h-[460px] w-[460px] rounded-full"
+          className="loginCrestGlow absolute right-[-140px] top-[-140px] h-[520px] w-[520px] rounded-full"
           style={{
-            background: "radial-gradient(circle, rgba(212,160,23,0.4) 0%, rgba(224,123,32,0.18) 45%, transparent 72%)",
+            background: "radial-gradient(circle, rgba(212,160,23,0.45) 0%, rgba(224,123,32,0.2) 45%, transparent 72%)",
             filter: "blur(4px)",
           }}
         />
-        <div className="loginCrestSpin absolute left-1/2 top-1/2 h-[380px] w-[380px]">
+        <div className="loginCrestSpin absolute right-[-40px] top-[-40px] h-[420px] w-[420px]">
           <img
             src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
             alt=""

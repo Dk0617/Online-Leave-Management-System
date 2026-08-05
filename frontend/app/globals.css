@@ -88,59 +88,57 @@ body {
   animation: gradientDrift 18s ease-in-out infinite;
 }
 
-/* Rotation alone doesn't read as "animated" on a mostly-symmetric round
-   crest — the eye can't tell 2°/s of turn apart from standing still. Split
-   the motion across two nested layers instead: the outer wrapper turns
-   slowly (still there, still adds life over time), while the crest image
-   itself visibly breathes (scale + opacity) on its own fast-enough cycle,
-   so there's always something obviously moving regardless of the crest's
-   own symmetry. */
+/* Anchored in the open top-right corner of the background (see page.tsx),
+   clear of the card entirely, so the motion stays purely in the ambient
+   space around the sign-in form rather than behind or inside it. Rotation
+   alone doesn't read as "animated" on a mostly-symmetric round crest — the
+   eye can't tell 2°/s of turn apart from standing still — so the crest
+   image itself also visibly breathes (scale + opacity) on its own
+   fast-enough cycle, layered on top of the slower spin. */
 @keyframes crestSpin {
   from {
-    transform: translate(-50%, -50%) rotate(0deg);
+    transform: rotate(0deg);
   }
   to {
-    transform: translate(-50%, -50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 
 .loginCrestSpin {
-  transform: translate(-50%, -50%);
-  animation: crestSpin 60s linear infinite;
+  animation: crestSpin 25s linear infinite;
 }
 
 @keyframes crestBreathe {
   0%,
   100% {
-    opacity: 0.16;
+    opacity: 0.22;
     transform: scale(1);
   }
   50% {
-    opacity: 0.28;
-    transform: scale(1.08);
+    opacity: 0.5;
+    transform: scale(1.16);
   }
 }
 
 .loginCrestBreathe {
-  animation: crestBreathe 4.5s ease-in-out infinite;
+  animation: crestBreathe 3.5s ease-in-out infinite;
 }
 
 @keyframes crestGlow {
   0%,
   100% {
-    opacity: 0.3;
-    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.35;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.6;
-    transform: translate(-50%, -50%) scale(1.12);
+    opacity: 0.75;
+    transform: scale(1.25);
   }
 }
 
 .loginCrestGlow {
-  transform: translate(-50%, -50%);
-  opacity: 0.3;
-  animation: crestGlow 4.5s ease-in-out infinite;
+  opacity: 0.35;
+  animation: crestGlow 3.5s ease-in-out infinite;
 }
 
 @keyframes cardEnter {
