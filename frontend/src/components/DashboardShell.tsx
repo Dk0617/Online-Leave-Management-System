@@ -69,34 +69,29 @@ function HeaderAvatar({ user }: { user: AuthUser }) {
   );
 }
 
-// A small live digital clock readout. Self-ticking so it can be dropped in
-// anywhere without the caller wiring up its own interval — used only on
-// the student's Apply for Leave form (see student/views.tsx ApplyLeave) to
-// help with picking exact start/end times; every portal's shared header
-// used to show one too, but that was just clutter for roles that never
-// need to reference the clock while working.
+// A small live digital clock readout, 24-hour format (e.g. 17:10), hours:
+// minutes only — no seconds, since this is a header glance, not a
+// stopwatch, so a once-a-minute tick is all it needs. Self-ticking so it
+// can be dropped in anywhere without the caller wiring up its own interval.
 export function DigitalClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  const hours24 = now.getHours();
-  const hours = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const hours = String(now.getHours()).padStart(2, "0");
   const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-  const ampm = hours24 >= 12 ? "PM" : "AM";
 
   return (
     <div
-      title={now.toLocaleDateString()}
-      className="hidden shrink-0 items-center gap-1.5 rounded-lg border-2 border-[var(--orange)] bg-gradient-to-br from-[#152569] to-[#0a1435] px-3 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.35)] sm:flex"
+      title={now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+      className="hidden shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card2)] px-3.5 py-1.5 sm:flex"
     >
-      <span className="font-mono text-sm font-bold tabular-nums text-white">
-        {hours}:{minutes}:{seconds}
+      <span className="text-sm leading-none">🕐</span>
+      <span className="font-mono text-sm font-semibold tabular-nums text-[var(--white)]">
+        {hours}:{minutes}
       </span>
-      <span className="text-[10px] font-bold text-[var(--orange)]">{ampm}</span>
     </div>
   );
 }

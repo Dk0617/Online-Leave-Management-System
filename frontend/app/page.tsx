@@ -4,6 +4,27 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, ROLE_HOME } from "@/src/AuthContext";
 
+// Fixed (not random) so server- and client-rendered markup match exactly —
+// Math.random() here would cause a hydration mismatch on first paint.
+// A field of twinkling stars behind the sign-in card, night-sky-over-camp
+// styling that fits the campus's defence theme. Bright/white with a glow so
+// it actually reads against the very dark background (the earlier pale-blue
+// version was too close in brightness to the base to be visible).
+const LOGIN_STARS = [
+  { left: "5%", top: "18%", size: 3, delay: 0, duration: 3.2 },
+  { left: "12%", top: "62%", size: 2, delay: 1.4, duration: 2.6 },
+  { left: "20%", top: "34%", size: 3, delay: 0.6, duration: 3.8 },
+  { left: "30%", top: "78%", size: 2, delay: 2.1, duration: 3 },
+  { left: "38%", top: "14%", size: 2, delay: 0.9, duration: 2.8 },
+  { left: "48%", top: "50%", size: 3, delay: 1.8, duration: 3.4 },
+  { left: "58%", top: "22%", size: 2, delay: 0.3, duration: 3.1 },
+  { left: "66%", top: "70%", size: 3, delay: 2.6, duration: 2.9 },
+  { left: "74%", top: "40%", size: 2, delay: 1.1, duration: 3.6 },
+  { left: "82%", top: "16%", size: 3, delay: 0.4, duration: 3.3 },
+  { left: "88%", top: "58%", size: 2, delay: 2.3, duration: 2.7 },
+  { left: "94%", top: "30%", size: 3, delay: 1.6, duration: 3.5 },
+];
+
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
@@ -34,19 +55,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="flex flex-1 items-center justify-center px-6 py-10"
-      style={{
-        background:
-          "radial-gradient(ellipse 80% 60% at 20% 0%, rgba(37,99,176,.35) 0%, transparent 60%)," +
-          "radial-gradient(ellipse 60% 50% at 80% 100%, rgba(224,123,32,.25) 0%, transparent 55%)," +
-          "linear-gradient(160deg, #050d1f 0%, #0a1540 50%, #0d1b5e 100%)",
-      }}
-    >
-      <div className="w-full max-w-[420px]">
-        <div className="rounded-[28px] bg-[rgba(255,255,255,0.97)] px-10 py-11 shadow-[0_24px_80px_rgba(13,27,94,0.5)]">
+    <div className="loginBg relative flex flex-1 items-center justify-center overflow-hidden px-6 py-10">
+      {/* Decorative ambient layer — a night-time gate-checkpoint scene: two
+          gold/orange searchlight beams sweeping from the bottom corners
+          (bright brand colors so they actually read against the very dark
+          base) plus a field of twinkling stars. Non-interactive, behind the
+          card. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="loginBeam" style={{ left: "-4%", animationDelay: "0s" }} />
+        <div className="loginBeam" style={{ right: "-4%", animationDelay: "-5s" }} />
+        {LOGIN_STARS.map((s, i) => (
+          <span
+            key={i}
+            className="loginStar absolute rounded-full bg-white"
+            style={{
+              left: s.left,
+              top: s.top,
+              width: s.size,
+              height: s.size,
+              boxShadow: "0 0 6px 1px rgba(255,255,255,0.8)",
+              animationDelay: `${s.delay}s`,
+              animationDuration: `${s.duration}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="relative w-full max-w-[420px]">
+        <div className="loginCard rounded-[28px] bg-[rgba(255,255,255,0.97)] px-10 py-11 shadow-[0_24px_80px_rgba(13,27,94,0.5)]">
           <div className="mb-6 flex items-center gap-4 border-b-2 border-[#e8edf5] pb-5">
-            <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e07b20] shadow-[0_0_0_2px_#d4a017,0_4px_10px_rgba(13,27,94,0.25)]">
+            <div className="loginLogo flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e07b20]">
               <img
                 src="/KDU-LOGO-ORIGINAL-5x4-inch-copy.png"
                 alt="KDU logo"

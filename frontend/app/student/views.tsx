@@ -30,6 +30,27 @@ function statusOrDash(status: string, moot: boolean) {
   return statusBadge(status);
 }
 
+// hodCorrectDateTime always re-saves all four date/time fields together,
+// even the ones the HOD didn't actually touch — so dateTimeCorrectedByHod
+// alone doesn't say which field changed. Compares each side's own original
+// vs current value and returns only the piece(s) that actually differ (just
+// the date, just the time, or both), so an unedited field never gets
+// flagged as "was X" alongside the one that really changed. Returns null
+// when this side (start or end) wasn't touched at all.
+function correctionNote(
+  currentDate: string,
+  currentTime: string,
+  originalDate?: string,
+  originalTime?: string
+): string | null {
+  if (!originalDate || !originalTime) return null;
+  const dateChanged = originalDate !== currentDate;
+  const timeChanged = originalTime !== currentTime;
+  if (!dateChanged && !timeChanged) return null;
+  if (dateChanged && timeChanged) return `${originalDate} ${originalTime}`;
+  return dateChanged ? originalDate : originalTime;
+}
+
 // The dashboard shows one merged row per Academic Leave + linked Personal
 // Leave pair. For Cadets the two routes only overlap at Squadron — Academic
 // Leave's own troopStatus/sddStatus stay "N/A" forever (it never reaches
@@ -161,6 +182,12 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                 // the one PDF, as before.
                 const academicPdfReady = companion ? isApproved(l) : false;
                 const personalOrStandalonePdfReady = companion ? isGateEligible(companion) : isApproved(l);
+                const startNote = l.dateTimeCorrectedByHod
+                  ? correctionNote(l.startDate, l.startTime, l.originalStartDate, l.originalStartTime)
+                  : null;
+                const endNote = l.dateTimeCorrectedByHod
+                  ? correctionNote(l.endDate, l.endTime, l.originalEndDate, l.originalEndTime)
+                  : null;
                 return (
                   <tr key={l.id}>
                     <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
@@ -175,17 +202,24 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                     </td>
                     <td>
                       {l.startDate}
-                      {l.dateTimeCorrectedByHod && (
-                        <div className="mt-0.5">
-                          <span
-                            title={`Originally applied for ${l.originalStartDate} ${l.originalStartTime} → ${l.originalEndDate} ${l.originalEndTime}`}
-                          >
-                            <Badge tone="amber">✏️ HOD Edited</Badge>
-                          </span>
+                      {startNote && (
+                        <div className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]">
+                          <span aria-hidden>✏️</span>
+                          <span>Edited</span>
+                          <span className="font-normal text-[var(--muted)]">· was {startNote}</span>
                         </div>
                       )}
                     </td>
-                    <td>{l.endDate}</td>
+                    <td>
+                      {l.endDate}
+                      {endNote && (
+                        <div className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]">
+                          <span aria-hidden>✏️</span>
+                          <span>Edited</span>
+                          <span className="font-normal text-[var(--muted)]">· was {endNote}</span>
+                        </div>
+                      )}
+                    </td>
                     {isCadet ? (
                       // Cadet Academic Leave routes HOD -> Squadron only (Troop
                       // and SDD stay "N/A" on the Academic Leave itself) — merged
@@ -318,6 +352,7 @@ export function ApplyLeave({
   }, [portal.profile]);
 
   const isEmergency = type === "Emergency Leave";
+  const isMedical = type === "Medical Leave";
   const isAcademic = type === "Academic Leave";
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   // The linked Personal Leave that always accompanies an Academic Leave
@@ -326,7 +361,13 @@ export function ApplyLeave({
   // check in studentcontrol.js applyLeave.
   const personalDocRequired = isAcademic && isCadet;
   const today = new Date().toISOString().split("T")[0];
-  const minStartDate = isEmergency
+  // Medical Leave alone may be backdated (sickness is often only reported
+  // after the fact), and only up to 7 days back — mirrors the backend check
+  // in studentcontrol.js applyLeave.
+  const medicalBackdateFloor = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const minStartDate = isMedical
+    ? medicalBackdateFloor
+    : isEmergency
     ? today
     : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
@@ -360,10 +401,15 @@ export function ApplyLeave({
     if ((startMinutePart !== 0 && startMinutePart !== 30) || (endMinutePart !== 0 && endMinutePart !== 30)) {
       return "Start and end time must be on the hour or half hour (e.g. 09:00 or 09:30).";
     }
-    if (new Date(`${startDate}T${startTime}`) < new Date()) {
+    if (isMedical) {
+      const MEDICAL_BACKDATE_MS = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - new Date(`${startDate}T${startTime}`).getTime() > MEDICAL_BACKDATE_MS) {
+        return "Medical Leave can only be backdated up to 7 days from its start date.";
+      }
+    } else if (new Date(`${startDate}T${startTime}`) < new Date()) {
       return "Start date/time can't be in the past.";
     }
-    if (!isEmergency && startDate < minStartDate) {
+    if (!isEmergency && !isMedical && startDate < minStartDate) {
       return "Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.";
     }
     if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
@@ -371,7 +417,7 @@ export function ApplyLeave({
     }
     if (!isEmergency) {
       const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
-      if (new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
+      if (!isMedical && new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
         return "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.";
       }
       const [startHour, startMinute] = startTime.split(":").map(Number);
@@ -557,7 +603,7 @@ export function ApplyLeave({
               <label className={styles.label}>
                 Start Date<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input type="date" min={today} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={styles.input} />
+              <input type="date" min={isMedical ? medicalBackdateFloor : today} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
@@ -569,7 +615,7 @@ export function ApplyLeave({
               <label className={styles.label}>
                 End Date<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input type="date" min={today} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={styles.input} />
+              <input type="date" min={isMedical ? medicalBackdateFloor : today} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>

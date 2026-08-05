@@ -149,7 +149,16 @@ export const applyLeave = async (req, res) => {
       .status(400)
       .json({ message: "End date/time must be after start date/time — they can't be the same" });
   }
-  if (new Date(`${startDate}T${startTime}`) < new Date()) {
+  // Every leave type must start now or in the future, except Medical Leave —
+  // sickness is often only reported/documented after the fact, so it alone
+  // may be backdated, and only up to 7 days back.
+  const MEDICAL_BACKDATE_MS = 7 * 24 * 60 * 60 * 1000;
+  const startDateTime = new Date(`${startDate}T${startTime}`);
+  if (type === "Medical Leave") {
+    if (Date.now() - startDateTime.getTime() > MEDICAL_BACKDATE_MS) {
+      return res.status(400).json({ message: "Medical Leave can only be backdated up to 7 days from its start date." });
+    }
+  } else if (startDateTime < new Date()) {
     return res.status(400).json({ message: "Start date/time can't be in the past" });
   }
   if (attachmentData && Buffer.byteLength(attachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
@@ -159,13 +168,13 @@ export const applyLeave = async (req, res) => {
     return res.status(400).json({ message: "Personal Leave attachment too large (max 20MB)" });
   }
 
-  // Every leave type except Emergency Leave must be submitted at least 2
-  // days ahead of the leave's own start date/time — Emergency Leave is the
-  // one deliberate exception, since it exists precisely for same-day needs.
+  // Every leave type except Emergency Leave and Medical Leave must be
+  // submitted at least 2 days ahead of the leave's own start date/time —
+  // Emergency Leave exists for same-day needs, Medical Leave for the
+  // backdating case just above (both would otherwise fail this check).
   if (type !== "Emergency Leave") {
     const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
-    const startDateTime = new Date(`${startDate}T${startTime}`);
-    if (startDateTime.getTime() - Date.now() < MIN_NOTICE_MS) {
+    if (type !== "Medical Leave" && startDateTime.getTime() - Date.now() < MIN_NOTICE_MS) {
       return res.status(400).json({
         message:
           "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.",
