@@ -8,6 +8,12 @@ import {
   troopReject,
 } from "../controllers/leavecontrol.js";
 import { troopMovements } from "../controllers/movementcontrol.js";
+import {
+  troopBlockLeavePending,
+  troopBlockLeaveHistory,
+  troopApproveBlockLeave,
+  troopRejectBlockLeave,
+} from "../controllers/blockleavecontrol.js";
 
 const router = express.Router();
 
@@ -18,6 +24,11 @@ router.get("/leaves/history", troopHistory);
 router.get("/leaves/records", troopAllRecords);
 router.patch("/leaves/:id/approve", troopApprove);
 router.patch("/leaves/:id/reject", troopReject);
+
+router.get("/block-leave/pending", troopBlockLeavePending);
+router.get("/block-leave/history", troopBlockLeaveHistory);
+router.patch("/block-leave/:id/approve", troopApproveBlockLeave);
+router.patch("/block-leave/:id/reject", troopRejectBlockLeave);
 
 router.get("/movements", troopMovements);
 

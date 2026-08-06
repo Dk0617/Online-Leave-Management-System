@@ -5,6 +5,8 @@
 import {
   AuditEntry,
   AuthUser,
+  BlockLeaveEntry,
+  BlockLeaveRequest,
   DOC_REQUIRED_TYPES,
   DOC_REQUIRED_TYPES_CADET,
   EventDay,
@@ -414,4 +416,50 @@ export function isGateEligible(leave: LeaveRequest): boolean {
 // backend/controllers/studentcontrol.js requiresAttachment — keep in sync).
 export function requiresAttachment(type: LeaveRequest["type"], studentType: LeaveRequest["studentType"]): boolean {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES).includes(type);
+}
+
+// ==================================================================
+// Block Leave
+// ==================================================================
+
+export function normalizeBlockLeave(raw: Raw): BlockLeaveRequest {
+  return {
+    id: String(raw._id ?? raw.id),
+    department: raw.department as string,
+    hodId: String(raw.hodId),
+    intakes: ((raw.intakes as unknown[]) ?? []).map((i) => String(i)),
+    troopIds: ((raw.troopIds as unknown[]) ?? []).map((t) => String(t)),
+    startDate: raw.startDate as string,
+    startTime: raw.startTime as string,
+    endDate: raw.endDate as string,
+    endTime: raw.endTime as string,
+    reason: raw.reason as string,
+    students: ((raw.students as Raw[]) ?? []).map((s) => ({
+      no: s.no as number,
+      studentId: String(s.studentId),
+      indexNumber: s.indexNumber as string,
+      name: s.name as string,
+      intake: s.intake as string | undefined,
+      verifyCode: s.verifyCode as string,
+    })) as BlockLeaveEntry[],
+    stage: raw.stage as BlockLeaveRequest["stage"],
+    submittedAt: raw.submittedAt as string | undefined,
+    submittedByStudentId: raw.submittedByStudentId ? String(raw.submittedByStudentId) : undefined,
+    hodStatus: raw.hodStatus as BlockLeaveRequest["hodStatus"],
+    hodComment: raw.hodComment as string | undefined,
+    hodApprovedAt: raw.hodApprovedAt as string | undefined,
+    troopStatus: raw.troopStatus as BlockLeaveRequest["troopStatus"],
+    troopComment: raw.troopComment as string | undefined,
+    troopApprovedAt: raw.troopApprovedAt as string | undefined,
+    decidedByTroopId: raw.decidedByTroopId ? String(raw.decidedByTroopId) : undefined,
+    createdAt: raw.createdAt as string,
+  };
+}
+
+export function isBlockLeaveApproved(block: BlockLeaveRequest): boolean {
+  return block.hodStatus === "Approved" && block.troopStatus === "Approved";
+}
+
+export function isBlockLeaveRejected(block: BlockLeaveRequest): boolean {
+  return block.hodStatus === "Rejected" || block.troopStatus === "Rejected";
 }

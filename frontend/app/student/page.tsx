@@ -1,23 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FileText, KeyRound, LayoutDashboard, User } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, KeyRound, LayoutDashboard, User, Users } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { Dashboard, ApplyLeave, Profile, SetProfilePhoto } from "./views";
-
-const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "applyLeave", label: "Apply Leave", icon: FileText },
-  { key: "profile", label: "My Profile", icon: User },
-  { key: "changePass", label: "Change Password", icon: KeyRound },
-];
+import { Dashboard, ApplyLeave, BlockLeave, Profile, SetProfilePhoto } from "./views";
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
   applyLeave: "Apply for Leave",
+  blockLeave: "Block Leave",
   profile: "My Profile",
   changePass: "Change Password",
   setPhoto: "Set Profile Photo",
@@ -27,6 +21,20 @@ export default function StudentPage() {
   const { user, setUserPhoto } = useAuth();
   const [view, setView] = useState("dashboard");
   const portal = useStudentPortal();
+
+  // Block Leave is Day Scholar only — never shown to Cadets, see
+  // backend/models/BlockLeave.js.
+  const navItems: NavItem[] = useMemo(() => {
+    const items: NavItem[] = [
+      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { key: "applyLeave", label: "Apply Leave", icon: FileText },
+    ];
+    if (user?.studentType === "DAY_SCHOLAR") {
+      items.push({ key: "blockLeave", label: "Block Leave", icon: Users });
+    }
+    items.push({ key: "profile", label: "My Profile", icon: User }, { key: "changePass", label: "Change Password", icon: KeyRound });
+    return items;
+  }, [user?.studentType]);
 
   const forcedPassword = !!user?.mustChangePassword;
   // Only forced once the profile has actually loaded (so this doesn't flash
@@ -51,13 +59,14 @@ export default function StudentPage() {
     <DashboardShell
       role="STUDENT"
       title={TITLES[activeView]}
-      navItems={NAV_ITEMS}
+      navItems={navItems}
       activeView={activeView}
       onNavigate={(key) => !forced && setView(key)}
       roleTag={user ? `${user.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠Day Scholar"}\n${user.indexNumber}` : undefined}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
       {activeView === "applyLeave" && <ApplyLeave portal={portal} onDone={() => setView("dashboard")} />}
+      {activeView === "blockLeave" && user?.studentType === "DAY_SCHOLAR" && <BlockLeave portal={portal} />}
       {activeView === "profile" && <Profile portal={portal} />}
       {activeView === "changePass" && (
         <ChangePasswordForm forced={forcedPassword} onDone={() => setView("dashboard")} />

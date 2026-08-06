@@ -5,6 +5,7 @@ import { CheckCircle2, ClipboardList, Hourglass, LogIn, XCircle } from "lucide-r
 import { Card, StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { BlockLeaveRosterModal, blockLeaveTone } from "@/src/components/blockLeave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { TimeSelect } from "@/src/components/TimeSelect";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
@@ -12,6 +13,7 @@ import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
 import { isToday } from "@/src/api";
 import {
+  BlockLeaveRequest,
   EVENT_CATEGORY_LABELS,
   EventCategory,
   LEAVE_TYPE_LABELS,
@@ -917,6 +919,149 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
           onClose={() => setReviewEvent(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ==================================================================
+// Block Leave — one HOD decision settles the whole roster at once. See
+// backend/models/BlockLeave.js.
+// ==================================================================
+
+export function BlockLeaveQueue({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
+  const { blockLeavePending, blockLeaveHistory, approveBlockLeave, rejectBlockLeave, error, refresh } = portal;
+  const [viewing, setViewing] = useState<BlockLeaveRequest | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "green" | "red" } | null>(null);
+
+  function notify(block: BlockLeaveRequest, decision: "Approved" | "Rejected") {
+    setToast({
+      message: `Block Leave ${decision} — ${block.department} (${block.students.length} students)`,
+      tone: decision === "Approved" ? "green" : "red",
+    });
+    setTimeout(() => setToast(null), 5000);
+  }
+
+  return (
+    <div>
+      {toast && <Toast message={toast.message} tone={toast.tone} />}
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load Block Leave data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
+      <div className={styles.infoBanner}>
+        <strong>Block Leave:</strong> a Day Scholar starts one and others in your department join it — once
+        submitted, your decision here approves or rejects the whole roster at once, then it moves on to a
+        Troop Commander for a second decision covering everyone.
+      </div>
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending Block Leaves</h2>
+      <div className="mb-8 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Students</th>
+              <th>Reason</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {blockLeavePending.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No Block Leaves pending.
+                </td>
+              </tr>
+            ) : (
+              blockLeavePending.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.department}</td>
+                  <td>
+                    {b.startDate} {b.startTime}
+                  </td>
+                  <td>
+                    {b.endDate} {b.endTime}
+                  </td>
+                  <td>{b.students.length}</td>
+                  <td className="max-w-[220px] text-xs text-[var(--muted)]">{b.reason}</td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
+                    <ApprovalActions
+                      onApprove={() => approveBlockLeave(b.id)}
+                      onReject={(remarks) => rejectBlockLeave(b.id, remarks)}
+                      onSuccess={(decision) => notify(b, decision)}
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Block Leave History</h2>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Students</th>
+              <th>Your Decision</th>
+              <th>Troop Commander</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {blockLeaveHistory.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  No Block Leave history yet.
+                </td>
+              </tr>
+            ) : (
+              blockLeaveHistory.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.department}</td>
+                  <td>
+                    {b.startDate} {b.startTime}
+                  </td>
+                  <td>
+                    {b.endDate} {b.endTime}
+                  </td>
+                  <td>{b.students.length}</td>
+                  <td>
+                    <Badge tone={blockLeaveTone(b.hodStatus)}>{b.hodStatus}</Badge>
+                  </td>
+                  <td>
+                    {b.hodStatus === "Rejected" ? (
+                      <Badge tone="gray">Not Reached</Badge>
+                    ) : (
+                      <Badge tone={blockLeaveTone(b.troopStatus)}>{b.troopStatus}</Badge>
+                    )}
+                  </td>
+                  <td>
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {viewing && <BlockLeaveRosterModal block={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }

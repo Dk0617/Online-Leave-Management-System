@@ -1,14 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeEventDay, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
-import { EventDay, LeaveRequest, Movement } from "@/src/types";
+import {
+  api,
+  normalizeBlockLeave,
+  normalizeEventDay,
+  normalizeLeave,
+  normalizeMovement,
+  POLL_INTERVAL_MS,
+} from "@/src/api";
+import { BlockLeaveRequest, EventDay, LeaveRequest, Movement } from "@/src/types";
 
 export function useHodPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [blockLeavePending, setBlockLeavePending] = useState<BlockLeaveRequest[]>([]);
+  const [blockLeaveHistory, setBlockLeaveHistory] = useState<BlockLeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,16 +25,20 @@ export function useHodPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [p, h, e, m] = await Promise.all([
+      const [p, h, e, m, blp, blh] = await Promise.all([
         api.get<Record<string, unknown>[]>("/hod/leaves/pending"),
         api.get<Record<string, unknown>[]>("/hod/leaves/history"),
         api.get<Record<string, unknown>[]>("/hod/events"),
         api.get<Record<string, unknown>[]>("/hod/movements"),
+        api.get<Record<string, unknown>[]>("/hod/block-leave/pending"),
+        api.get<Record<string, unknown>[]>("/hod/block-leave/history"),
       ]);
       setPending(p.map(normalizeLeave));
       setHistory(h.map(normalizeLeave));
       setEvents(e.map(normalizeEventDay));
       setMovements(m.map(normalizeMovement));
+      setBlockLeavePending(blp.map(normalizeBlockLeave));
+      setBlockLeaveHistory(blh.map(normalizeBlockLeave));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load HOD data");
     } finally {
@@ -85,11 +98,22 @@ export function useHodPortal() {
     return result.rejectedCount;
   }
 
+  async function approveBlockLeave(id: string, comment?: string) {
+    await api.patch(`/hod/block-leave/${id}/approve`, { comment });
+    await refresh();
+  }
+  async function rejectBlockLeave(id: string, comment?: string) {
+    await api.patch(`/hod/block-leave/${id}/reject`, { comment });
+    await refresh();
+  }
+
   return {
     pending,
     history,
     events,
     movements,
+    blockLeavePending,
+    blockLeaveHistory,
     loading,
     error,
     refresh,
@@ -99,5 +123,7 @@ export function useHodPortal() {
     addEvent,
     removeEvent,
     rejectOverlapping,
+    approveBlockLeave,
+    rejectBlockLeave,
   };
 }

@@ -8,10 +8,10 @@ import { LeaveDetailModal } from "@/src/components/leave";
 import { PhotoCropModal } from "@/src/components/PhotoCropModal";
 import { TimeSelect } from "@/src/components/TimeSelect";
 import { useAuth } from "@/src/AuthContext";
-import { useStudentPortal } from "@/src/hooks/useStudentPortal";
-import { isApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
-import { downloadLeavePassPdf } from "@/src/pdf";
-import { LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
+import { useStudentPortal, NewBlockLeaveInput } from "@/src/hooks/useStudentPortal";
+import { isApproved, isBlockLeaveApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
+import { downloadBlockLeavePassPdf, downloadLeavePassPdf } from "@/src/pdf";
+import { BLOCK_LEAVE_MAX_STUDENTS, BLOCK_LEAVE_MIN_STUDENTS, LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
 import styles from "./student.module.css";
 
 function statusBadge(status: string) {
@@ -776,6 +776,308 @@ export function ApplyLeave({
           </Button>
         </form>
       </Card>
+    </div>
+  );
+}
+
+// One shared 24-hour leave a department's Day Scholars join one at a time
+// (min 5, max 30) instead of each filing their own individual leave — see
+// backend/models/BlockLeave.js. Never shown to Cadets (student/page.tsx
+// hides the nav item for them; this component itself refuses too, in case
+// it's ever reached another way).
+export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
+  const { user } = useAuth();
+  const { openBlockLeave, myBlockLeaves, startBlockLeave, joinBlockLeave, submitBlockLeave, error, refresh } = portal;
+
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  if (user?.studentType === "CADET") {
+    return <p className="text-sm text-[var(--muted)]">Block Leave is only available to Day Scholars.</p>;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const myEntry = openBlockLeave?.students.find((s) => s.studentId === user?.id);
+  const isMember = !!myEntry;
+  const count = openBlockLeave?.students.length ?? 0;
+  const canSubmit = isMember && count >= BLOCK_LEAVE_MIN_STUDENTS;
+
+  async function handleStart(e: FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    if (!startDate || !startTime || !endDate || !endTime || !reason.trim()) {
+      setFormError("Please complete all fields.");
+      return;
+    }
+    const input: NewBlockLeaveInput = { startDate, startTime, endDate, endTime, reason: reason.trim() };
+    setSubmitting(true);
+    try {
+      await startBlockLeave(input);
+      setStartDate("");
+      setStartTime("");
+      setEndDate("");
+      setEndTime("");
+      setReason("");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to start Block Leave");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleJoin() {
+    if (!openBlockLeave) return;
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await joinBlockLeave(openBlockLeave.id);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to join Block Leave");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitForApproval() {
+    if (!openBlockLeave) return;
+    if (
+      !confirm(
+        `Submit this Block Leave with ${count} student(s) for HOD approval? No more students will be able to join afterward.`
+      )
+    ) {
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await submitBlockLeave(openBlockLeave.id);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to submit Block Leave");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div>
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load Block Leave data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
+      <div className={styles.flowBanner}>
+        <div className="text-xl">🧑‍🤝‍🧑</div>
+        <div>
+          <strong className="text-[var(--white)]">Block Leave:</strong> one shared 24-hour leave for {BLOCK_LEAVE_MIN_STUDENTS}
+          –{BLOCK_LEAVE_MAX_STUDENTS} Day Scholars from your own department. Goes to your HOD, then a Troop Commander,
+          as a single decision covering everyone on the roster.
+        </div>
+      </div>
+
+      {!openBlockLeave ? (
+        <Card className="p-5">
+          <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Start a Block Leave</h2>
+          <p className="mb-4 text-xs leading-relaxed text-[var(--muted)]">
+            No Block Leave is currently open for your department. Start one below — other Day Scholars in your
+            department will then be able to join it using the same dates/times you set here.
+          </p>
+          <form onSubmit={handleStart} className="space-y-4">
+            <div className={styles.formGrid}>
+              <div>
+                <label className={styles.label}>
+                  Start Date<span className="ml-0.5 text-[var(--err)]">*</span>
+                </label>
+                <input
+                  type="date"
+                  min={today}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+              <div>
+                <label className={styles.label}>
+                  Start Time<span className="ml-0.5 text-[var(--err)]">*</span>
+                </label>
+                <TimeSelect value={startTime} onChange={setStartTime} className={styles.input} />
+              </div>
+              <div>
+                <label className={styles.label}>
+                  End Date<span className="ml-0.5 text-[var(--err)]">*</span>
+                </label>
+                <input
+                  type="date"
+                  min={startDate || today}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className={styles.input}
+                />
+              </div>
+              <div>
+                <label className={styles.label}>
+                  End Time<span className="ml-0.5 text-[var(--err)]">*</span>
+                </label>
+                <TimeSelect value={endTime} onChange={setEndTime} className={styles.input} />
+              </div>
+            </div>
+            <div>
+              <label className={styles.label}>
+                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. Department study tour"
+                className={styles.input}
+              />
+            </div>
+            {formError && <p className="text-sm text-[var(--err)]">{formError}</p>}
+            <Button type="submit" variant="accent" disabled={submitting}>
+              {submitting ? "Starting…" : "📤 Start Block Leave"}
+            </Button>
+          </form>
+        </Card>
+      ) : (
+        <Card className="p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-[var(--white)]">
+              {openBlockLeave.department} Block Leave — {count}/{BLOCK_LEAVE_MAX_STUDENTS} joined
+            </h2>
+            <Badge tone={count >= BLOCK_LEAVE_MIN_STUDENTS ? "green" : "amber"}>
+              {count >= BLOCK_LEAVE_MIN_STUDENTS ? "Ready to submit" : `Needs ${BLOCK_LEAVE_MIN_STUDENTS - count} more to submit`}
+            </Badge>
+          </div>
+          <div className={`${styles.formGrid} mb-4`}>
+            <div>
+              <div className={styles.label}>From (Exit)</div>
+              <div className="text-sm text-[var(--white)]">
+                {openBlockLeave.startDate} {openBlockLeave.startTime}
+              </div>
+            </div>
+            <div>
+              <div className={styles.label}>To (Entry)</div>
+              <div className="text-sm text-[var(--white)]">
+                {openBlockLeave.endDate} {openBlockLeave.endTime}
+              </div>
+            </div>
+          </div>
+          <div className="mb-4">
+            <div className={styles.label}>Reason</div>
+            <div className="text-sm text-[var(--white)]">{openBlockLeave.reason}</div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>Index Number</th>
+                  <th>Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openBlockLeave.students.map((s) => (
+                  <tr key={s.studentId} className={s.studentId === user?.id ? "bg-[rgba(74,144,217,0.08)]" : ""}>
+                    <td>{s.no}</td>
+                    <td>{s.indexNumber}</td>
+                    <td>
+                      {s.name}
+                      {s.studentId === user?.id && (
+                        <span className="ml-1.5">
+                          <Badge tone="blue">You</Badge>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {formError && <p className="mt-3 text-sm text-[var(--err)]">{formError}</p>}
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {!isMember ? (
+              <Button variant="accent" onClick={handleJoin} disabled={submitting}>
+                {submitting ? "Joining…" : "Join this Block Leave"}
+              </Button>
+            ) : (
+              <>
+                <p className="text-xs text-[var(--muted)]">You&apos;re No. {myEntry!.no} on this roster.</p>
+                <Button variant="primary" onClick={handleSubmitForApproval} disabled={submitting || !canSubmit}>
+                  {submitting ? "Submitting…" : `Submit for Approval (${count})`}
+                </Button>
+              </>
+            )}
+          </div>
+          {isMember && !canSubmit && (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              At least {BLOCK_LEAVE_MIN_STUDENTS} students must join before this can be submitted — it also
+              auto-submits once {BLOCK_LEAVE_MAX_STUDENTS} students have joined.
+            </p>
+          )}
+        </Card>
+      )}
+
+      <h2 className="mb-3 mt-8 text-sm font-bold text-[var(--white)]">My Block Leaves</h2>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Students</th>
+              <th>HOD</th>
+              <th>Troop Commander</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {myBlockLeaves.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  No Block Leaves yet.
+                </td>
+              </tr>
+            ) : (
+              myBlockLeaves.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.department}</td>
+                  <td>
+                    {b.startDate} {b.startTime}
+                  </td>
+                  <td>
+                    {b.endDate} {b.endTime}
+                  </td>
+                  <td>{b.students.length}</td>
+                  <td>{statusBadge(b.hodStatus)}</td>
+                  <td>{statusBadge(b.troopStatus)}</td>
+                  <td>
+                    {isBlockLeaveApproved(b) && (
+                      <button
+                        onClick={() => downloadBlockLeavePassPdf(b)}
+                        className="rounded-md border border-[rgba(212,160,23,0.2)] bg-[rgba(212,160,23,0.15)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold)]"
+                      >
+                        📥 PDF
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

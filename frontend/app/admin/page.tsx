@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  BookOpen,
   CalendarRange,
   Construction,
   GraduationCap,
@@ -28,7 +27,6 @@ import {
   Troop,
   PasswordChanges,
   AuditLog,
-  Lecturers,
   HodCover,
   PhotoRequests,
 } from "./views";
@@ -38,7 +36,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: "intakes", label: "Intakes", icon: CalendarRange },
   { key: "students", label: "Students", icon: GraduationCap },
   { key: "hod", label: "HODs", icon: Landmark },
-  { key: "lecturers", label: "Lecturers", icon: BookOpen },
   { key: "hodCover", label: "HOD Cover", icon: RefreshCw },
   { key: "troop", label: "Troop Commanders", icon: Medal },
   { key: "squadran", label: "Squadron Commander", icon: Swords },
@@ -55,7 +52,6 @@ const TITLES: Record<string, string> = {
   intakes: "Intakes",
   students: "Students",
   hod: "HODs",
-  lecturers: "Lecturers",
   hodCover: "HOD Cover",
   troop: "Troop Commanders",
   squadran: "Squadron Commander",
@@ -83,7 +79,6 @@ export default function AdminPage() {
       {view === "intakes" && <Intakes portal={portal} />}
       {view === "students" && <Students portal={portal} />}
       {view === "hod" && <StaffRole portal={portal} role="HOD" title="HOD" extraLabel="Department" />}
-      {view === "lecturers" && <Lecturers portal={portal} />}
       {view === "hodCover" && <HodCover portal={portal} />}
       {view === "squadran" && <StaffRole portal={portal} role="SQUADRAN" title="Squadron Commander" />}
       {view === "sdd" && (

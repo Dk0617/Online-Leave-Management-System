@@ -1,7 +1,7 @@
 // Official leave-pass PDF, ported from student.html's jsPDF layout.
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
-import { LeaveRequest } from "@/src/types";
+import { BlockLeaveRequest, LeaveRequest } from "@/src/types";
 
 const NAVY: [number, number, number] = [13, 27, 94];
 const ORANGE: [number, number, number] = [224, 123, 32];
@@ -135,7 +135,7 @@ export async function downloadLeavePassPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(210, 220, 245);
-  doc.text("Student Leave Management System (SLMS)", 43, 40);
+  doc.text("Student Leave Management System", 43, 40);
 
   const boxX = 170,
     boxY = 9,
@@ -221,8 +221,8 @@ export async function downloadLeavePassPdf(
     doc.text(
       doc.splitTextToSize(
         qrData
-          ? "Gate staff: scan this QR with the SLMS Gate portal's camera scanner, or type the code above, to view the student's photo on file and confirm identity. Do not allow exit/entry without a photo match."
-          : "Gate staff: enter this code in the SLMS Gate portal to view the student's photo on file and confirm identity. Do not allow exit/entry on this pass without a photo match.",
+          ? "Gate staff: scan this QR with the Gate portal's camera scanner, or type the code above, to view the student's photo on file and confirm identity. Do not allow exit/entry without a photo match."
+          : "Gate staff: enter this code in the Gate portal to view the student's photo on file and confirm identity. Do not allow exit/entry on this pass without a photo match.",
         pageW - 12 - textX
       ),
       textX,
@@ -500,13 +500,13 @@ export async function downloadLeavePassPdf(
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
   const note = isAcademicType
-    ? "This is a computer-generated record copy issued via the Student Leave Management System (SLMS), KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
-    : "This is a computer-generated official document issued via the Student Leave Management System (SLMS), KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
+    ? "This is a computer-generated record copy issued via the Student Leave Management System, KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
+    : "This is a computer-generated official document issued via the Student Leave Management System, KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
   doc.text(doc.splitTextToSize(note, 190), 10, footY + 5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text(
-    `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   SLMS © KDU Southern Campus`,
+    `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   Student Leave Management System © KDU Southern Campus`,
     105,
     pageH - 9,
     { align: "center" }
@@ -514,4 +514,248 @@ export async function downloadLeavePassPdf(
 
   const fileTypeTag = leave.type.replace(/\s+/g, "");
   doc.save(`LeavePass_${leave.indexNumber}_${fileTypeTag}_${leave.startDate}.pdf`);
+}
+
+// Combined pass for a fully-approved Block Leave — one PDF, downloadable by
+// every student on the roster, listing everyone's details rather than just
+// the downloader's own. Deliberately simpler than the individual leave pass
+// above (no per-student photo/QR — that's a lot of scanning for a roster
+// that can run up to 30 names): one shared HOD/Troop approval record for
+// the whole block, then a paginated No/Index/Name/Verify-Code table.
+export async function downloadBlockLeavePassPdf(block: BlockLeaveRequest) {
+  const crestData = await loadImageAsDataURL("/KDU-LOGO-ORIGINAL-5x4-inch-copy.png");
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageW = 210;
+  const pageH = 297;
+  const marginX = 10;
+  const contentW = pageW - marginX * 2;
+
+  function drawFrame() {
+    doc.setDrawColor(...NAVY);
+    doc.setLineWidth(1);
+    doc.rect(6, 6, pageW - 12, pageH - 12);
+    doc.setDrawColor(...ORANGE);
+    doc.setLineWidth(0.4);
+    doc.rect(8, 8, pageW - 16, pageH - 16);
+  }
+
+  function drawHeader() {
+    doc.setFillColor(...NAVY);
+    doc.rect(6, 6, pageW - 12, 40, "F");
+    doc.setFillColor(...ORANGE);
+    doc.rect(6, 46, pageW - 12, 1.6, "F");
+
+    if (crestData) {
+      try {
+        doc.addImage(crestData, "PNG", 13, 10, 24, 24);
+      } catch {
+        /* ignore */
+      }
+    } else {
+      doc.setFillColor(255, 255, 255);
+      doc.circle(25, 22, 12, "F");
+      doc.setTextColor(...NAVY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("KDU", 25, 24, { align: "center" });
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12.5);
+    doc.text("GENERAL SIR JOHN KOTELAWALA DEFENCE UNIVERSITY", 43, 16);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.text("SOUTHERN CAMPUS", 43, 22);
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.2);
+    doc.line(43, 25, 163, 25);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(245, 196, 90);
+    doc.text("BLOCK LEAVE  /  OFFICIAL PASS", 43, 34);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(210, 220, 245);
+    doc.text("Student Leave Management System", 43, 40);
+  }
+
+  drawFrame();
+  drawHeader();
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...NAVY);
+  doc.text(`REF: BL-${block.id}`, marginX, 55.3);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text(`Issued: ${new Date().toLocaleString()}`, pageW - marginX, 55.3, { align: "right" });
+
+  let y = 63;
+  function sectionHeader(title: string, color: [number, number, number]) {
+    doc.setFillColor(...color);
+    doc.rect(6, y, pageW - 12, 7, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(title, 10, y + 4.8);
+    y += 7 + 7;
+  }
+  function fieldRow(x: number, label: string, value?: string) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(label.toUpperCase(), x, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...DARK);
+    doc.text(String(value || "—"), x, y + 5.2);
+  }
+
+  sectionHeader("BLOCK LEAVE DETAILS", ORANGE);
+  fieldRow(10, "Department", block.department);
+  fieldRow(110, "Number of Students", String(block.students.length));
+  y += 12;
+  fieldRow(10, "From (Exit)", `${block.startDate}  ${block.startTime}`);
+  fieldRow(110, "To (Entry)", `${block.endDate}  ${block.endTime}`);
+  y += 14;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...MUTED);
+  doc.text("REASON", 10, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...DARK);
+  const reasonLines = doc.splitTextToSize(String(block.reason || "—"), contentW);
+  doc.text(reasonLines, 10, y + 5.2);
+  y += 5.2 + reasonLines.length * 4.6 + 8;
+
+  sectionHeader("APPROVAL RECORD", NAVY);
+  const approvalRows: [string, string, string | undefined][] = [
+    ["Head of Department", block.hodStatus, block.hodApprovedAt],
+    ["Troop Commander", block.troopStatus, block.troopApprovedAt],
+  ];
+  const tblX = 10,
+    tblW = 190,
+    col1 = 80,
+    col2 = 45;
+  doc.setFillColor(...NAVY);
+  doc.rect(tblX, y, tblW, 7, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("APPROVAL STAGE", tblX + 3, y + 4.8);
+  doc.text("STATUS", tblX + col1 + 3, y + 4.8);
+  doc.text("DATE / TIME", tblX + col1 + col2 + 3, y + 4.8);
+  y += 7;
+  approvalRows.forEach((r, i) => {
+    const rh = 8.5;
+    doc.setFillColor(...(i % 2 === 0 ? ([255, 255, 255] as [number, number, number]) : LIGHT));
+    doc.rect(tblX, y, tblW, rh, "F");
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.15);
+    doc.rect(tblX, y, tblW, rh);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...DARK);
+    doc.text(r[0], tblX + 3, y + 5.6);
+    const pc = pillColor(r[1] || "Pending");
+    const pillW = 26;
+    doc.setFillColor(...pc.bg);
+    doc.setDrawColor(...pc.border);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(tblX + col1 + 3, y + 1.6, pillW, 5.4, 1.2, 1.2, "FD");
+    doc.setTextColor(...pc.text);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text((r[1] || "Pending").toUpperCase(), tblX + col1 + 3 + pillW / 2, y + 5.2, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text(r[2] || "—", tblX + col1 + col2 + 3, y + 5.6);
+    y += rh;
+  });
+  y += 10;
+
+  // Roster table — paginated: a new page (with the same frame/header) is
+  // started whenever the next row wouldn't fit above the footer band.
+  const rosterColX = { no: 10, index: 28, name: 68, code: 155 };
+  function rosterTableHeader() {
+    doc.setFillColor(...NAVY);
+    doc.rect(tblX, y, tblW, 7, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("NO.", rosterColX.no + 2, y + 4.8);
+    doc.text("INDEX NUMBER", rosterColX.index, y + 4.8);
+    doc.text("NAME", rosterColX.name, y + 4.8);
+    doc.text("VERIFY CODE", rosterColX.code, y + 4.8);
+    y += 7;
+  }
+
+  sectionHeader(`STUDENT ROSTER (${block.students.length})`, ORANGE);
+  rosterTableHeader();
+  const rowH = 7.5;
+  const footerReserve = 30;
+  block.students
+    .slice()
+    .sort((a, b) => a.no - b.no)
+    .forEach((s, i) => {
+      if (y + rowH > pageH - footerReserve) {
+        doc.addPage();
+        drawFrame();
+        y = 14;
+        rosterTableHeader();
+      }
+      doc.setFillColor(...(i % 2 === 0 ? ([255, 255, 255] as [number, number, number]) : LIGHT));
+      doc.rect(tblX, y, tblW, rowH, "F");
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.15);
+      doc.rect(tblX, y, tblW, rowH);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...DARK);
+      doc.text(String(s.no), rosterColX.no + 2, y + 5.1);
+      doc.text(s.indexNumber, rosterColX.index, y + 5.1);
+      doc.text(s.name, rosterColX.name, y + 5.1);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...ORANGE);
+      doc.text(s.verifyCode, rosterColX.code, y + 5.1);
+      y += rowH;
+    });
+  y += 8;
+
+  const footY = pageH - 24;
+  if (y > footY - 8) {
+    doc.addPage();
+    drawFrame();
+    y = footY - 8;
+  }
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.2);
+  doc.line(10, footY, 200, footY);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...MUTED);
+  doc.text(
+    doc.splitTextToSize(
+      "This is a computer-generated official document issued via the Student Leave Management System, KDU Southern Campus, covering every student named on this roster. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.",
+      190
+    ),
+    10,
+    footY + 5
+  );
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text(
+    `Generated ${new Date().toLocaleString()}   |   Ref: BL-${block.id}   |   Student Leave Management System © KDU Southern Campus`,
+    105,
+    pageH - 9,
+    { align: "center" }
+  );
+
+  doc.save(`BlockLeavePass_${block.department}_${block.startDate}.pdf`);
 }

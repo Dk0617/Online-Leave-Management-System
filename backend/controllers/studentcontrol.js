@@ -31,7 +31,7 @@ function minutesFromTimeString(t) {
 const MAX_ATTACHMENT_BYTES = (20 * 1024 * 1024 * 4) / 3;
 // Excludes ambiguous characters (0/O, 1/I/L) so gate staff can read/type it easily.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function generateVerifyCode() {
+export function generateVerifyCode() {
   const bytes = crypto.randomBytes(6);
   let code = "";
   for (let i = 0; i < 6; i++) code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];

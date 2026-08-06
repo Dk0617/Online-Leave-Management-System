@@ -16,7 +16,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SLMS — KDU Southern Campus",
+  title: "Student Leave Management System — KDU Southern Campus",
   description: "Student Leave Management System for KDU Southern Campus",
 };
 

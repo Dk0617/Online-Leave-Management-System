@@ -4,10 +4,11 @@ import { useState } from "react";
 import { ClipboardList, Construction, GraduationCap, Landmark, Medal, Star, Swords } from "lucide-react";
 import { Card, StatTile, Button, Badge, SearchInput, SortableTh } from "@/src/components/ui";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { LeaveDetailModal } from "@/src/components/leave";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
 import { isApproved, isRejected, isToday } from "@/src/api";
-import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest } from "@/src/types";
+import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS } from "@/src/types";
 import styles from "./admin.module.css";
 
 // A leave has no single "decided at" field system-wide — whichever stage
@@ -91,7 +92,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
         <div>
           <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>
           <p className="text-xs text-[var(--muted)]">
-            Here&apos;s what&apos;s happening across SLMS today.
+            Here&apos;s what&apos;s happening across the system today.
           </p>
         </div>
         <div className="rounded-lg border border-[rgba(224,123,32,0.25)] bg-[rgba(224,123,32,0.1)] px-3.5 py-1.5 font-mono text-xs text-[var(--orange2)]">
@@ -211,6 +212,119 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           onClose={() => setLeaveDrilldown(null)}
         />
       )}
+    </div>
+  );
+}
+
+type LeaveOverallStatus = "Pending" | "Approved" | "Rejected";
+
+// Unlike each stage's own hodStatus/troopStatus/etc, there's no single
+// stored field for "where does this leave stand overall" — isApproved/
+// isRejected already encode that per studentType/route, this just names
+// the third (not yet decided either way) case for display.
+function overallStatus(l: LeaveRequest): LeaveOverallStatus {
+  if (isApproved(l)) return "Approved";
+  if (isRejected(l)) return "Rejected";
+  return "Pending";
+}
+
+function overallStatusTone(status: LeaveOverallStatus) {
+  return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
+}
+
+const LEAVE_RECORD_STATUS_FILTERS: Array<"All" | LeaveOverallStatus> = ["All", "Pending", "Approved", "Rejected"];
+
+// Full browsable history of every leave ever submitted — the Dashboard's
+// breakdown card only surfaces Pending / Approved Today / Rejected Today,
+// so anything decided on an earlier day was previously invisible even
+// though it's kept in the database. This is the "see everything" view.
+export function LeaveRecords({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { leaves } = portal;
+  const [statusFilter, setStatusFilter] = useState<"All" | LeaveOverallStatus>("All");
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
+
+  const statusFiltered =
+    statusFilter === "All" ? leaves : leaves.filter((l) => overallStatus(l) === statusFilter);
+  const { query, setQuery, filtered } = useSearchFilter(statusFiltered, (l) => [l.studentName, l.indexNumber]);
+  const sort = useSort("applied", "desc");
+
+  const sorted = sortRows(filtered, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    type: (l) => l.type,
+    applied: (l) => l.appliedDate ?? "",
+    from: (l) => l.startDate,
+    status: (l) => overallStatus(l),
+  });
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          {LEAVE_RECORD_STATUS_FILTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatusFilter(s)}
+              className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                statusFilter === s
+                  ? "border-[var(--sky)] bg-[rgba(74,144,217,0.15)] text-[var(--white)]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--white)]"
+              }`}
+            >
+              {s === "All" ? `All (${leaves.length})` : `${s} (${leaves.filter((l) => overallStatus(l) === s).length})`}
+            </button>
+          ))}
+        </div>
+        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Applied" sortKey="applied" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Status" sortKey="status" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <th>Stages</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No leave records match.
+                </td>
+              </tr>
+            ) : (
+              sorted.map((l) => (
+                <tr key={l.id} onClick={() => setSelected(l)} className="cursor-pointer">
+                  <td>
+                    {l.studentName}
+                    <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                  </td>
+                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td className="text-xs text-[var(--muted)]">{l.appliedDate || "—"}</td>
+                  <td>{l.startDate}</td>
+                  <td>
+                    <Badge tone={overallStatusTone(overallStatus(l))}>{overallStatus(l)}</Badge>
+                  </td>
+                  <td className="text-xs text-[var(--muted)]">
+                    {l.studentType === "CADET" && l.troopStatus === "N/A"
+                      ? `HOD ${l.hodStatus} · Sqn ${l.sqnStatus}`
+                      : l.studentType === "CADET"
+                      ? `Troop ${l.troopStatus} · Sqn ${l.sqnStatus} · SDD ${l.sddStatus}`
+                      : `HOD ${l.hodStatus} · Troop ${l.troopStatus}`}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
