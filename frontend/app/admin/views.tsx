@@ -8,7 +8,7 @@ import { LeaveDetailModal } from "@/src/components/leave";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
 import { isApproved, isRejected, isToday } from "@/src/api";
-import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS } from "@/src/types";
+import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS, LecturerAccount } from "@/src/types";
 import styles from "./admin.module.css";
 
 // A leave has no single "decided at" field system-wide — whichever stage
@@ -1437,13 +1437,15 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
 }
 
 // ==================================================================
-// Lecturers & HOD Cover — the fixed campus-wide seniority chain used to
-// cover HOD approvals when the HOD is unavailable. Order is: the HOD
-// themselves, then every Senior Lecturer by rank, then every Junior
-// Lecturer by rank. Admin marks WHO is unavailable (an HOD, or a
-// Lecturer) on WHICH days; the system works out on its own who that
-// resolves to — nobody picks a specific substitute by hand. See
-// leavecontrol.js resolveActiveCoverer for the resolution logic.
+// HOD Cover — each department has exactly one shared "covering" login
+// used by all of its lecturers to stand in when the HOD is unavailable.
+// Admin creates that one account per department and maintains a named
+// roster inside it (Senior/Junior tier + rank); admin marks WHO is
+// unavailable (the HOD, or a specific named roster member) on WHICH days,
+// and the system works out on its own which named lecturer is currently
+// active — nobody picks a specific substitute by hand. See
+// leavecontrol.js resolveActiveMemberForDepartment for the resolution
+// logic.
 // ==================================================================
 
 function todayStr() {
@@ -1452,226 +1454,171 @@ function todayStr() {
 
 const TIER_LABELS: Record<"SENIOR" | "JUNIOR", string> = { SENIOR: "Senior Lecturer", JUNIOR: "Junior Lecturer" };
 
-export function Lecturers({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { lecturers, addLecturer, editLecturer, removeLecturer } = portal;
+function LecturerRosterModal({
+  lecturer,
+  onAddMember,
+  onEditMember,
+  onRemoveMember,
+  onClose,
+}: {
+  lecturer: LecturerAccount;
+  onAddMember: (input: { name: string; tier: "SENIOR" | "JUNIOR"; rank: number }) => Promise<void>;
+  onEditMember: (memberId: string, input: { name: string; tier: "SENIOR" | "JUNIOR"; rank: number }) => Promise<void>;
+  onRemoveMember: (memberId: string) => Promise<void>;
+  onClose: () => void;
+}) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [username, setUsername] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [department, setDepartment] = useState("");
   const [tier, setTier] = useState<"SENIOR" | "JUNIOR">("SENIOR");
   const [rank, setRank] = useState("1");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   function resetForm() {
     setEditingId(null);
-    setUsername("");
     setName("");
-    setEmail("");
-    setDepartment("");
     setTier("SENIOR");
     setRank("1");
-    setPassword("");
   }
 
-  function startEdit(id: string) {
-    const l = lecturers.find((x) => x.id === id);
-    if (!l) return;
-    setEditingId(id);
-    setUsername(l.username);
-    setName(l.name);
-    setEmail(l.email || "");
-    setDepartment(l.department || "");
-    setTier(l.tier);
-    setRank(String(l.rank));
-    setPassword("");
+  function startEdit(m: LecturerAccount["members"][number]) {
+    setEditingId(m.id);
+    setName(m.name);
+    setTier(m.tier);
+    setRank(String(m.rank));
   }
 
   async function handleSubmit() {
-    if (!editingId) {
-      if (!username.trim() || !name.trim() || !email.trim() || !password.trim()) {
-        setError("All fields are required to create an account.");
-        return;
-      }
-    } else if (!username.trim() || !name.trim()) {
-      setError("Please fill in username and name.");
-      return;
-    }
-    if (!rank.trim() || Number.isNaN(Number(rank)) || Number(rank) < 1) {
-      setError("Rank must be a positive number (1 = highest seniority within the tier).");
-      return;
-    }
-    if (password.trim() && !isValidSimplePassword(password.trim())) {
-      setError(SIMPLE_PASSWORD_MESSAGE);
+    if (!name.trim() || !rank.trim() || Number.isNaN(Number(rank)) || Number(rank) < 1) {
+      setError("Name and a positive rank are required.");
       return;
     }
     setError(null);
+    setSubmitting(true);
     try {
-      const input = {
-        username: username.trim(),
-        name: name.trim(),
-        email: email.trim() || undefined,
-        department: department.trim() || undefined,
-        tier,
-        rank: Number(rank),
-        password: password.trim() || undefined,
-      };
-      if (editingId) {
-        await editLecturer(editingId, input);
-      } else {
-        await addLecturer(input);
-      }
+      const input = { name: name.trim(), tier, rank: Number(rank) };
+      if (editingId) await onEditMember(editingId, input);
+      else await onAddMember(input);
       resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save lecturer");
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this lecturer account?")) return;
+  async function handleRemove(memberId: string) {
+    if (!confirm("Remove this lecturer from the roster?")) return;
     try {
-      await removeLecturer(id);
+      await onRemoveMember(memberId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete lecturer");
+      setError(err instanceof Error ? err.message : "Failed to remove");
     }
   }
 
-  const sorted = [...lecturers].sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1));
+  const sorted = [...lecturer.members].sort((a, b) =>
+    a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1
+  );
 
   return (
-    <div>
-      <div className={styles.infoBanner}>
-        <strong>Seniority Chain:</strong> When an HOD is unavailable (see HOD Cover), their approvals fall to
-        the highest-ranked available Lecturer here — every Senior Lecturer (by rank) is tried before any
-        Junior Lecturer. Rank 1 is tried first within its tier.
-      </div>
-
-      <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
-          {editingId ? "✏️ Edit Lecturer" : "Create Lecturer Account"}
-        </h2>
-        <div className={`${styles.formGrid3} mb-3.5`}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm">
+      <div className="max-h-[85vh] w-[90%] max-w-[560px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-5">
           <div>
-            <label className={styles.label}>
-              Username<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. lect1" className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>
-              Full Name<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full Name" className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>
-              Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
-            </label>
-            <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
-            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-              Min 4 characters — no need for capitals or symbols. They set their own stronger password on
-            first login.
+            <h3 className="text-[15px] font-bold text-[var(--white)]">{lecturer.department} Roster</h3>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Login: {lecturer.username} — shared by every lecturer below.
             </p>
           </div>
+          <button onClick={onClose} className="text-xl leading-none text-[var(--muted)] hover:text-[var(--white)]">
+            ✕
+          </button>
         </div>
-        <div className={`${styles.formGrid3} mb-3.5`}>
-          <div>
-            <label className={styles.label}>
-              Email (enables login by email code)<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@kdu.ac.lk" className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>Department (optional)</label>
-            <input value={department} onChange={(e) => setDepartment(e.target.value)} className={styles.input} />
-          </div>
-          <div />
-        </div>
-        <div className="mb-3.5 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={styles.label}>Tier</label>
-            <select value={tier} onChange={(e) => setTier(e.target.value as "SENIOR" | "JUNIOR")} className={styles.input}>
-              <option value="SENIOR">Senior Lecturer</option>
-              <option value="JUNIOR">Junior Lecturer</option>
-            </select>
-          </div>
-          <div>
-            <label className={styles.label}>
-              Rank within tier<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={rank}
-              onChange={(e) => setRank(e.target.value)}
-              placeholder="1 = highest"
-              className={styles.input}
-            />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="primary" onClick={handleSubmit}>
-            {editingId ? "Save Changes" : "Create Account"}
-          </Button>
-          {editingId && (
-            <Button variant="secondary" onClick={resetForm}>
-              Cancel
-            </Button>
-          )}
-        </div>
-        {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
-      </Card>
-
-      <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Seniority Chain (in order)</h2>
-        <div className="overflow-x-auto">
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Name</th>
-                <th>Tier</th>
-                <th>Rank</th>
-                <th>Department</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                    No lecturers yet.
-                  </td>
+        <div className="px-6 py-4">
+          <div className="mb-4 overflow-x-auto rounded-xl border border-[var(--border)]">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                  <th className="px-3 py-2">Order</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Tier</th>
+                  <th className="px-3 py-2">Rank</th>
+                  <th className="px-3 py-2">Actions</th>
                 </tr>
-              ) : (
-                sorted.map((l, i) => (
-                  <tr key={l.id}>
-                    <td>{i + 1}</td>
-                    <td>
-                      {l.name}
-                      <div className="text-xs text-[var(--muted)]">{l.username}</div>
-                    </td>
-                    <td>
-                      <Badge tone={l.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[l.tier]}</Badge>
-                    </td>
-                    <td>{l.rank}</td>
-                    <td className="text-[var(--muted)]">{l.department || "—"}</td>
-                    <td className="space-x-1.5 whitespace-nowrap">
-                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(l.id)}>
-                        Edit
-                      </Button>
-                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(l.id)}>
-                        Delete
-                      </Button>
+              </thead>
+              <tbody>
+                {sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-[var(--muted)]">
+                      No lecturers on this roster yet.
                     </td>
                   </tr>
-                ))
+                ) : (
+                  sorted.map((m, i) => (
+                    <tr key={m.id} className="border-t border-[rgba(255,255,255,0.05)]">
+                      <td className="px-3 py-2 text-[var(--white)]">{i + 1}</td>
+                      <td className="px-3 py-2 text-[var(--white)]">{m.name}</td>
+                      <td className="px-3 py-2">
+                        <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[m.tier]}</Badge>
+                      </td>
+                      <td className="px-3 py-2 text-[var(--white)]">{m.rank}</td>
+                      <td className="space-x-1.5 whitespace-nowrap px-3 py-2">
+                        <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(m)}>
+                          Edit
+                        </Button>
+                        <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(m.id)}>
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card2)] p-4">
+            <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
+              {editingId ? "Edit Lecturer" : "Add Lecturer to Roster"}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className={styles.label}>Name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} className={styles.input} placeholder="Full name" />
+              </div>
+              <div>
+                <label className={styles.label}>Tier</label>
+                <select value={tier} onChange={(e) => setTier(e.target.value as "SENIOR" | "JUNIOR")} className={styles.input}>
+                  <option value="SENIOR">Senior Lecturer</option>
+                  <option value="JUNIOR">Junior Lecturer</option>
+                </select>
+              </div>
+              <div>
+                <label className={styles.label}>Rank</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={rank}
+                  onChange={(e) => setRank(e.target.value)}
+                  className={styles.input}
+                  placeholder="1 = highest"
+                />
+              </div>
+            </div>
+            {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+            <div className="mt-3 flex gap-2">
+              <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? "Saving…" : editingId ? "Save Changes" : "Add"}
+              </Button>
+              {editingId && (
+                <Button variant="ghost" onClick={resetForm}>
+                  Cancel
+                </Button>
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -1684,23 +1631,116 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     lecturerUnavailability,
     addHodUnavailability,
     removeHodUnavailability,
+    addLecturer,
+    editLecturer,
+    removeLecturer,
+    addLecturerMember,
+    editLecturerMember,
+    removeLecturerMember,
     addLecturerUnavailability,
     removeLecturerUnavailability,
   } = portal;
 
+  // ── Department covering accounts ─────────────────────────────────
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [acctDepartment, setAcctDepartment] = useState("");
+  const [acctUsername, setAcctUsername] = useState("");
+  const [acctName, setAcctName] = useState("");
+  const [acctEmail, setAcctEmail] = useState("");
+  const [acctPassword, setAcctPassword] = useState("");
+  const [acctError, setAcctError] = useState<string | null>(null);
+  const [rosterFor, setRosterFor] = useState<string | null>(null);
+
+  function resetAccountForm() {
+    setEditingAccountId(null);
+    setAcctDepartment("");
+    setAcctUsername("");
+    setAcctName("");
+    setAcctEmail("");
+    setAcctPassword("");
+  }
+
+  function startEditAccount(id: string) {
+    const l = lecturers.find((x) => x.id === id);
+    if (!l) return;
+    setEditingAccountId(id);
+    setAcctDepartment(l.department);
+    setAcctUsername(l.username);
+    setAcctName(l.name);
+    setAcctEmail(l.email || "");
+    setAcctPassword("");
+  }
+
+  async function handleSaveAccount() {
+    if (!editingAccountId) {
+      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctEmail.trim() || !acctPassword.trim()) {
+        setAcctError("All fields are required to create an account.");
+        return;
+      }
+    } else if (!acctUsername.trim() || !acctName.trim()) {
+      setAcctError("Please fill in username and name.");
+      return;
+    }
+    if (acctPassword.trim() && !isValidSimplePassword(acctPassword.trim())) {
+      setAcctError(SIMPLE_PASSWORD_MESSAGE);
+      return;
+    }
+    setAcctError(null);
+    try {
+      if (editingAccountId) {
+        await editLecturer(editingAccountId, {
+          username: acctUsername.trim(),
+          name: acctName.trim(),
+          email: acctEmail.trim() || undefined,
+          department: acctDepartment.trim() || undefined,
+          password: acctPassword.trim() || undefined,
+        });
+      } else {
+        await addLecturer({
+          department: acctDepartment.trim(),
+          username: acctUsername.trim(),
+          name: acctName.trim(),
+          email: acctEmail.trim(),
+          password: acctPassword.trim(),
+        });
+      }
+      resetAccountForm();
+    } catch (err) {
+      setAcctError(err instanceof Error ? err.message : "Failed to save account");
+    }
+  }
+
+  async function handleDeleteAccount(id: string) {
+    if (!confirm("Delete this department's covering account? Its whole roster and unavailability history go with it.")) {
+      return;
+    }
+    try {
+      await removeLecturer(id);
+    } catch (err) {
+      setAcctError(err instanceof Error ? err.message : "Failed to delete account");
+    }
+  }
+
+  const rosterLecturer = lecturers.find((l) => l.id === rosterFor) || null;
+  const existingDepartments = new Set(lecturers.map((l) => l.department));
+
+  // ── HOD unavailability ────────────────────────────────────────────
   const [hodId, setHodId] = useState("");
   const [hodFrom, setHodFrom] = useState(todayStr());
   const [hodTo, setHodTo] = useState(todayStr());
   const [hodReason, setHodReason] = useState("");
   const [hodError, setHodError] = useState<string | null>(null);
 
-  const [lecturerId, setLecturerId] = useState("");
+  // ── Mark a roster lecturer unavailable ────────────────────────────
+  const [lectAccountId, setLectAccountId] = useState("");
+  const [lectMemberId, setLectMemberId] = useState("");
   const [lectFrom, setLectFrom] = useState(todayStr());
   const [lectTo, setLectTo] = useState(todayStr());
   const [lectReason, setLectReason] = useState("");
   const [lectError, setLectError] = useState<string | null>(null);
 
   const today = todayStr();
+  const selectedLectAccount = lecturers.find((l) => l.id === lectAccountId) || null;
 
   async function handleAddHod() {
     if (!hodId) {
@@ -1721,9 +1761,9 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     }
   }
 
-  async function handleAddLecturer() {
-    if (!lecturerId) {
-      setLectError("Select a Lecturer.");
+  async function handleAddLecturerUnavailability() {
+    if (!lectAccountId || !lectMemberId) {
+      setLectError("Select a department and a lecturer.");
       return;
     }
     if (lectTo < lectFrom) {
@@ -1733,12 +1773,14 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setLectError(null);
     try {
       await addLecturerUnavailability({
-        lecturerId,
+        lecturerId: lectAccountId,
+        memberId: lectMemberId,
         fromDate: lectFrom,
         toDate: lectTo,
         reason: lectReason.trim() || undefined,
       });
-      setLecturerId("");
+      setLectAccountId("");
+      setLectMemberId("");
       setLectReason("");
     } catch (err) {
       setLectError(err instanceof Error ? err.message : "Failed to mark lecturer unavailable");
@@ -1748,12 +1790,139 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>HOD Cover:</strong> Mark an HOD unavailable here when they can&apos;t act on leaves (e.g.
-        they&apos;re on leave themselves) — no need to pick who covers. The system automatically hands their
-        Day Scholar and Officer Cadet Academic Leave queue to the highest-ranked available Lecturer in the
-        seniority chain (see Lecturers). If a Lecturer in that chain is also unavailable on a given day, mark
-        them below so they&apos;re skipped over.
+        <strong>HOD Cover:</strong> Each department has exactly one shared login used by all of its lecturers
+        to cover for the HOD. Create that account below, add its lecturers to the roster (Senior/Junior tier +
+        rank), then mark the HOD unavailable when they can&apos;t act on leaves — no need to pick who covers.
+        The system automatically hands their Day Scholar and Officer Cadet Academic Leave queue to the
+        highest-ranked available lecturer in that department&apos;s own roster. If that lecturer is also
+        unavailable on a given day, mark them below so they&apos;re skipped over too.
       </div>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
+          {editingAccountId ? "✏️ Edit Department Covering Account" : "➕ Create Department Covering Account"}
+        </h2>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Department<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <select
+              value={acctDepartment}
+              onChange={(e) => setAcctDepartment(e.target.value)}
+              className={styles.input}
+              disabled={!!editingAccountId}
+            >
+              <option value="">Select department…</option>
+              {hods
+                .map((h) => h.department)
+                .filter((d, i, arr): d is string => !!d && arr.indexOf(d) === i)
+                .map((d) => (
+                  <option key={d} value={d} disabled={existingDepartments.has(d)}>
+                    {d}
+                    {existingDepartments.has(d) ? " (already has an account)" : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>
+              Username<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={acctUsername} onChange={(e) => setAcctUsername(e.target.value)} className={styles.input} placeholder="e.g. cover-it" />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Account Label<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input
+              value={acctName}
+              onChange={(e) => setAcctName(e.target.value)}
+              className={styles.input}
+              placeholder="e.g. IT Dept Covering Lecturers"
+            />
+          </div>
+        </div>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Email<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} className={styles.input} placeholder="name@kdu.ac.lk" />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Password {editingAccountId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
+            </label>
+            <input value={acctPassword} onChange={(e) => setAcctPassword(e.target.value)} className={styles.input} />
+            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+              This is the ONE shared password every lecturer in this department uses to log in and cover for
+              the HOD.
+            </p>
+          </div>
+          <div />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={handleSaveAccount}>
+            {editingAccountId ? "Save Changes" : "Create Account"}
+          </Button>
+          {editingAccountId && (
+            <Button variant="secondary" onClick={resetAccountForm}>
+              Cancel
+            </Button>
+          )}
+        </div>
+        {acctError && <p className="mt-2 text-xs text-[var(--err)]">{acctError}</p>}
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Department Covering Accounts</h2>
+        <div className="overflow-x-auto">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Login</th>
+                <th>Roster</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lecturers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-[var(--muted)]">
+                    No covering accounts yet.
+                  </td>
+                </tr>
+              ) : (
+                lecturers.map((l) => (
+                  <tr key={l.id}>
+                    <td>{l.department}</td>
+                    <td>
+                      {l.username}
+                      <div className="text-xs text-[var(--muted)]">{l.name}</div>
+                    </td>
+                    <td className="text-[var(--muted)]">
+                      {l.members.length} lecturer{l.members.length === 1 ? "" : "s"}
+                    </td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setRosterFor(l.id)}>
+                        Manage Roster
+                      </Button>
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEditAccount(l.id)}>
+                        Edit
+                      </Button>
+                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDeleteAccount(l.id)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <Card className="mb-5 p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark HOD Unavailable</h2>
@@ -1850,17 +2019,43 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
       </Card>
 
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark Lecturer Unavailable</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark a Roster Lecturer Unavailable</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={styles.label}>Lecturer</label>
-            <select value={lecturerId} onChange={(e) => setLecturerId(e.target.value)} className={styles.input}>
-              <option value="">Select Lecturer…</option>
+          <div>
+            <label className={styles.label}>Department</label>
+            <select
+              value={lectAccountId}
+              onChange={(e) => {
+                setLectAccountId(e.target.value);
+                setLectMemberId("");
+              }}
+              className={styles.input}
+            >
+              <option value="">Select department…</option>
               {lecturers.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.name} ({TIER_LABELS[l.tier]}, rank {l.rank})
+                  {l.department}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>Lecturer</label>
+            <select
+              value={lectMemberId}
+              onChange={(e) => setLectMemberId(e.target.value)}
+              className={styles.input}
+              disabled={!selectedLectAccount}
+            >
+              <option value="">Select lecturer…</option>
+              {selectedLectAccount?.members
+                .slice()
+                .sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({TIER_LABELS[m.tier]}, rank {m.rank})
+                  </option>
+                ))}
             </select>
           </div>
           <div>
@@ -1882,7 +2077,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
           </div>
         </div>
         <div className="mt-4">
-          <Button variant="primary" onClick={handleAddLecturer}>
+          <Button variant="primary" onClick={handleAddLecturerUnavailability}>
             Mark Unavailable
           </Button>
         </div>
@@ -1890,12 +2085,13 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Lecturer Unavailability</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Roster Unavailability</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
               <tr>
                 <th>Lecturer</th>
+                <th>Department</th>
                 <th>From</th>
                 <th>To</th>
                 <th>Reason</th>
@@ -1906,7 +2102,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
             <tbody>
               {lecturerUnavailability.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                     No lecturer unavailability marked.
                   </td>
                 </tr>
@@ -1916,11 +2112,14 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
                   return (
                     <tr key={u.id}>
                       <td>
-                        {u.lecturerName}
-                        <div className="text-xs text-[var(--muted)]">
-                          {TIER_LABELS[u.lecturerTier]}, rank {u.lecturerRank}
-                        </div>
+                        {u.memberName || "Unknown"}
+                        {u.memberTier && (
+                          <div className="text-xs text-[var(--muted)]">
+                            {TIER_LABELS[u.memberTier]}, rank {u.memberRank}
+                          </div>
+                        )}
                       </td>
+                      <td className="text-[var(--muted)]">{u.department || "—"}</td>
                       <td>{u.fromDate}</td>
                       <td>{u.toDate}</td>
                       <td className="text-[var(--muted)]">{u.reason || "—"}</td>
@@ -1944,6 +2143,16 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
           </table>
         </div>
       </Card>
+
+      {rosterLecturer && (
+        <LecturerRosterModal
+          lecturer={rosterLecturer}
+          onAddMember={(input) => addLecturerMember(rosterLecturer.id, input)}
+          onEditMember={(memberId, input) => editLecturerMember(rosterLecturer.id, memberId, input)}
+          onRemoveMember={(memberId) => removeLecturerMember(rosterLecturer.id, memberId)}
+          onClose={() => setRosterFor(null)}
+        />
+      )}
     </div>
   );
 }

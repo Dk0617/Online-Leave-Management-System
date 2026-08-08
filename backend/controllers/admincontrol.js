@@ -464,16 +464,14 @@ export const deleteTroop = async (req, res) => {
   res.json({ message: "Deleted" });
 };
 
-// ── Lecturers (extra: tier + rank — the fixed seniority chain used to
-// cover HOD approvals when the HOD is unavailable; see
-// leavecontrol.js resolveActiveCoverer) ─────────────────────────────
+// ── Lecturers — one shared covering-login per department (not an
+// individual's account), with an embedded named roster (tier + rank) admin
+// manages within it; see leavecontrol.js resolveActiveMemberForDepartment
+// for how HOD Cover uses this to pick who's active on a given day. ───────
 export const createLecturer = async (req, res) => {
-  const { username, name, password, email, department, tier, rank } = req.body;
-  if (!username || !name || !email || !password || !tier || rank === undefined || rank === null) {
+  const { username, name, password, email, department } = req.body;
+  if (!username || !name || !email || !password || !department) {
     return res.status(400).json({ message: "All fields are required to create an account" });
-  }
-  if (!["SENIOR", "JUNIOR"].includes(tier)) {
-    return res.status(400).json({ message: "Tier must be Senior or Junior" });
   }
   if (!isValidSimplePassword(password)) {
     return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
@@ -481,24 +479,28 @@ export const createLecturer = async (req, res) => {
 
   const existing = await Lecturer.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
+  const existingDept = await Lecturer.findOne({ department });
+  if (existingDept) {
+    return res.status(409).json({ message: "That department already has a covering account" });
+  }
   if (await isEmailTaken(email)) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
-  const created = await Lecturer.create({ username, name, password, email, department, tier, rank: Number(rank) });
-  await writeAudit("ADMIN", req.user.name, "account_created", `lecturer ${username}`);
+  const created = await Lecturer.create({ username, name, password, email, department });
+  await writeAudit("ADMIN", req.user.name, "account_created", `lecturer-cover ${username} (${department})`);
   const { password: _pw, ...safe } = created.toObject();
   res.status(201).json(safe);
 };
 
 export const listLecturers = async (req, res) => {
-  res.json(await Lecturer.find().select("-password").sort({ tier: 1, rank: 1 }));
+  res.json(await Lecturer.find().select("-password").sort({ department: 1 }));
 };
 
 export const updateLecturer = async (req, res) => {
-  const { username, name, password, email, department, tier, rank } = req.body;
+  const { username, name, password, email, department } = req.body;
   const lecturer = await Lecturer.findById(req.params.id);
-  if (!lecturer) return res.status(404).json({ message: "Lecturer not found" });
+  if (!lecturer) return res.status(404).json({ message: "Lecturer account not found" });
 
   if (username && username !== lecturer.username) {
     const clash = await Lecturer.findOne({ username, _id: { $ne: lecturer._id } });
@@ -510,14 +512,11 @@ export const updateLecturer = async (req, res) => {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
   if (email !== undefined) lecturer.email = email;
-  if (department !== undefined) lecturer.department = department;
-  if (tier) {
-    if (!["SENIOR", "JUNIOR"].includes(tier)) {
-      return res.status(400).json({ message: "Tier must be Senior or Junior" });
-    }
-    lecturer.tier = tier;
+  if (department && department !== lecturer.department) {
+    const clash = await Lecturer.findOne({ department, _id: { $ne: lecturer._id } });
+    if (clash) return res.status(409).json({ message: "That department already has a covering account" });
+    lecturer.department = department;
   }
-  if (rank !== undefined && rank !== null && rank !== "") lecturer.rank = Number(rank);
   if (password) {
     if (!isValidSimplePassword(password)) {
       return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
@@ -527,7 +526,7 @@ export const updateLecturer = async (req, res) => {
   }
 
   await lecturer.save();
-  await writeAudit("ADMIN", req.user.name, "account_updated", `lecturer ${lecturer.username}`);
+  await writeAudit("ADMIN", req.user.name, "account_updated", `lecturer-cover ${lecturer.username}`);
   const { password: _pw, ...safe } = lecturer.toObject();
   res.json(safe);
 };
@@ -536,6 +535,58 @@ export const deleteLecturer = async (req, res) => {
   await LecturerUnavailability.deleteMany({ lecturerId: req.params.id });
   await Lecturer.findByIdAndDelete(req.params.id);
   res.json({ message: "Deleted" });
+};
+
+// ── Named roster members within one department's covering account ───────
+export const addLecturerMember = async (req, res) => {
+  const { name, tier, rank } = req.body;
+  if (!name?.trim() || !tier || rank === undefined || rank === null || rank === "") {
+    return res.status(400).json({ message: "Name, tier, and rank are all required" });
+  }
+  if (!["SENIOR", "JUNIOR"].includes(tier)) {
+    return res.status(400).json({ message: "Tier must be Senior or Junior" });
+  }
+  const lecturer = await Lecturer.findById(req.params.id);
+  if (!lecturer) return res.status(404).json({ message: "Lecturer account not found" });
+
+  lecturer.members.push({ name: name.trim(), tier, rank: Number(rank) });
+  await lecturer.save();
+  await writeAudit("ADMIN", req.user.name, "lecturer_member_added", `${name.trim()} -> ${lecturer.department}`);
+  res.status(201).json(lecturer);
+};
+
+export const updateLecturerMember = async (req, res) => {
+  const { name, tier, rank } = req.body;
+  const lecturer = await Lecturer.findById(req.params.id);
+  if (!lecturer) return res.status(404).json({ message: "Lecturer account not found" });
+  const member = lecturer.members.id(req.params.memberId);
+  if (!member) return res.status(404).json({ message: "Roster member not found" });
+
+  if (name?.trim()) member.name = name.trim();
+  if (tier) {
+    if (!["SENIOR", "JUNIOR"].includes(tier)) {
+      return res.status(400).json({ message: "Tier must be Senior or Junior" });
+    }
+    member.tier = tier;
+  }
+  if (rank !== undefined && rank !== null && rank !== "") member.rank = Number(rank);
+
+  await lecturer.save();
+  await writeAudit("ADMIN", req.user.name, "lecturer_member_updated", `${member.name} (${lecturer.department})`);
+  res.json(lecturer);
+};
+
+export const removeLecturerMember = async (req, res) => {
+  const lecturer = await Lecturer.findById(req.params.id);
+  if (!lecturer) return res.status(404).json({ message: "Lecturer account not found" });
+  const member = lecturer.members.id(req.params.memberId);
+  if (!member) return res.status(404).json({ message: "Roster member not found" });
+
+  await LecturerUnavailability.deleteMany({ lecturerId: lecturer._id, memberId: member._id });
+  member.deleteOne();
+  await lecturer.save();
+  await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);
+  res.json(lecturer);
 };
 
 // ── Password-change notifications ──────────────────────────────────

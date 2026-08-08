@@ -14,6 +14,8 @@ import {
   Intake,
   LeaveRequest,
   LecturerAccount,
+  LecturerCoverStatus,
+  LecturerMember,
   LecturerUnavailability,
   Movement,
   NotificationEntry,
@@ -300,15 +302,23 @@ export function normalizeEventDay(raw: Raw): EventDay {
   };
 }
 
+function normalizeLecturerMember(raw: Raw): LecturerMember {
+  return {
+    id: String(raw._id ?? raw.id),
+    name: raw.name as string,
+    tier: raw.tier as "SENIOR" | "JUNIOR",
+    rank: raw.rank as number,
+  };
+}
+
 export function normalizeLecturer(raw: Raw): LecturerAccount {
   return {
     id: String(raw._id ?? raw.id),
     username: raw.username as string,
     name: raw.name as string,
     email: raw.email as string | undefined,
-    department: raw.department as string | undefined,
-    tier: raw.tier as "SENIOR" | "JUNIOR",
-    rank: raw.rank as number,
+    department: raw.department as string,
+    members: ((raw.members as Raw[]) ?? []).map(normalizeLecturerMember),
     mustChangePassword: !!raw.mustChangePassword,
   };
 }
@@ -327,16 +337,27 @@ export function normalizeHodUnavailability(raw: Raw): HodUnavailability {
 }
 
 export function normalizeLecturerUnavailability(raw: Raw): LecturerUnavailability {
-  const lecturer = raw.lecturerId as Raw;
   return {
     id: String(raw._id ?? raw.id),
-    lecturerId: String(lecturer?._id ?? lecturer),
-    lecturerName: (lecturer?.name as string) ?? "Unknown",
-    lecturerTier: lecturer?.tier as "SENIOR" | "JUNIOR",
-    lecturerRank: lecturer?.rank as number,
+    lecturerId: String(raw.lecturerId),
+    department: raw.department as string | undefined,
+    memberId: String(raw.memberId),
+    memberName: raw.memberName as string | undefined,
+    memberTier: raw.memberTier as "SENIOR" | "JUNIOR" | undefined,
+    memberRank: raw.memberRank as number | undefined,
     fromDate: raw.fromDate as string,
     toDate: raw.toDate as string,
     reason: raw.reason as string | undefined,
+  };
+}
+
+export function normalizeCoverStatus(raw: Raw): LecturerCoverStatus {
+  return {
+    department: raw.department as string,
+    hodName: raw.hodName as string | undefined,
+    hodUnavailable: !!raw.hodUnavailable,
+    activeMember: raw.activeMember ? normalizeLecturerMember(raw.activeMember as Raw) : null,
+    roster: ((raw.roster as Raw[]) ?? []).map(normalizeLecturerMember),
   };
 }
 

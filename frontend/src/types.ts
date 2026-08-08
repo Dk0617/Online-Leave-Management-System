@@ -300,16 +300,29 @@ export interface EventDay {
   endTime?: string; // "HH:MM"
 }
 
-// A Senior or Junior Lecturer in the campus-wide HOD-cover seniority chain
-// — see backend/models/Lecturer.js.
+// One named entry in a department's HOD-cover roster — Senior/Junior tier +
+// rank determines their place in the seniority order. See
+// backend/models/Lecturer.js.
+export interface LecturerMember {
+  id: string;
+  name: string;
+  tier: "SENIOR" | "JUNIOR";
+  rank: number;
+}
+
+// A department's shared HOD-cover login — one account per department,
+// covering that department's HOD when they're unavailable. Not an
+// individual lecturer's own account: any of the department's lecturers in
+// `members` can log in with this one username/password, and the system
+// resolves which of them is the currently active coverer (see
+// backend/controllers/leavecontrol.js resolveActiveMemberForDepartment).
 export interface LecturerAccount {
   id: string;
   username: string;
   name: string;
   email?: string;
-  department?: string;
-  tier: "SENIOR" | "JUNIOR";
-  rank: number;
+  department: string;
+  members: LecturerMember[];
   mustChangePassword: boolean;
 }
 
@@ -325,15 +338,28 @@ export interface HodUnavailability {
   reason?: string;
 }
 
-// Admin-marked window when a Lecturer isn't available to cover HOD
-// approvals — see backend/models/LecturerUnavailability.js.
+// Admin-marked window when one named roster member (within a department's
+// shared covering account) isn't available to cover HOD approvals — see
+// backend/models/LecturerUnavailability.js.
 export interface LecturerUnavailability {
   id: string;
   lecturerId: string;
-  lecturerName: string;
-  lecturerTier: "SENIOR" | "JUNIOR";
-  lecturerRank: number;
+  department?: string;
+  memberId: string;
+  memberName?: string;
+  memberTier?: "SENIOR" | "JUNIOR";
+  memberRank?: number;
   fromDate: string; // "YYYY-MM-DD"
   toDate: string; // "YYYY-MM-DD"
   reason?: string;
+}
+
+// What's returned by /hod/cover-status — powers the Lecturer dashboard's
+// "is the HOD out, and are you (or who is) the active coverer" banner.
+export interface LecturerCoverStatus {
+  department: string;
+  hodName?: string;
+  hodUnavailable: boolean;
+  activeMember: LecturerMember | null;
+  roster: LecturerMember[];
 }
