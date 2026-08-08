@@ -37,28 +37,50 @@ export const deleteHodUnavailability = async (req, res) => {
   res.json({ message: "Deleted" });
 };
 
+// lecturerId now identifies a department's shared covering account, not an
+// individual — enriched here with that account's department and the
+// specific named roster member (memberId) this row is actually about,
+// since the raw document alone can't show either.
 export const listLecturerUnavailability = async (req, res) => {
-  const rows = await LecturerUnavailability.find().populate("lecturerId", "name tier rank").sort({ fromDate: -1 });
-  res.json(rows);
+  const rows = await LecturerUnavailability.find().populate("lecturerId", "department members").sort({ fromDate: -1 });
+  const enriched = rows.map((r) => {
+    const lecturer = r.lecturerId;
+    const member = lecturer?.members?.id?.(r.memberId);
+    return {
+      id: r._id,
+      lecturerId: lecturer?._id,
+      department: lecturer?.department,
+      memberId: r.memberId,
+      memberName: member?.name,
+      memberTier: member?.tier,
+      memberRank: member?.rank,
+      fromDate: r.fromDate,
+      toDate: r.toDate,
+      reason: r.reason,
+    };
+  });
+  res.json(enriched);
 };
 
 export const createLecturerUnavailability = async (req, res) => {
-  const { lecturerId, fromDate, toDate, reason } = req.body;
-  if (!lecturerId || !fromDate || !toDate) {
-    return res.status(400).json({ message: "Lecturer and both dates are required" });
+  const { lecturerId, memberId, fromDate, toDate, reason } = req.body;
+  if (!lecturerId || !memberId || !fromDate || !toDate) {
+    return res.status(400).json({ message: "Department account, lecturer, and both dates are required" });
   }
   if (toDate < fromDate) {
     return res.status(400).json({ message: "End date can't be before start date" });
   }
   const lecturer = await Lecturer.findById(lecturerId);
-  if (!lecturer) return res.status(404).json({ message: "Lecturer not found" });
+  if (!lecturer) return res.status(404).json({ message: "Lecturer account not found" });
+  const member = lecturer.members.id(memberId);
+  if (!member) return res.status(404).json({ message: "Roster member not found" });
 
-  const row = await LecturerUnavailability.create({ lecturerId, fromDate, toDate, reason });
+  const row = await LecturerUnavailability.create({ lecturerId, memberId, fromDate, toDate, reason });
   await writeAudit(
     "ADMIN",
     req.user.name,
     "lecturer_unavailability_added",
-    `${lecturer.name} from ${fromDate} to ${toDate}`
+    `${member.name} (${lecturer.department}) from ${fromDate} to ${toDate}`
   );
   res.status(201).json(row);
 };

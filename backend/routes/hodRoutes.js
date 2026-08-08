@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
-import { hod, hodCorrectDateTime } from "../controllers/leavecontrol.js";
+import { hod, hodCorrectDateTime, coverStatus } from "../controllers/leavecontrol.js";
 import { listEvents, createEvent, deleteEvent, rejectOverlapping } from "../controllers/eventcontrol.js";
 import { hodMovements } from "../controllers/movementcontrol.js";
 import {
@@ -13,10 +13,9 @@ import {
 const router = express.Router();
 
 // A Lecturer only ever reaches here while actively covering an unavailable
-// HOD (see leavecontrol.js hodScopeFilter) — everything below except the
-// Event Calendar, which stays HOD-only since marking mandatory days is a
-// longer-term planning tool, not something a one-day substitute should be
-// doing.
+// HOD (see leavecontrol.js hodScopeFilter) — marking/editing the Event
+// Calendar stays HOD-only below, since that's a longer-term planning tool,
+// not something a one-day substitute should be doing.
 router.use(verifyToken, requireRole("HOD", "LECTURER"));
 
 router.get("/leaves/pending", hod.pending);
@@ -24,6 +23,7 @@ router.get("/leaves/history", hod.history);
 router.patch("/leaves/:id/approve", hod.approve);
 router.patch("/leaves/:id/reject", hod.reject);
 router.patch("/leaves/:id/datetime", requireRole("HOD"), hodCorrectDateTime);
+router.get("/cover-status", requireRole("LECTURER"), coverStatus);
 
 // Block Leave decisions are HOD-only, unlike the ordinary leave queue above
 // — a covering Lecturer (see leavecontrol.js hodScopeFilter) can stand in
@@ -45,7 +45,12 @@ router.patch("/block-leave/:id/reject", requireRole("HOD"), hodRejectBlockLeave)
 // leave queue already gets; a non-covering one just sees an empty scope.
 router.get("/movements", hodMovements);
 
-router.get("/events", requireRole("HOD"), listEvents);
+// The GET stays open to LECTURER too (same reasoning as block-leave and
+// movements above) — useHodPortal's refresh() fetches this unconditionally
+// in the same Promise.all as the leave queue, so a 403 here would silently
+// blank a covering Lecturer's entire dashboard, not just hide the calendar.
+// The Lecturer portal's own nav simply has no Calendar tab to show it in.
+router.get("/events", listEvents);
 router.post("/events", requireRole("HOD"), createEvent);
 router.delete("/events/:id", requireRole("HOD"), deleteEvent);
 router.post("/events/:id/reject-overlapping", requireRole("HOD"), rejectOverlapping);

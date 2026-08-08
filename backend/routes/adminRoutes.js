@@ -22,6 +22,9 @@ import {
   listLecturers,
   updateLecturer,
   deleteLecturer,
+  addLecturerMember,
+  updateLecturerMember,
+  removeLecturerMember,
   listNotifications,
   markNotificationRead,
   listAudit,
@@ -64,6 +67,9 @@ router.get("/lecturers", listLecturers);
 router.post("/lecturers", createLecturer);
 router.patch("/lecturers/:id", updateLecturer);
 router.delete("/lecturers/:id", deleteLecturer);
+router.post("/lecturers/:id/members", addLecturerMember);
+router.patch("/lecturers/:id/members/:memberId", updateLecturerMember);
+router.delete("/lecturers/:id/members/:memberId", removeLecturerMember);
 
 // Generic HOD / Squadron / SDD / Gate account management
 router.get("/staff/:role", listStaff);

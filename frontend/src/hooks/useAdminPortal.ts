@@ -66,7 +66,11 @@ export interface NewLecturerInput {
   name: string;
   password?: string;
   email?: string;
-  department?: string;
+  department: string;
+}
+
+export interface NewLecturerMemberInput {
+  name: string;
   tier: "SENIOR" | "JUNIOR";
   rank: number;
 }
@@ -218,7 +222,9 @@ export function useAdminPortal() {
     await refresh();
   }
 
-  // ── Lecturers (extra: tier + rank — the HOD-cover seniority chain) ──
+  // ── Lecturers — one shared covering-login per department, with a named
+  // roster (tier + rank) managed within it (the HOD-cover seniority chain
+  // for that department). ─────────────────────────────────────────────
   async function addLecturer(input: NewLecturerInput) {
     await api.post("/admin/lecturers", input);
     await refresh();
@@ -229,6 +235,18 @@ export function useAdminPortal() {
   }
   async function removeLecturer(id: string) {
     await api.delete(`/admin/lecturers/${id}`);
+    await refresh();
+  }
+  async function addLecturerMember(lecturerId: string, input: NewLecturerMemberInput) {
+    await api.post(`/admin/lecturers/${lecturerId}/members`, input);
+    await refresh();
+  }
+  async function editLecturerMember(lecturerId: string, memberId: string, input: Partial<NewLecturerMemberInput>) {
+    await api.patch(`/admin/lecturers/${lecturerId}/members/${memberId}`, input);
+    await refresh();
+  }
+  async function removeLecturerMember(lecturerId: string, memberId: string) {
+    await api.delete(`/admin/lecturers/${lecturerId}/members/${memberId}`);
     await refresh();
   }
 
@@ -243,6 +261,7 @@ export function useAdminPortal() {
   }
   async function addLecturerUnavailability(input: {
     lecturerId: string;
+    memberId: string;
     fromDate: string;
     toDate: string;
     reason?: string;
@@ -300,6 +319,9 @@ export function useAdminPortal() {
     addLecturer,
     editLecturer,
     removeLecturer,
+    addLecturerMember,
+    editLecturerMember,
+    removeLecturerMember,
     addHodUnavailability,
     removeHodUnavailability,
     addLecturerUnavailability,
