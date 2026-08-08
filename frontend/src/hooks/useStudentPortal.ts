@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  normalizeBlockLeave,
   normalizeEventDay,
   normalizeLeave,
   normalizePhotoChangeRequest,
   normalizeStudent,
   POLL_INTERVAL_MS,
 } from "@/src/api";
-import { EventDay, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
+import { BlockLeaveRequest, EventDay, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
 import { PassVerification } from "@/src/pdf";
 
 export interface NewLeaveInput {
@@ -37,11 +38,21 @@ export interface ProfileInput {
   mobile?: string;
 }
 
+export interface NewBlockLeaveInput {
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  reason: string;
+}
+
 export function useStudentPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profile, setProfile] = useState<Student | null>(null);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
   const [blockedDays, setBlockedDays] = useState<EventDay[]>([]);
+  const [openBlockLeave, setOpenBlockLeave] = useState<BlockLeaveRequest | null>(null);
+  const [myBlockLeaves, setMyBlockLeaves] = useState<BlockLeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,16 +60,20 @@ export function useStudentPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [leavesRaw, profileRaw, photoRequestsRaw, blockedDaysRaw] = await Promise.all([
+      const [leavesRaw, profileRaw, photoRequestsRaw, blockedDaysRaw, openBlockRaw, myBlockRaw] = await Promise.all([
         api.get<Record<string, unknown>[]>("/student/leaves"),
         api.get<Record<string, unknown>>("/student/profile"),
         api.get<Record<string, unknown>[]>("/student/photo-requests"),
         api.get<Record<string, unknown>[]>("/student/blocked-days"),
+        api.get<Record<string, unknown> | null>("/student/block-leave/open"),
+        api.get<Record<string, unknown>[]>("/student/block-leave/mine"),
       ]);
       setLeaves(leavesRaw.map(normalizeLeave));
       setProfile(normalizeStudent(profileRaw));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
       setBlockedDays(blockedDaysRaw.map(normalizeEventDay));
+      setOpenBlockLeave(openBlockRaw ? normalizeBlockLeave(openBlockRaw) : null);
+      setMyBlockLeaves(myBlockRaw.map(normalizeBlockLeave));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -101,11 +116,26 @@ export function useStudentPortal() {
     return api.get<PassVerification>(`/student/leaves/${leaveId}/movements`);
   }
 
+  async function startBlockLeave(input: NewBlockLeaveInput) {
+    await api.post("/student/block-leave", input);
+    await refresh();
+  }
+  async function joinBlockLeave(id: string) {
+    await api.post(`/student/block-leave/${id}/join`);
+    await refresh();
+  }
+  async function submitBlockLeave(id: string) {
+    await api.post(`/student/block-leave/${id}/submit`);
+    await refresh();
+  }
+
   return {
     leaves,
     profile,
     photoRequests,
     blockedDays,
+    openBlockLeave,
+    myBlockLeaves,
     loading,
     error,
     refresh,
@@ -113,5 +143,8 @@ export function useStudentPortal() {
     updateProfile,
     requestPhotoChange,
     getMovements,
+    startBlockLeave,
+    joinBlockLeave,
+    submitBlockLeave,
   };
 }

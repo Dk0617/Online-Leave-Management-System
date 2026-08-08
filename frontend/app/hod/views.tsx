@@ -1,15 +1,19 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Card, StatTile, Badge, Button, Toast } from "@/src/components/ui";
+import { CheckCircle2, ClipboardList, Hourglass, LogIn, XCircle } from "lucide-react";
+import { Card, StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { BlockLeaveRosterModal, blockLeaveTone } from "@/src/components/blockLeave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { TimeSelect } from "@/src/components/TimeSelect";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
+import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
 import { isToday } from "@/src/api";
 import {
+  BlockLeaveRequest,
   EVENT_CATEGORY_LABELS,
   EventCategory,
   LEAVE_TYPE_LABELS,
@@ -40,8 +44,13 @@ export function Dashboard({
   const { pending, history, movements, approve, reject, correctDateTime, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.hodStatus === "Approved" && isToday(l.hodApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.hodStatus === "Rejected" && isToday(l.hodApprovedAt));
-  const emergencyPending = pending.filter((l) => l.priority === "emergency");
-  const otherPending = pending.filter((l) => l.priority !== "emergency");
+  const { query: pendingQuery, setQuery: setPendingQuery, filtered: searchedPending } = useSearchFilter(
+    pending,
+    (l) => [l.studentName, l.indexNumber]
+  );
+  const pendingSort = useSort();
+  const emergencyPending = searchedPending.filter((l) => l.priority === "emergency");
+  const otherPending = searchedPending.filter((l) => l.priority !== "emergency");
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [correcting, setCorrecting] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
@@ -101,19 +110,34 @@ export function Dashboard({
 
       <div className={styles.statGrid}>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Pending", leaves: pending })}>
-          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" />
+          <StatTile label="Pending (click for details)" value={pending.length} tone="amber" icon={<Hourglass size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}>
-          <StatTile label="Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+          <StatTile
+            label="Approved Today (click for details)"
+            value={approvedTodayLeaves.length}
+            tone="green"
+            icon={<CheckCircle2 size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
-          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+          <StatTile
+            label="Rejected Today (click for details)"
+            value={rejectedTodayLeaves.length}
+            tone="red"
+            icon={<XCircle size={20} />}
+          />
         </ClickableStatCard>
-        <StatTile label="Total" value={history.length + pending.length} />
+        <StatTile label="Total" value={history.length + pending.length} icon={<ClipboardList size={20} />} />
         <ClickableStatCard
           onClick={() => setMovementDrilldown({ title: "Entries Today — Your Department", entries: todayEntryEntries })}
         >
-          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+          <StatTile
+            label="Entries Today (click for details)"
+            value={todayEntryEntries.length}
+            tone="green"
+            icon={<LogIn size={20} />}
+          />
         </ClickableStatCard>
       </div>
 
@@ -132,6 +156,15 @@ export function Dashboard({
         />
       )}
 
+      <div className="mb-4 flex justify-end">
+        <SearchInput
+          value={pendingQuery}
+          onChange={setPendingQuery}
+          placeholder="Search pending by name or index…"
+          className="w-full sm:w-72"
+        />
+      </div>
+
       {emergencyPending.length > 0 && (
         <>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--white)]">
@@ -145,6 +178,7 @@ export function Dashboard({
               onReject={reject}
               onCorrect={onCorrect}
               notify={notify}
+              sort={pendingSort}
             />
           </div>
         </>
@@ -160,6 +194,7 @@ export function Dashboard({
         onReject={reject}
         onCorrect={onCorrect}
         notify={notify}
+        sort={pendingSort}
       />
 
       {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
@@ -188,6 +223,7 @@ function PendingTable({
   onReject,
   onCorrect,
   notify,
+  sort,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
@@ -195,30 +231,39 @@ function PendingTable({
   onReject: (id: string, comment?: string) => Promise<void>;
   onCorrect?: (l: LeaveRequest) => void;
   notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
+  sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
 }) {
+  const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+    applied: (l) => l.appliedDate,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Index</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Applied</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Index" sortKey="index" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="To" sortKey="to" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Applied" sortKey="applied" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {leaves.length === 0 ? (
+          {sorted.length === 0 ? (
             <tr>
               <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                No applications.
+                {leaves.length === 0 ? "No applications." : "No applications match your search."}
               </td>
             </tr>
           ) : (
-            leaves.map((l) => (
+            sorted.map((l) => (
               <tr key={l.id}>
                 <td>
                   {l.studentName}
@@ -350,37 +395,53 @@ function CorrectDateTimeModal({
 
 type HodHistoryEntry = ReturnType<typeof useHodPortal>["history"][number];
 
-function matchesSearch(l: HodHistoryEntry, query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return l.studentName.toLowerCase().includes(q) || l.indexNumber.toLowerCase().includes(q);
-}
-
-function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; emptyMessage: string }) {
+function HodHistoryTable({
+  rows,
+  emptyMessage,
+  sort,
+}: {
+  rows: HodHistoryEntry[];
+  emptyMessage: string;
+  sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
+}) {
+  const sorted = sortRows(rows, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+    decision: (l) => l.hodStatus,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Index</th>
-            <th>Type</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Your Decision</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Index" sortKey="index" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh label="To" sortKey="to" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+            <SortableTh
+              label="Your Decision"
+              sortKey="decision"
+              activeSortKey={sort.sortKey}
+              sortDir={sort.sortDir}
+              onSort={sort.toggleSort}
+            />
             <th>Reason</th>
             <th>Next Stage</th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {sorted.length === 0 ? (
             <tr>
               <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            rows.map((l) => {
+            sorted.map((l) => {
               // Cadet Academic Leave skips Troop Commander entirely (routed to
               // Squadron instead) — troopStatus stays "N/A" forever for it,
               // unlike a Day Scholar leave where "N/A" means "not reached yet".
@@ -419,41 +480,33 @@ function HodHistoryTable({ rows, emptyMessage }: { rows: HodHistoryEntry[]; empt
 
 export function History({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
   const { history } = portal;
-  const [dsQuery, setDsQuery] = useState("");
-  const [cdQuery, setCdQuery] = useState("");
+  const dayScholarSource = history.filter((l) => l.studentType === "DAY_SCHOLAR");
+  const cadetSource = history.filter((l) => l.studentType === "CADET");
 
-  const dayScholarHistory = history.filter(
-    (l) => l.studentType === "DAY_SCHOLAR" && matchesSearch(l, dsQuery)
+  const { query: dsQuery, setQuery: setDsQuery, filtered: dayScholarHistory } = useSearchFilter(
+    dayScholarSource,
+    (l) => [l.studentName, l.indexNumber]
   );
-  const cadetHistory = history.filter((l) => l.studentType === "CADET" && matchesSearch(l, cdQuery));
+  const { query: cdQuery, setQuery: setCdQuery, filtered: cadetHistory } = useSearchFilter(cadetSource, (l) => [
+    l.studentName,
+    l.indexNumber,
+  ]);
+  const dsSort = useSort();
+  const cdSort = useSort();
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--white)]">Day Scholar History</h2>
-        <div className="w-64">
-          <input
-            value={dsQuery}
-            onChange={(e) => setDsQuery(e.target.value)}
-            placeholder="🔍 Search by name or index number..."
-            className={styles.input}
-          />
-        </div>
+        <SearchInput value={dsQuery} onChange={setDsQuery} placeholder="Search by name or index number…" className="w-64" />
       </div>
-      <HodHistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." />
+      <HodHistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." sort={dsSort} />
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
-        <div className="w-64">
-          <input
-            value={cdQuery}
-            onChange={(e) => setCdQuery(e.target.value)}
-            placeholder="🔍 Search by name or index number..."
-            className={styles.input}
-          />
-        </div>
+        <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
       </div>
-      <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." />
+      <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
     </div>
   );
 }
@@ -866,6 +919,149 @@ export function EventCalendar({ portal }: { portal: ReturnType<typeof useHodPort
           onClose={() => setReviewEvent(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ==================================================================
+// Block Leave — one HOD decision settles the whole roster at once. See
+// backend/models/BlockLeave.js.
+// ==================================================================
+
+export function BlockLeaveQueue({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
+  const { blockLeavePending, blockLeaveHistory, approveBlockLeave, rejectBlockLeave, error, refresh } = portal;
+  const [viewing, setViewing] = useState<BlockLeaveRequest | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: "green" | "red" } | null>(null);
+
+  function notify(block: BlockLeaveRequest, decision: "Approved" | "Rejected") {
+    setToast({
+      message: `Block Leave ${decision} — ${block.department} (${block.students.length} students)`,
+      tone: decision === "Approved" ? "green" : "red",
+    });
+    setTimeout(() => setToast(null), 5000);
+  }
+
+  return (
+    <div>
+      {toast && <Toast message={toast.message} tone={toast.tone} />}
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load Block Leave data: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
+      <div className={styles.infoBanner}>
+        <strong>Block Leave:</strong> a Day Scholar starts one and others in your department join it — once
+        submitted, your decision here approves or rejects the whole roster at once, then it moves on to a
+        Troop Commander for a second decision covering everyone.
+      </div>
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending Block Leaves</h2>
+      <div className="mb-8 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Students</th>
+              <th>Reason</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {blockLeavePending.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No Block Leaves pending.
+                </td>
+              </tr>
+            ) : (
+              blockLeavePending.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.department}</td>
+                  <td>
+                    {b.startDate} {b.startTime}
+                  </td>
+                  <td>
+                    {b.endDate} {b.endTime}
+                  </td>
+                  <td>{b.students.length}</td>
+                  <td className="max-w-[220px] text-xs text-[var(--muted)]">{b.reason}</td>
+                  <td className="space-x-1.5 whitespace-nowrap">
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
+                    <ApprovalActions
+                      onApprove={() => approveBlockLeave(b.id)}
+                      onReject={(remarks) => rejectBlockLeave(b.id, remarks)}
+                      onSuccess={(decision) => notify(b, decision)}
+                    />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Block Leave History</h2>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Students</th>
+              <th>Your Decision</th>
+              <th>Troop Commander</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {blockLeaveHistory.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  No Block Leave history yet.
+                </td>
+              </tr>
+            ) : (
+              blockLeaveHistory.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.department}</td>
+                  <td>
+                    {b.startDate} {b.startTime}
+                  </td>
+                  <td>
+                    {b.endDate} {b.endTime}
+                  </td>
+                  <td>{b.students.length}</td>
+                  <td>
+                    <Badge tone={blockLeaveTone(b.hodStatus)}>{b.hodStatus}</Badge>
+                  </td>
+                  <td>
+                    {b.hodStatus === "Rejected" ? (
+                      <Badge tone="gray">Not Reached</Badge>
+                    ) : (
+                      <Badge tone={blockLeaveTone(b.troopStatus)}>{b.troopStatus}</Badge>
+                    )}
+                  </td>
+                  <td>
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {viewing && <BlockLeaveRosterModal block={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }

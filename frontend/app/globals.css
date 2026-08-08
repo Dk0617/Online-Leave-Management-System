@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* KDU Southern Campus SLMS palette (matches the reference HTML mockups) */
+  /* KDU Southern Campus Student Leave Management System palette (matches the reference HTML mockups) */
   --navy: #0d1b5e;
   --navy2: #162070;
   --blue: #2563b0;
@@ -127,6 +127,47 @@ body {
   .loginBg,
   .loginCard,
   .loginLogo {
+    animation: none !important;
+  }
+}
+
+/* Dashboard portals — a short fade/slide on every view switch (see
+   DashboardShell.tsx, which remounts <main> with key={activeView} so this
+   replays on every nav click), and a slide-down entrance for the decision
+   Toast (see ui.tsx) so it doesn't just pop into existence. */
+@keyframes viewFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.viewFade {
+  animation: viewFade 0.2s ease-out both;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toastIn {
+  animation: toastIn 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewFade,
+  .toastIn {
     animation: none !important;
   }
 }

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Card, StatTile, Button, Badge } from "@/src/components/ui";
+import { ClipboardList, Construction, GraduationCap, Landmark, Medal, Star, Swords } from "lucide-react";
+import { Card, StatTile, Button, Badge, SearchInput, SortableTh } from "@/src/components/ui";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
+import { LeaveDetailModal } from "@/src/components/leave";
+import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
 import { isApproved, isRejected, isToday } from "@/src/api";
-import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest } from "@/src/types";
+import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS } from "@/src/types";
 import styles from "./admin.module.css";
 
 // A leave has no single "decided at" field system-wide — whichever stage
@@ -89,7 +92,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
         <div>
           <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>
           <p className="text-xs text-[var(--muted)]">
-            Here&apos;s what&apos;s happening across SLMS today.
+            Here&apos;s what&apos;s happening across the system today.
           </p>
         </div>
         <div className="rounded-lg border border-[rgba(224,123,32,0.25)] bg-[rgba(224,123,32,0.1)] px-3.5 py-1.5 font-mono text-xs text-[var(--orange2)]">
@@ -103,13 +106,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
       </div>
 
       <div className={styles.statRow}>
-        <StatTile label="Students" value={students.length} />
-        <StatTile label="HODs" value={hods.length} />
-        <StatTile label="Troop Cdrs" value={troops.length} />
-        <StatTile label="Squadron Cdrs" value={squadrans.length} />
-        <StatTile label="Senior Deputy Deans" value={sdds.length} />
-        <StatTile label="Gate Staff" value={gates.length} />
-        <StatTile label="Leave Records" value={leaves.length} />
+        <StatTile label="Students" value={students.length} icon={<GraduationCap size={20} />} />
+        <StatTile label="HODs" value={hods.length} icon={<Landmark size={20} />} />
+        <StatTile label="Troop Cdrs" value={troops.length} icon={<Medal size={20} />} />
+        <StatTile label="Squadron Cdrs" value={squadrans.length} icon={<Swords size={20} />} />
+        <StatTile label="Senior Deputy Deans" value={sdds.length} icon={<Star size={20} />} />
+        <StatTile label="Gate Staff" value={gates.length} icon={<Construction size={20} />} />
+        <StatTile label="Leave Records" value={leaves.length} icon={<ClipboardList size={20} />} />
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -213,10 +216,138 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
   );
 }
 
+type LeaveOverallStatus = "Pending" | "Approved" | "Rejected";
+
+// Unlike each stage's own hodStatus/troopStatus/etc, there's no single
+// stored field for "where does this leave stand overall" — isApproved/
+// isRejected already encode that per studentType/route, this just names
+// the third (not yet decided either way) case for display.
+function overallStatus(l: LeaveRequest): LeaveOverallStatus {
+  if (isApproved(l)) return "Approved";
+  if (isRejected(l)) return "Rejected";
+  return "Pending";
+}
+
+function overallStatusTone(status: LeaveOverallStatus) {
+  return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
+}
+
+const LEAVE_RECORD_STATUS_FILTERS: Array<"All" | LeaveOverallStatus> = ["All", "Pending", "Approved", "Rejected"];
+
+// Full browsable history of every leave ever submitted — the Dashboard's
+// breakdown card only surfaces Pending / Approved Today / Rejected Today,
+// so anything decided on an earlier day was previously invisible even
+// though it's kept in the database. This is the "see everything" view.
+export function LeaveRecords({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { leaves } = portal;
+  const [statusFilter, setStatusFilter] = useState<"All" | LeaveOverallStatus>("All");
+  const [selected, setSelected] = useState<LeaveRequest | null>(null);
+
+  const statusFiltered =
+    statusFilter === "All" ? leaves : leaves.filter((l) => overallStatus(l) === statusFilter);
+  const { query, setQuery, filtered } = useSearchFilter(statusFiltered, (l) => [l.studentName, l.indexNumber]);
+  const sort = useSort("applied", "desc");
+
+  const sorted = sortRows(filtered, sort.sortKey, sort.sortDir, {
+    student: (l) => l.studentName,
+    type: (l) => l.type,
+    applied: (l) => l.appliedDate ?? "",
+    from: (l) => l.startDate,
+    status: (l) => overallStatus(l),
+  });
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          {LEAVE_RECORD_STATUS_FILTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatusFilter(s)}
+              className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
+                statusFilter === s
+                  ? "border-[var(--sky)] bg-[rgba(74,144,217,0.15)] text-[var(--white)]"
+                  : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--white)]"
+              }`}
+            >
+              {s === "All" ? `All (${leaves.length})` : `${s} (${leaves.filter((l) => overallStatus(l) === s).length})`}
+            </button>
+          ))}
+        </div>
+        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Applied" sortKey="applied" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <SortableTh label="Status" sortKey="status" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
+              <th>Stages</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No leave records match.
+                </td>
+              </tr>
+            ) : (
+              sorted.map((l) => (
+                <tr key={l.id} onClick={() => setSelected(l)} className="cursor-pointer">
+                  <td>
+                    {l.studentName}
+                    <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                  </td>
+                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td className="text-xs text-[var(--muted)]">{l.appliedDate || "—"}</td>
+                  <td>{l.startDate}</td>
+                  <td>
+                    <Badge tone={overallStatusTone(overallStatus(l))}>{overallStatus(l)}</Badge>
+                  </td>
+                  <td className="text-xs text-[var(--muted)]">
+                    {l.studentType === "CADET" && l.troopStatus === "N/A"
+                      ? `HOD ${l.hodStatus} · Sqn ${l.sqnStatus}`
+                      : l.studentType === "CADET"
+                      ? `Troop ${l.troopStatus} · Sqn ${l.sqnStatus} · SDD ${l.sddStatus}`
+                      : `HOD ${l.hodStatus} · Troop ${l.troopStatus}`}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
 export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const { intakes, students, troops, addIntake, removeIntake } = portal;
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Computed once per intake before sorting, since "Students" and "Troop
+  // Officers Assigned" are both derived counts, not raw fields — sorting
+  // needs the count itself as the comparable value, not `intakes` directly.
+  const intakeRows = intakes.map((i) => ({
+    intake: i,
+    count: students.filter((s) => s.intake === i.code).length,
+    officers: troops.filter((t) => (t.intakes ?? []).includes(i.code)),
+  }));
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sortedIntakeRows = sortRows(intakeRows, sortKey, sortDir, {
+    code: (r) => r.intake.code,
+    students: (r) => r.count,
+    officers: (r) => r.officers.length,
+  });
 
   async function handleAdd() {
     if (!code.trim()) {
@@ -269,46 +400,48 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Intake</th>
-                <th>Students</th>
-                <th>Troop Officers Assigned</th>
+                <SortableTh label="Intake" sortKey="code" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Students" sortKey="students" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh
+                  label="Troop Officers Assigned"
+                  sortKey="officers"
+                  activeSortKey={sortKey}
+                  sortDir={sortDir}
+                  onSort={toggleSort}
+                />
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {intakes.length === 0 ? (
+              {sortedIntakeRows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-6 text-center text-[var(--muted)]">
                     No intakes yet. Add one above.
                   </td>
                 </tr>
               ) : (
-                intakes.map((i) => {
-                  const count = students.filter((s) => s.intake === i.code).length;
-                  const officers = troops.filter((t) => (t.intakes ?? []).includes(i.code));
-                  return (
-                    <tr key={i.id}>
-                      <td>
-                        <span className="rounded bg-[rgba(37,99,176,0.15)] px-2 py-0.5 text-[10px] font-bold text-[var(--light)]">
-                          Intake {i.code}
-                        </span>
-                      </td>
-                      <td>{count}</td>
-                      <td>
-                        {officers.length ? (
-                          officers.map((o) => o.name).join(", ")
-                        ) : (
-                          <span className="text-[var(--muted)]">None assigned</span>
-                        )}
-                      </td>
-                      <td>
-                        <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(i.code)}>
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
+                sortedIntakeRows.map(({ intake: i, count, officers }) => (
+                  <tr key={i.id}>
+                    <td>
+                      <span className="rounded bg-[rgba(37,99,176,0.15)] px-2 py-0.5 text-[10px] font-bold text-[var(--light)]">
+                        Intake {i.code}
+                      </span>
+                    </td>
+                    <td>{count}</td>
+                    <td>
+                      {officers.length ? (
+                        officers.map((o) => o.name).join(", ")
+                      ) : (
+                        <span className="text-[var(--muted)]">None assigned</span>
+                      )}
+                    </td>
+                    <td>
+                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(i.code)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -347,6 +480,21 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const departmentOptions = Array.from(
     new Set(hods.map((h) => h.department).filter((d): d is string => !!d))
   ).sort();
+
+  const { query, setQuery, filtered: searchedStudents } = useSearchFilter(students, (s) => [
+    s.indexNumber,
+    s.firstName,
+    s.lastName,
+    s.department,
+  ]);
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sortedStudents = sortRows(searchedStudents, sortKey, sortDir, {
+    index: (s) => s.indexNumber,
+    name: (s) => `${s.firstName} ${s.lastName}`,
+    type: (s) => s.studentType,
+    intake: (s) => s.intake ?? "",
+    dept: (s) => s.department ?? "",
+  });
 
   // HOD and Troop Commander(s) are never picked directly — each Day
   // Scholar's HOD is already fully determined by their Department (every
@@ -657,30 +805,33 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Students</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-[var(--white)]">All Students</h2>
+          <SearchInput value={query} onChange={setQuery} placeholder="Search by name, index, or department…" className="w-full sm:w-72" />
+        </div>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Index No.</th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Intake</th>
-                <th>Dept</th>
+                <SortableTh label="Index No." sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Name" sortKey="name" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Intake" sortKey="intake" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Dept" sortKey="dept" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <th>Troop</th>
                 <th>HOD/Sqn</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {students.length === 0 ? (
+              {sortedStudents.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-6 text-center text-[var(--muted)]">
-                    No students yet.
+                    {students.length === 0 ? "No students yet." : "No students match your search."}
                   </td>
                 </tr>
               ) : (
-                students.map((s) => (
+                sortedStudents.map((s) => (
                   <tr key={s.id}>
                     <td>{s.indexNumber}</td>
                     <td>
@@ -1208,6 +1359,12 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [error, setError] = useState<string | null>(null);
 
   const filtered = roleFilter ? audit.filter((a) => a.role === roleFilter) : audit;
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sorted = sortRows(filtered, sortKey, sortDir, {
+    time: (a) => a.time,
+    role: (a) => a.role,
+    user: (a) => a.user,
+  });
 
   async function handleClear() {
     if (!confirm("Clear the entire audit log? This cannot be undone.")) return;
@@ -1242,22 +1399,22 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Date/Time</th>
-              <th>Role</th>
-              <th>Username</th>
+              <SortableTh label="Date/Time" sortKey="time" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Role" sortKey="role" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Username" sortKey="user" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th>Action</th>
               <th>Details</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
                   No audit events recorded yet.
                 </td>
               </tr>
             ) : (
-              filtered.slice(0, 500).map((a) => (
+              sorted.slice(0, 500).map((a) => (
                 <tr key={a.id}>
                   <td>{new Date(a.time).toLocaleString()}</td>
                   <td>{ROLE_LABELS[a.role as keyof typeof ROLE_LABELS] ?? a.role}</td>

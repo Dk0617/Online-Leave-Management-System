@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search, XCircle } from "lucide-react";
 
 // ==================================================================
 // Badge
@@ -39,9 +40,9 @@ type ButtonVariant = "primary" | "accent" | "secondary" | "success" | "danger" |
 
 const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-gradient-to-br from-[var(--navy)] to-[var(--blue)] text-white shadow-[0_6px_20px_rgba(13,27,94,0.4)] hover:brightness-110",
+    "bg-gradient-to-br from-[var(--navy)] to-[var(--blue)] text-white shadow-[0_3px_10px_rgba(13,27,94,0.25)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_6px_16px_rgba(13,27,94,0.32)]",
   accent:
-    "bg-gradient-to-br from-[var(--orange)] to-[var(--orange2)] text-white shadow-[0_6px_20px_rgba(224,123,32,0.35)] hover:brightness-110",
+    "bg-gradient-to-br from-[var(--orange)] to-[var(--orange2)] text-white shadow-[0_3px_10px_rgba(224,123,32,0.22)] hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_6px_16px_rgba(224,123,32,0.3)]",
   secondary:
     "bg-[var(--card2)] text-[var(--white)] ring-1 ring-inset ring-[var(--border)] hover:bg-[rgba(74,144,217,0.12)]",
   success:
@@ -63,7 +64,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLASSES[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLASSES[variant]} ${className}`}
       {...rest}
     />
   );
@@ -82,7 +83,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] ${className}`}
+      className={`rounded-[28px] border border-[var(--border)] bg-[var(--card)] shadow-[0_4px_16px_rgba(0,0,0,0.18)] ${className}`}
     >
       {children}
     </div>
@@ -93,8 +94,19 @@ const STAT_TILE_BAR_GRADIENTS: Record<string, string> = {
   default: "from-[var(--orange)] to-[var(--gold)]",
   amber: "from-[var(--orange)] to-[var(--gold)]",
   green: "from-[#22c55e] to-[#16a34a]",
-  red: "from-[#a855f7] to-[#7c3aed]",
+  red: "from-[#ef4444] to-[#b91c1c]",
   blue: "from-[var(--blue)] to-[var(--sky)]",
+};
+
+// Tone-matched circular backdrop behind a StatTile's icon (soft tint, not a
+// solid fill) — same low-opacity-tint convention Badge already uses, so an
+// amber tile's icon sits in a soft amber circle instead of floating bare.
+const STAT_TILE_ICON_CHIP_CLASSES: Record<string, string> = {
+  default: "bg-[rgba(224,123,32,0.14)] text-[var(--orange)]",
+  amber: "bg-[rgba(245,158,11,0.14)] text-[var(--warn)]",
+  green: "bg-[rgba(34,197,94,0.14)] text-[var(--ok)]",
+  red: "bg-[rgba(239,68,68,0.14)] text-[var(--err)]",
+  blue: "bg-[rgba(74,144,217,0.14)] text-[var(--sky)]",
 };
 
 export function StatTile({
@@ -106,7 +118,7 @@ export function StatTile({
   label: string;
   value: string | number;
   tone?: "default" | "amber" | "green" | "red" | "blue";
-  icon?: string;
+  icon?: ReactNode;
 }) {
   const toneClass =
     tone === "amber"
@@ -120,9 +132,13 @@ export function StatTile({
       : "text-[var(--white)]";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-4">
+    <div className="relative overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] px-5 py-4 shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
       <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${STAT_TILE_BAR_GRADIENTS[tone]}`} />
-      {icon && <div className="mb-2 text-xl">{icon}</div>}
+      {icon && (
+        <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full ${STAT_TILE_ICON_CHIP_CLASSES[tone]}`}>
+          {icon}
+        </div>
+      )}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
         {label}
       </p>
@@ -147,20 +163,21 @@ const TOAST_TONE_CLASSES: Record<ToastTone, string> = {
   red: "bg-gradient-to-r from-[#b91c1c] to-[#ef4444] ring-2 ring-[rgba(255,255,255,0.3)] shadow-[0_10px_30px_rgba(185,28,28,0.5)]",
 };
 
-const TOAST_TONE_ICON: Record<ToastTone, string> = {
-  green: "✅",
-  red: "⛔",
+const TOAST_TONE_ICON: Record<ToastTone, typeof CheckCircle2> = {
+  green: CheckCircle2,
+  red: XCircle,
 };
 
 // A transient confirmation banner — see useDecisionToast, used by every
 // approver portal to confirm which student's leave was just decided (the
 // row itself just silently disappears from the pending list otherwise).
 export function Toast({ message, tone = "green" }: { message: string; tone?: ToastTone }) {
+  const Icon = TOAST_TONE_ICON[tone];
   return (
     <div
-      className={`mb-4 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-bold text-white ${TOAST_TONE_CLASSES[tone]}`}
+      className={`toastIn mb-4 flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-bold text-white ${TOAST_TONE_CLASSES[tone]}`}
     >
-      <span className="text-lg leading-none">{TOAST_TONE_ICON[tone]}</span>
+      <Icon size={20} className="shrink-0" />
       <span>{message}</span>
     </div>
   );
@@ -196,5 +213,75 @@ export function Crest({ size = 48 }: { size?: number }) {
         fill="#cc1f34"
       />
     </svg>
+  );
+}
+
+// ==================================================================
+// SearchInput
+// ==================================================================
+
+// A text box with a leading search icon, replacing the inline "🔍
+// Search..." boxes that used to be copy-pasted per table (see
+// hooks/useTableControls.ts's useSearchFilter for the matching filter
+// logic). Styled to match the `.input` class already duplicated across
+// portal.module.css/admin.module.css/student.module.css.
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = "Search…",
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search
+        size={14}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+      />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-[var(--border)] bg-[rgba(74,144,217,0.06)] py-2.5 pl-9 pr-3 text-[13px] text-[var(--white)] outline-none focus:border-[var(--sky)]"
+      />
+    </div>
+  );
+}
+
+// ==================================================================
+// SortableTh
+// ==================================================================
+
+// A <th> that toggles sort on click and shows the active direction — the
+// presentational half of the sort pattern in hooks/useTableControls.ts
+// (useSort/sortRows). Renders as a plain <th> so each table's own CSS
+// module `.table th` rule (uppercase, color, spacing) still applies via
+// the cascade — this only adds the click affordance and indicator icon.
+export function SortableTh({
+  label,
+  sortKey,
+  activeSortKey,
+  sortDir,
+  onSort,
+}: {
+  label: ReactNode;
+  sortKey: string;
+  activeSortKey?: string;
+  sortDir: "asc" | "desc";
+  onSort: (key: string) => void;
+}) {
+  const isActive = activeSortKey === sortKey;
+  const Icon = isActive ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th onClick={() => onSort(sortKey)} className="cursor-pointer select-none hover:text-[var(--white)]">
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon size={12} className={isActive ? "text-[var(--sky)]" : "opacity-40"} />
+      </span>
+    </th>
   );
 }

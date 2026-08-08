@@ -27,11 +27,11 @@ async function sendMail(to, subject, text) {
 export async function sendApprovalEmail(to, studentName, leave) {
   await sendMail(
     to,
-    "Your SLMS Leave Pass is Fully Approved",
+    "Your Leave Pass is Fully Approved",
     `Hi ${studentName},\n\n` +
       `Your ${leave.type} leave request (${leave.startDate} to ${leave.endDate}) has been fully approved.\n\n` +
-      `Log in to SLMS and download your official Leave Pass PDF before you exit campus.\n\n` +
-      `— SLMS, KDU Southern Campus`
+      `Log in to the Student Leave Management System and download your official Leave Pass PDF before you exit campus.\n\n` +
+      `— Student Leave Management System, KDU Southern Campus`
   );
 }
 
@@ -46,11 +46,11 @@ export async function sendRejectionEmail(to, studentName, leave, role, reason) {
   const roleLabel = ROLE_LABELS[role] || role;
   await sendMail(
     to,
-    "Your SLMS Leave Application Was Rejected",
+    "Your Leave Application Was Rejected",
     `Hi ${studentName},\n\n` +
       `Your ${leave.type} leave request (${leave.startDate} to ${leave.endDate}) was rejected by the ${roleLabel}, and will not proceed to any further approval stage.\n\n` +
       `Reason given: ${reason}\n\n` +
       `What to do next: review the reason above, then either submit a new leave request with the necessary corrections, or contact the ${roleLabel} directly if you need clarification before reapplying.\n\n` +
-      `— SLMS, KDU Southern Campus`
+      `— Student Leave Management System, KDU Southern Campus`
   );
 }

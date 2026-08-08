@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
-import { StatTile, Badge, Button, Card } from "@/src/components/ui";
+import { AlertTriangle, DoorOpen, FileText, LogIn, LogOut } from "lucide-react";
+import { StatTile, Badge, Button, Card, SearchInput, SortableTh } from "@/src/components/ui";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
+import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -117,6 +119,10 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
   // time-ordered, so a plain string sort on `id` gives the exact order
   // these applications came in without needing a separate timestamp field.
   const orderedLeaves = [...approvedLeaves].sort((a, b) => a.id.localeCompare(b.id));
+  const { query: leaveQuery, setQuery: setLeaveQuery, filtered: searchedLeaves } = useSearchFilter(
+    orderedLeaves,
+    (l) => [l.studentName, l.indexNumber]
+  );
 
   return (
     <div>
@@ -136,16 +142,21 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
       </div>
 
       <div className={styles.statGrid}>
-        <StatTile label="On Leave Now" value={onLeaveNow.length} tone="amber" />
+        <StatTile label="On Leave Now" value={onLeaveNow.length} tone="amber" icon={<DoorOpen size={20} />} />
         <ClickableStatCard onClick={() => setDrilldown({ title: "Exits Today", entries: todayExitEntries })}>
-          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} />
+          <StatTile label="Exits Today (click for details)" value={todayExitEntries.length} icon={<LogOut size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setDrilldown({ title: "Entries Today", entries: todayEntryEntries })}>
-          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+          <StatTile
+            label="Entries Today (click for details)"
+            value={todayEntryEntries.length}
+            tone="green"
+            icon={<LogIn size={20} />}
+          />
         </ClickableStatCard>
-        <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" />
+        <StatTile label="Approved Passes" value={approvedLeaves.length} tone="blue" icon={<FileText size={20} />} />
         <ClickableStatCard onClick={() => setDrilldown({ title: "Overdue — Still Out", entries: overdueEntries })}>
-          <StatTile label="Overdue (click for details)" value={overdueEntries.length} tone="red" />
+          <StatTile label="Overdue (click for details)" value={overdueEntries.length} tone="red" icon={<AlertTriangle size={20} />} />
         </ClickableStatCard>
       </div>
 
@@ -157,15 +168,27 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
         />
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">
-        Leave Passes — Exit / Entry &amp; Validity Status ({orderedLeaves.length})
-      </h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-[var(--white)]">
+          Leave Passes — Exit / Entry &amp; Validity Status ({searchedLeaves.length})
+        </h2>
+        <SearchInput
+          value={leaveQuery}
+          onChange={setLeaveQuery}
+          placeholder="Search by name or index number…"
+          className="w-full sm:w-72"
+        />
+      </div>
       {orderedLeaves.length === 0 ? (
         <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
           No approved leave passes in system.
         </div>
+      ) : searchedLeaves.length === 0 ? (
+        <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
+          No leave passes match your search.
+        </div>
       ) : (
-        <LeavePassTable leaves={orderedLeaves} lastMovementFor={lastMovementFor} />
+        <LeavePassTable leaves={searchedLeaves} lastMovementFor={lastMovementFor} />
       )}
     </div>
   );
@@ -178,29 +201,40 @@ function LeavePassTable({
   leaves: LeaveRequest[];
   lastMovementFor: (indexNumber: string, leaveId: string) => { direction: "Exit" | "Entry" } | null;
 }) {
+  const { sortKey, sortDir, toggleSort } = useSort();
+  // Status/Validity are derived per row (need lastMovementFor/validity), not
+  // raw fields — computed once here so both the sort accessors and the
+  // render below share the same values instead of recomputing per row twice.
+  const rows = leaves.map((l) => {
+    const last = lastMovementFor(l.indexNumber, l.id);
+    const state = validity(l);
+    return { leave: l, last, state, isOverdue: last?.direction === "Exit" && state === "expired" };
+  });
+  const sortedRows = sortRows(rows, sortKey, sortDir, {
+    student: (r) => r.leave.studentName,
+    studentType: (r) => r.leave.studentType,
+    type: (r) => r.leave.type,
+    from: (r) => r.leave.startDate,
+    to: (r) => r.leave.endDate,
+    status: (r) => (r.last ? r.last.direction : ""),
+    validity: (r) => r.state,
+  });
   return (
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Student</th>
-            <th>Type</th>
-            <th>Leave Type</th>
-            <th>From (Exit)</th>
-            <th>To (Entry)</th>
-            <th>Status</th>
-            <th>Validity</th>
+            <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="Type" sortKey="studentType" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="From (Exit)" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="To (Entry)" sortKey="to" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="Status" sortKey="status" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableTh label="Validity" sortKey="validity" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
           </tr>
         </thead>
         <tbody>
-          {leaves.map((l) => {
-            const last = lastMovementFor(l.indexNumber, l.id);
-            const state = validity(l);
-            // Still out (exited, not yet returned) and past their approved
-            // end date/time — overdue. Flagged on the whole row, not just
-            // the individual badges, so it's impossible to miss scanning
-            // down the table.
-            const isOverdue = last?.direction === "Exit" && state === "expired";
+          {sortedRows.map(({ leave: l, last, state, isOverdue }) => {
             return (
               <tr key={l.id} className={isOverdue ? "bg-[rgba(239,68,68,0.1)]" : undefined}>
                 <td className={isOverdue ? "text-[var(--err)]" : undefined}>

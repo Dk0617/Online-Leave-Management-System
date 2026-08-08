@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { StatTile, Badge, Button, Toast } from "@/src/components/ui";
+import { AlertTriangle, CheckCircle2, Hourglass, Loader2, LogIn, XCircle } from "lucide-react";
+import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
+import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { isApproved, isRejected, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
@@ -23,6 +25,18 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
   const { pending, history, pipeline, movements, approve, reject, error, refresh } = portal;
   const approvedTodayLeaves = history.filter((l) => l.sddStatus === "Approved" && isToday(l.sddApprovedAt));
   const rejectedTodayLeaves = history.filter((l) => l.sddStatus === "Rejected" && isToday(l.sddApprovedAt));
+  const { query: pendingQuery, setQuery: setPendingQuery, filtered: searchedPending } = useSearchFilter(
+    pending,
+    (l) => [l.studentName, l.indexNumber]
+  );
+  const { sortKey: pendingSortKey, sortDir: pendingSortDir, toggleSort: togglePendingSort } = useSort();
+  const sortedPending = sortRows(searchedPending, pendingSortKey, pendingSortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    to: (l) => l.endDate,
+  });
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
   const [movementDrilldown, setMovementDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
@@ -79,24 +93,44 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
 
       <div className={styles.statGrid}>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Awaiting You", leaves: pending })}>
-          <StatTile label="Awaiting You (click for details)" value={pending.length} tone="amber" />
+          <StatTile label="Awaiting You (click for details)" value={pending.length} tone="amber" icon={<Hourglass size={20} />} />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Fully Approved Today", leaves: approvedTodayLeaves })}>
-          <StatTile label="Fully Approved Today (click for details)" value={approvedTodayLeaves.length} tone="green" />
+          <StatTile
+            label="Fully Approved Today (click for details)"
+            value={approvedTodayLeaves.length}
+            tone="green"
+            icon={<CheckCircle2 size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}>
-          <StatTile label="Rejected Today (click for details)" value={rejectedTodayLeaves.length} tone="red" />
+          <StatTile
+            label="Rejected Today (click for details)"
+            value={rejectedTodayLeaves.length}
+            tone="red"
+            icon={<XCircle size={20} />}
+          />
         </ClickableStatCard>
-        <StatTile label="In Progress" value={pipeline.length} />
+        <StatTile label="In Progress" value={pipeline.length} icon={<Loader2 size={20} />} />
         <ClickableStatCard
           onClick={() => setMovementDrilldown({ title: "Entries Today — Officer Cadets", entries: todayEntryEntries })}
         >
-          <StatTile label="Entries Today (click for details)" value={todayEntryEntries.length} tone="green" />
+          <StatTile
+            label="Entries Today (click for details)"
+            value={todayEntryEntries.length}
+            tone="green"
+            icon={<LogIn size={20} />}
+          />
         </ClickableStatCard>
         <ClickableStatCard
           onClick={() => setMovementDrilldown({ title: "Late Returns — Officer Cadets", entries: lateReturnEntries })}
         >
-          <StatTile label="Late Returns (click for details)" value={lateReturnEntries.length} tone="red" />
+          <StatTile
+            label="Late Returns (click for details)"
+            value={lateReturnEntries.length}
+            tone="red"
+            icon={<AlertTriangle size={20} />}
+          />
         </ClickableStatCard>
       </div>
 
@@ -120,30 +154,38 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
         campus.
       </div>
 
-      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Ready for Final Approval</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-[var(--white)]">Ready for Final Approval</h2>
+        <SearchInput
+          value={pendingQuery}
+          onChange={setPendingQuery}
+          placeholder="Search by name or index number…"
+          className="w-full sm:w-72"
+        />
+      </div>
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>From</th>
-              <th>To</th>
+              <SortableTh label="Student" sortKey="student" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
+              <SortableTh label="Index" sortKey="index" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
+              <SortableTh label="To" sortKey="to" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
               <th>Troop</th>
               <th>Squadron</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {pending.length === 0 ? (
+            {sortedPending.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  No applications awaiting your approval.
+                  {pending.length === 0 ? "No applications awaiting your approval." : "No applications match your search."}
                 </td>
               </tr>
             ) : (
-              pending.map((l) => (
+              sortedPending.map((l) => (
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
@@ -187,30 +229,43 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
 
 export function History({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
   const { history } = portal;
+  const { query, setQuery, filtered } = useSearchFilter(history, (l) => [l.studentName, l.indexNumber]);
+  const { sortKey, sortDir, toggleSort } = useSort();
+  const sorted = sortRows(filtered, sortKey, sortDir, {
+    student: (l) => l.studentName,
+    index: (l) => l.indexNumber,
+    type: (l) => l.type,
+    from: (l) => l.startDate,
+    decision: (l) => l.sddStatus,
+  });
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Index</th>
-            <th>Leave Type</th>
-            <th>From</th>
-            <th>Your Decision</th>
-            <th>Reason</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.length === 0 ? (
+    <div>
+      <div className="mb-3 flex justify-end">
+        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
             <tr>
-              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                No history.
-              </td>
+              <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Index" sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="From" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableTh label="Your Decision" sortKey="decision" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th>Reason</th>
+              <th>Date</th>
             </tr>
-          ) : (
-            history.map((l) => (
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                  {history.length === 0 ? "No history." : "No history matches your search."}
+                </td>
+              </tr>
+            ) : (
+              sorted.map((l) => (
               <tr key={l.id}>
                 <td>{l.studentName}</td>
                 <td>{l.indexNumber}</td>
@@ -226,6 +281,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSddPortal> })
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

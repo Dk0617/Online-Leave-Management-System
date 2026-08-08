@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
-import { LeaveRequest, Movement } from "@/src/types";
+import { api, normalizeBlockLeave, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
+import { BlockLeaveRequest, LeaveRequest, Movement } from "@/src/types";
 
 export function useTroopPortal() {
   const [allPending, setAllPending] = useState<LeaveRequest[]>([]);
@@ -12,6 +12,8 @@ export function useTroopPortal() {
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsLoaded, setRecordsLoaded] = useState(false);
   const [recordsError, setRecordsError] = useState<string | null>(null);
+  const [blockLeavePending, setBlockLeavePending] = useState<BlockLeaveRequest[]>([]);
+  const [blockLeaveHistory, setBlockLeaveHistory] = useState<BlockLeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,14 +29,18 @@ export function useTroopPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [all, hist, mov] = await Promise.all([
+      const [all, hist, mov, blp, blh] = await Promise.all([
         api.get<Record<string, unknown>[]>("/troop/leaves/pending"),
         api.get<Record<string, unknown>[]>("/troop/leaves/history"),
         api.get<Record<string, unknown>[]>("/troop/movements"),
+        api.get<Record<string, unknown>[]>("/troop/block-leave/pending"),
+        api.get<Record<string, unknown>[]>("/troop/block-leave/history"),
       ]);
       setAllPending(all.map(normalizeLeave));
       setHistory(hist.map(normalizeLeave));
       setMovements(mov.map(normalizeMovement));
+      setBlockLeavePending(blp.map(normalizeBlockLeave));
+      setBlockLeaveHistory(blh.map(normalizeBlockLeave));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Troop data");
     } finally {
@@ -81,6 +87,15 @@ export function useTroopPortal() {
     }
   }, []);
 
+  async function approveBlockLeave(id: string, comment?: string) {
+    await api.patch(`/troop/block-leave/${id}/approve`, { comment });
+    await refresh();
+  }
+  async function rejectBlockLeave(id: string, comment?: string) {
+    await api.patch(`/troop/block-leave/${id}/reject`, { comment });
+    await refresh();
+  }
+
   return {
     allPending,
     dayScholarPending,
@@ -92,10 +107,14 @@ export function useTroopPortal() {
     recordsLoaded,
     recordsError,
     loadRecords,
+    blockLeavePending,
+    blockLeaveHistory,
     loading,
     error,
     refresh,
     approve,
     reject,
+    approveBlockLeave,
+    rejectBlockLeave,
   };
 }

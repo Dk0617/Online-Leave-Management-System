@@ -187,6 +187,50 @@ export interface LeaveRequest {
   sddApprovedAt?: string;
 }
 
+// ── Block Leave — one shared 24-hour window a department's Day Scholars
+// join one at a time (min 5, max 30) instead of each filing their own
+// individual leave; settled by a single HOD decision then a single Troop
+// Commander decision for the whole roster. See
+// backend/models/BlockLeave.js. ─────────────────────────────────────────
+export const BLOCK_LEAVE_MIN_STUDENTS = 5;
+export const BLOCK_LEAVE_MAX_STUDENTS = 30;
+
+export interface BlockLeaveEntry {
+  no: number;
+  studentId: string;
+  indexNumber: string;
+  name: string;
+  intake?: string;
+  verifyCode: string;
+}
+
+export type BlockLeaveStage = "FILLING" | "SUBMITTED";
+
+export interface BlockLeaveRequest {
+  id: string;
+  department: string;
+  hodId: string;
+  intakes: string[];
+  troopIds: string[];
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  reason: string;
+  students: BlockLeaveEntry[];
+  stage: BlockLeaveStage;
+  submittedAt?: string;
+  submittedByStudentId?: string;
+  hodStatus: LeaveStatus;
+  hodComment?: string;
+  hodApprovedAt?: string;
+  troopStatus: LeaveStatus;
+  troopComment?: string;
+  troopApprovedAt?: string;
+  decidedByTroopId?: string;
+  createdAt: string;
+}
+
 // ── Gate movement log ───────────────────────────────────────────────
 export interface Movement {
   id: string;
