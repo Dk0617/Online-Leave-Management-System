@@ -16,6 +16,10 @@ import {
   joinBlockLeave,
   submitBlockLeave,
   myBlockLeaves,
+  searchInvitableStudents,
+  inviteToBlockLeave,
+  myBlockLeaveInvitations,
+  respondToBlockLeaveInvite,
 } from "../controllers/blockleavecontrol.js";
 
 const router = express.Router();
@@ -32,6 +36,10 @@ router.post("/block-leave", createBlockLeave);
 router.post("/block-leave/:id/join", joinBlockLeave);
 router.post("/block-leave/:id/submit", submitBlockLeave);
 router.get("/block-leave/mine", myBlockLeaves);
+router.get("/block-leave/invitations", myBlockLeaveInvitations);
+router.get("/block-leave/:id/invitable-students", searchInvitableStudents);
+router.post("/block-leave/:id/invite", inviteToBlockLeave);
+router.post("/block-leave/:id/invite/respond", respondToBlockLeaveInvite);
 
 router.get("/profile", getProfile);
 router.patch("/profile", updateProfile);

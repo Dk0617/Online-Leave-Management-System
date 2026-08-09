@@ -350,6 +350,17 @@ export const hodCorrectDateTime = async (req, res) => {
   if (leave.hodStatus !== "Pending") {
     return res.status(403).json({ message: "This leave is not pending your decision" });
   }
+  // This tool exists to fix a time-of-day typo (e.g. the student meant
+  // 08:00, not 18:00) — not to reschedule the leave. The dates themselves
+  // are locked to whatever the student actually applied for (their very
+  // first submission, even across a second correction), so the HOD can
+  // never move a leave to a different day, only correct the time on the
+  // day(s) already applied for.
+  if (startDate !== leave.startDate || endDate !== leave.endDate) {
+    return res.status(400).json({
+      message: "The date can't be changed here — only the time. Reject the application if the date itself is wrong.",
+    });
+  }
 
   // Keep the student's own first-submitted values (not overwritten by a
   // second correction) so the "originally applied for" figure shown to the

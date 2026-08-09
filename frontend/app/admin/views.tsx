@@ -7,6 +7,7 @@ import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
+import { EventCalendarView } from "@/src/components/eventCalendar";
 import { isApproved, isRejected, isToday } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS, LecturerAccount } from "@/src/types";
 import styles from "./admin.module.css";
@@ -2312,5 +2313,37 @@ export function PhotoRequests({ portal }: { portal: ReturnType<typeof useAdminPo
         </table>
       </div>
     </div>
+  );
+}
+
+// ==================================================================
+// Event Calendar — this admin's own department's Workshop days. Each of
+// the department admins manages only their own department here; students
+// in that department get blocked from ordinary leave during a marked
+// window (see backend/controllers/studentcontrol.js applyLeave). The
+// department's HOD/Lecturer portal shows the same calendar read-only (see
+// app/hod/views.tsx EventCalendar) and keeps the bulk reject-overlapping
+// action there, since that's a leave decision, not a calendar edit.
+// ==================================================================
+
+export function Calendar({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { events, addEvent, removeEvent } = portal;
+  return (
+    <EventCalendarView
+      events={events}
+      editable
+      onAdd={addEvent}
+      onRemove={removeEvent}
+      infoBanner={
+        <>
+          <strong>Event Calendar:</strong> Sri Lanka&apos;s Poya days and national holidays (niwadu dawasa)
+          are shown here automatically — nothing for you to add or maintain. Mark a mandatory{" "}
+          <strong>Workshop</strong> day for your department, with its actual start and end time — students
+          in your department can&apos;t apply for ordinary leave during that window, but are free to once
+          it ends, even on the same day. Your department&apos;s HOD can see this calendar and review any
+          pending leave requests that overlap a workshop.
+        </>
+      }
+    />
   );
 }

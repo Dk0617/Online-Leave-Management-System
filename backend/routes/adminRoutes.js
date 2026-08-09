@@ -41,6 +41,7 @@ import {
   createLecturerUnavailability,
   deleteLecturerUnavailability,
 } from "../controllers/substitutecontrol.js";
+import { adminListEvents, adminCreateEvent, adminDeleteEvent } from "../controllers/eventcontrol.js";
 
 const router = express.Router();
 
@@ -90,6 +91,13 @@ router.delete("/hod-unavailability/:id", deleteHodUnavailability);
 router.get("/lecturer-unavailability", listLecturerUnavailability);
 router.post("/lecturer-unavailability", createLecturerUnavailability);
 router.delete("/lecturer-unavailability/:id", deleteLecturerUnavailability);
+
+// Event Calendar — Workshop days for this admin's own department (see
+// eventcontrol.js resolveDeptHod). HOD/Lecturer only view their department's
+// calendar now (hodRoutes.js GET /events).
+router.get("/events", adminListEvents);
+router.post("/events", adminCreateEvent);
+router.delete("/events/:id", adminDeleteEvent);
 
 router.get("/photo-requests", listPhotoRequests);
 router.patch("/photo-requests/:id/approve", approvePhotoRequest);

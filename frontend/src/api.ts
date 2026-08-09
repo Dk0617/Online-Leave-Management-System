@@ -462,6 +462,7 @@ export function normalizeBlockLeave(raw: Raw): BlockLeaveRequest {
       name: s.name as string,
       intake: s.intake as string | undefined,
       verifyCode: s.verifyCode as string,
+      status: (s.status as BlockLeaveEntry["status"]) ?? "JOINED",
     })) as BlockLeaveEntry[],
     stage: raw.stage as BlockLeaveRequest["stage"],
     submittedAt: raw.submittedAt as string | undefined,

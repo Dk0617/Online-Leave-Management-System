@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   normalizeAudit,
+  normalizeEventDay,
   normalizeHodUnavailability,
   normalizeIntake,
   normalizeLeave,
@@ -17,6 +18,7 @@ import {
 } from "@/src/api";
 import {
   AuditEntry,
+  EventDay,
   HodUnavailability,
   Intake,
   LeaveRequest,
@@ -87,6 +89,7 @@ export function useAdminPortal() {
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
+  const [events, setEvents] = useState<EventDay[]>([]);
   const [hodUnavailability, setHodUnavailability] = useState<HodUnavailability[]>([]);
   const [lecturerUnavailability, setLecturerUnavailability] = useState<LecturerUnavailability[]>([]);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
@@ -109,6 +112,7 @@ export function useAdminPortal() {
         notifsRaw,
         auditRaw,
         lecturersRaw,
+        eventsRaw,
         hodUnavailabilityRaw,
         lecturerUnavailabilityRaw,
         photoRequestsRaw,
@@ -124,6 +128,7 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/notifications"),
         api.get<Record<string, unknown>[]>("/admin/audit"),
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
+        api.get<Record<string, unknown>[]>("/admin/events"),
         api.get<Record<string, unknown>[]>("/admin/hod-unavailability"),
         api.get<Record<string, unknown>[]>("/admin/lecturer-unavailability"),
         api.get<Record<string, unknown>[]>("/admin/photo-requests"),
@@ -139,6 +144,7 @@ export function useAdminPortal() {
       setNotifications(notifsRaw.map(normalizeNotification));
       setAudit(auditRaw.map(normalizeAudit));
       setLecturers(lecturersRaw.map(normalizeLecturer));
+      setEvents(eventsRaw.map(normalizeEventDay));
       setHodUnavailability(hodUnavailabilityRaw.map(normalizeHodUnavailability));
       setLecturerUnavailability(lecturerUnavailabilityRaw.map(normalizeLecturerUnavailability));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
@@ -250,6 +256,18 @@ export function useAdminPortal() {
     await refresh();
   }
 
+  // ── Event Calendar — this admin's own department's Workshop days (see
+  // backend/controllers/eventcontrol.js adminCreateEvent/adminDeleteEvent,
+  // which resolve the department from the logged-in admin account). ────
+  async function addEvent(date: string, title: string, startTime: string, endTime: string) {
+    await api.post("/admin/events", { date, title, startTime, endTime });
+    await refresh();
+  }
+  async function removeEvent(id: string) {
+    await api.delete(`/admin/events/${id}`);
+    await refresh();
+  }
+
   // ── HOD / Lecturer unavailability (feeds the seniority-chain cover) ─
   async function addHodUnavailability(input: { hodId: string; fromDate: string; toDate: string; reason?: string }) {
     await api.post("/admin/hod-unavailability", input);
@@ -297,6 +315,7 @@ export function useAdminPortal() {
     notifications,
     audit,
     lecturers,
+    events,
     hodUnavailability,
     lecturerUnavailability,
     photoRequests,
@@ -322,6 +341,8 @@ export function useAdminPortal() {
     addLecturerMember,
     editLecturerMember,
     removeLecturerMember,
+    addEvent,
+    removeEvent,
     addHodUnavailability,
     removeHodUnavailability,
     addLecturerUnavailability,
