@@ -1,7 +1,7 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
 import { hod, hodCorrectDateTime, coverStatus } from "../controllers/leavecontrol.js";
-import { listEvents, createEvent, deleteEvent, rejectOverlapping } from "../controllers/eventcontrol.js";
+import { listEvents, rejectOverlapping } from "../controllers/eventcontrol.js";
 import { hodMovements } from "../controllers/movementcontrol.js";
 import {
   hodBlockLeavePending,
@@ -45,14 +45,15 @@ router.patch("/block-leave/:id/reject", requireRole("HOD"), hodRejectBlockLeave)
 // leave queue already gets; a non-covering one just sees an empty scope.
 router.get("/movements", hodMovements);
 
-// The GET stays open to LECTURER too (same reasoning as block-leave and
-// movements above) — useHodPortal's refresh() fetches this unconditionally
-// in the same Promise.all as the leave queue, so a 403 here would silently
-// blank a covering Lecturer's entire dashboard, not just hide the calendar.
-// The Lecturer portal's own nav simply has no Calendar tab to show it in.
+// Read-only here — Admin now owns creating/deleting a department's Workshop
+// days (see adminRoutes.js /events, controllers/eventcontrol.js
+// adminCreateEvent/adminDeleteEvent). The GET stays open to LECTURER too
+// (same reasoning as block-leave and movements above) — useHodPortal's
+// refresh() fetches this unconditionally in the same Promise.all as the
+// leave queue, so a 403 here would silently blank a covering Lecturer's
+// entire dashboard, not just hide the calendar. The Lecturer portal's own
+// nav simply has no Calendar tab to show it in.
 router.get("/events", listEvents);
-router.post("/events", requireRole("HOD"), createEvent);
-router.delete("/events/:id", requireRole("HOD"), deleteEvent);
 router.post("/events/:id/reject-overlapping", requireRole("HOD"), rejectOverlapping);
 
 export default router;

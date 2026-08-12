@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
+import { Check, X } from "lucide-react";
 import { LeaveRequest, LEAVE_TYPE_LABELS, LeaveStatus } from "@/src/types";
 import { isApproved, isRejected, isStageMoot } from "@/src/api";
 import { Button, Badge } from "@/src/components/ui";
@@ -127,11 +128,23 @@ export function ApprovalActions({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex gap-2">
-        <Button variant="danger" disabled={submitting} onClick={() => setRejecting(true)}>
-          Reject
+        <Button
+          variant="danger"
+          disabled={submitting}
+          onClick={() => setRejecting(true)}
+          title="Reject"
+          className="!h-8 !w-8 !p-0"
+        >
+          <X size={16} />
         </Button>
-        <Button variant="success" disabled={submitting} onClick={handleApprove}>
-          {submitting ? "Approving…" : "Approve"}
+        <Button
+          variant="success"
+          disabled={submitting}
+          onClick={handleApprove}
+          title={submitting ? "Approving…" : "Approve"}
+          className="!h-8 !w-8 !p-0"
+        >
+          <Check size={16} />
         </Button>
       </div>
       {error && <p className="w-56 text-[11px] text-[var(--err)]">{error}</p>}

@@ -195,6 +195,8 @@ export interface LeaveRequest {
 export const BLOCK_LEAVE_MIN_STUDENTS = 5;
 export const BLOCK_LEAVE_MAX_STUDENTS = 30;
 
+export type BlockLeaveEntryStatus = "JOINED" | "INVITED";
+
 export interface BlockLeaveEntry {
   no: number;
   studentId: string;
@@ -202,6 +204,17 @@ export interface BlockLeaveEntry {
   name: string;
   intake?: string;
   verifyCode: string;
+  status: BlockLeaveEntryStatus;
+}
+
+// A department student matching an invite search (see
+// backend/controllers/blockleavecontrol.js searchInvitableStudents) — not
+// yet on any roster, so no verifyCode/no/status of its own.
+export interface InvitableStudent {
+  id: string;
+  name: string;
+  indexNumber: string;
+  intake?: string;
 }
 
 export type BlockLeaveStage = "FILLING" | "SUBMITTED";

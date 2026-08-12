@@ -10,7 +10,7 @@ import {
   normalizeStudent,
   POLL_INTERVAL_MS,
 } from "@/src/api";
-import { BlockLeaveRequest, EventDay, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
+import { BlockLeaveRequest, EventDay, InvitableStudent, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
 import { PassVerification } from "@/src/pdf";
 
 export interface NewLeaveInput {
@@ -53,6 +53,7 @@ export function useStudentPortal() {
   const [blockedDays, setBlockedDays] = useState<EventDay[]>([]);
   const [openBlockLeave, setOpenBlockLeave] = useState<BlockLeaveRequest | null>(null);
   const [myBlockLeaves, setMyBlockLeaves] = useState<BlockLeaveRequest[]>([]);
+  const [blockLeaveInvitations, setBlockLeaveInvitations] = useState<BlockLeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,20 +61,23 @@ export function useStudentPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [leavesRaw, profileRaw, photoRequestsRaw, blockedDaysRaw, openBlockRaw, myBlockRaw] = await Promise.all([
-        api.get<Record<string, unknown>[]>("/student/leaves"),
-        api.get<Record<string, unknown>>("/student/profile"),
-        api.get<Record<string, unknown>[]>("/student/photo-requests"),
-        api.get<Record<string, unknown>[]>("/student/blocked-days"),
-        api.get<Record<string, unknown> | null>("/student/block-leave/open"),
-        api.get<Record<string, unknown>[]>("/student/block-leave/mine"),
-      ]);
+      const [leavesRaw, profileRaw, photoRequestsRaw, blockedDaysRaw, openBlockRaw, myBlockRaw, invitationsRaw] =
+        await Promise.all([
+          api.get<Record<string, unknown>[]>("/student/leaves"),
+          api.get<Record<string, unknown>>("/student/profile"),
+          api.get<Record<string, unknown>[]>("/student/photo-requests"),
+          api.get<Record<string, unknown>[]>("/student/blocked-days"),
+          api.get<Record<string, unknown> | null>("/student/block-leave/open"),
+          api.get<Record<string, unknown>[]>("/student/block-leave/mine"),
+          api.get<Record<string, unknown>[]>("/student/block-leave/invitations"),
+        ]);
       setLeaves(leavesRaw.map(normalizeLeave));
       setProfile(normalizeStudent(profileRaw));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
       setBlockedDays(blockedDaysRaw.map(normalizeEventDay));
       setOpenBlockLeave(openBlockRaw ? normalizeBlockLeave(openBlockRaw) : null);
       setMyBlockLeaves(myBlockRaw.map(normalizeBlockLeave));
+      setBlockLeaveInvitations(invitationsRaw.map(normalizeBlockLeave));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -128,6 +132,17 @@ export function useStudentPortal() {
     await api.post(`/student/block-leave/${id}/submit`);
     await refresh();
   }
+  async function searchInvitableStudents(id: string, q: string): Promise<InvitableStudent[]> {
+    return api.get<InvitableStudent[]>(`/student/block-leave/${id}/invitable-students?q=${encodeURIComponent(q)}`);
+  }
+  async function inviteToBlockLeave(id: string, studentId: string) {
+    await api.post(`/student/block-leave/${id}/invite`, { studentId });
+    await refresh();
+  }
+  async function respondToBlockLeaveInvite(id: string, accept: boolean) {
+    await api.post(`/student/block-leave/${id}/invite/respond`, { accept });
+    await refresh();
+  }
 
   return {
     leaves,
@@ -136,6 +151,7 @@ export function useStudentPortal() {
     blockedDays,
     openBlockLeave,
     myBlockLeaves,
+    blockLeaveInvitations,
     loading,
     error,
     refresh,
@@ -146,5 +162,8 @@ export function useStudentPortal() {
     startBlockLeave,
     joinBlockLeave,
     submitBlockLeave,
+    searchInvitableStudents,
+    inviteToBlockLeave,
+    respondToBlockLeaveInvite,
   };
 }

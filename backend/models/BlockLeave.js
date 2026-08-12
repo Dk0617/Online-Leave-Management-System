@@ -23,6 +23,14 @@ const rosterEntrySchema = new mongoose.Schema(
     // Leave.verifyCode — lets Gate staff confirm identity for whichever of
     // these students they're looking at, independent of the others.
     verifyCode: { type: String, required: true },
+    // JOINED: self-joined, or invited-and-accepted — counts toward the
+    // BLOCK_LEAVE_MIN_STUDENTS submit threshold and shows up as a normal
+    // roster row. INVITED: another roster member picked this student (see
+    // blockleavecontrol.js inviteToBlockLeave) but they haven't accepted or
+    // declined yet — reserves a seat toward BLOCK_LEAVE_MAX_STUDENTS without
+    // counting toward the submit threshold, and doesn't appear as a
+    // committed member until they respond.
+    status: { type: String, enum: ["JOINED", "INVITED"], default: "JOINED" },
   },
   { _id: false }
 );

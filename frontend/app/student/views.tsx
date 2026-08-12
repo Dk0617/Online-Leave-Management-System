@@ -7,11 +7,19 @@ import { StatTile, Badge, Button, Card } from "@/src/components/ui";
 import { LeaveDetailModal } from "@/src/components/leave";
 import { PhotoCropModal } from "@/src/components/PhotoCropModal";
 import { TimeSelect } from "@/src/components/TimeSelect";
+import { DateRangeCalendar } from "@/src/components/DateRangeCalendar";
 import { useAuth } from "@/src/AuthContext";
 import { useStudentPortal, NewBlockLeaveInput } from "@/src/hooks/useStudentPortal";
 import { isApproved, isBlockLeaveApproved, isGateEligible, isRejected, isStageMoot, requiresAttachment } from "@/src/api";
 import { downloadBlockLeavePassPdf, downloadLeavePassPdf } from "@/src/pdf";
-import { BLOCK_LEAVE_MAX_STUDENTS, BLOCK_LEAVE_MIN_STUDENTS, LEAVE_TYPE_LABELS, LeaveRequest, LeaveType } from "@/src/types";
+import {
+  BLOCK_LEAVE_MAX_STUDENTS,
+  BLOCK_LEAVE_MIN_STUDENTS,
+  InvitableStudent,
+  LEAVE_TYPE_LABELS,
+  LeaveRequest,
+  LeaveType,
+} from "@/src/types";
 import styles from "./student.module.css";
 
 function statusBadge(status: string) {
@@ -201,24 +209,26 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       {l.startDate}
                       {startNote && (
-                        <div className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]">
+                        <span
+                          title={`Edited by HOD — was ${startNote}`}
+                          className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(245,158,11,0.12)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]"
+                        >
                           <span aria-hidden>✏️</span>
-                          <span>Edited</span>
-                          <span className="font-normal text-[var(--muted)]">· was {startNote}</span>
-                        </div>
+                        </span>
                       )}
                     </td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       {l.endDate}
                       {endNote && (
-                        <div className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full bg-[rgba(245,158,11,0.12)] px-2 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]">
+                        <span
+                          title={`Edited by HOD — was ${endNote}`}
+                          className="ml-1.5 inline-flex items-center rounded-full bg-[rgba(245,158,11,0.12)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--warn)] ring-1 ring-inset ring-[rgba(245,158,11,0.25)]"
+                        >
                           <span aria-hidden>✏️</span>
-                          <span>Edited</span>
-                          <span className="font-normal text-[var(--muted)]">· was {endNote}</span>
-                        </div>
+                        </span>
                       )}
                     </td>
                     {isCadet ? (
@@ -601,24 +611,28 @@ export function ApplyLeave({
             </div>
           )}
 
+          <div>
+            <label className={styles.label}>
+              Leave Dates<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <DateRangeCalendar
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(s, e) => {
+                setStartDate(s);
+                setEndDate(e);
+              }}
+              minDate={isMedical ? medicalBackdateFloor : today}
+              blockedDays={portal.blockedDays}
+            />
+          </div>
+
           <div className={styles.formGrid}>
-            <div>
-              <label className={styles.label}>
-                Start Date<span className="ml-0.5 text-[var(--err)]">*</span>
-              </label>
-              <input type="date" min={isMedical ? medicalBackdateFloor : today} value={startDate} onChange={(e) => setStartDate(e.target.value)} className={styles.input} />
-            </div>
             <div>
               <label className={styles.label}>
                 Start Time<span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
               <TimeSelect value={startTime} onChange={setStartTime} className={styles.input} />
-            </div>
-            <div>
-              <label className={styles.label}>
-                End Date<span className="ml-0.5 text-[var(--err)]">*</span>
-              </label>
-              <input type="date" min={isMedical ? medicalBackdateFloor : today} value={endDate} onChange={(e) => setEndDate(e.target.value)} className={styles.input} />
             </div>
             <div>
               <label className={styles.label}>
@@ -787,7 +801,19 @@ export function ApplyLeave({
 // it's ever reached another way).
 export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPortal> }) {
   const { user } = useAuth();
-  const { openBlockLeave, myBlockLeaves, startBlockLeave, joinBlockLeave, submitBlockLeave, error, refresh } = portal;
+  const {
+    openBlockLeave,
+    myBlockLeaves,
+    blockLeaveInvitations,
+    startBlockLeave,
+    joinBlockLeave,
+    submitBlockLeave,
+    searchInvitableStudents,
+    inviteToBlockLeave,
+    respondToBlockLeaveInvite,
+    error,
+    refresh,
+  } = portal;
 
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -796,16 +822,72 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [inviteQuery, setInviteQuery] = useState("");
+  const [inviteResults, setInviteResults] = useState<InvitableStudent[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const myEntry = openBlockLeave?.students.find((s) => s.studentId === user?.id);
+
+  // Only a joined member of the currently-open roster can search for and
+  // invite other students — same reasoning as who can submit it (see
+  // backend/controllers/blockleavecontrol.js inviteToBlockLeave).
+  useEffect(() => {
+    if (!openBlockLeave || myEntry?.status !== "JOINED" || inviteQuery.trim().length < 2) {
+      setInviteResults([]);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchInvitableStudents(openBlockLeave.id, inviteQuery.trim())
+        .then(setInviteResults)
+        .catch(() => setInviteResults([]))
+        .finally(() => setSearching(false));
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteQuery, openBlockLeave?.id, myEntry?.status]);
 
   if (user?.studentType === "CADET") {
     return <p className="text-sm text-[var(--muted)]">Block Leave is only available to Day Scholars.</p>;
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const myEntry = openBlockLeave?.students.find((s) => s.studentId === user?.id);
   const isMember = !!myEntry;
-  const count = openBlockLeave?.students.length ?? 0;
-  const canSubmit = isMember && count >= BLOCK_LEAVE_MIN_STUDENTS;
+  // Invited-but-undecided seats still reserve a spot toward the 30-student
+  // cap, but only joined (accepted) students count toward the 5-student
+  // submit threshold — mirrors the backend split in blockleavecontrol.js.
+  const totalCount = openBlockLeave?.students.length ?? 0;
+  const joinedCount = openBlockLeave?.students.filter((s) => s.status === "JOINED").length ?? 0;
+  const canSubmit = isMember && myEntry?.status === "JOINED" && joinedCount >= BLOCK_LEAVE_MIN_STUDENTS;
+
+  async function handleInvite(studentId: string) {
+    if (!openBlockLeave) return;
+    setInvitingId(studentId);
+    setFormError(null);
+    try {
+      await inviteToBlockLeave(openBlockLeave.id, studentId);
+      setInviteQuery("");
+      setInviteResults([]);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to invite student");
+    } finally {
+      setInvitingId(null);
+    }
+  }
+
+  async function handleRespond(blockId: string, accept: boolean) {
+    setRespondingId(blockId);
+    setFormError(null);
+    try {
+      await respondToBlockLeaveInvite(blockId, accept);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to respond to invitation");
+    } finally {
+      setRespondingId(null);
+    }
+  }
 
   async function handleStart(e: FormEvent) {
     e.preventDefault();
@@ -847,7 +929,7 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
     if (!openBlockLeave) return;
     if (
       !confirm(
-        `Submit this Block Leave with ${count} student(s) for HOD approval? No more students will be able to join afterward.`
+        `Submit this Block Leave with ${joinedCount} student(s) for HOD approval? No more students will be able to join afterward.`
       )
     ) {
       return;
@@ -881,6 +963,46 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
           as a single decision covering everyone on the roster.
         </div>
       </div>
+
+      {blockLeaveInvitations.length > 0 && (
+        <Card className="mb-6 border-2 !border-[var(--sky)] p-5">
+          <h2 className="mb-3 text-sm font-bold text-[var(--white)]">✉️ Block Leave Invitations</h2>
+          <div className="space-y-3">
+            {blockLeaveInvitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--card2)] px-4 py-3"
+              >
+                <div className="text-xs text-[var(--white)]">
+                  <div className="font-bold">{inv.department} Block Leave</div>
+                  <div className="mt-0.5 text-[var(--muted)]">
+                    {inv.startDate} {inv.startTime} – {inv.endDate} {inv.endTime} · {inv.reason}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    className="!px-3 !py-1.5 !text-[11px]"
+                    disabled={respondingId === inv.id}
+                    onClick={() => handleRespond(inv.id, false)}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    variant="accent"
+                    className="!px-3 !py-1.5 !text-[11px]"
+                    disabled={respondingId === inv.id}
+                    onClick={() => handleRespond(inv.id, true)}
+                  >
+                    {respondingId === inv.id ? "Joining…" : "Accept & Join"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {formError && <p className="mt-3 text-xs text-[var(--err)]">{formError}</p>}
+        </Card>
+      )}
 
       {!openBlockLeave ? (
         <Card className="p-5">
@@ -950,10 +1072,12 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-[var(--white)]">
-              {openBlockLeave.department} Block Leave — {count}/{BLOCK_LEAVE_MAX_STUDENTS} joined
+              {openBlockLeave.department} Block Leave — {totalCount}/{BLOCK_LEAVE_MAX_STUDENTS} seats
             </h2>
-            <Badge tone={count >= BLOCK_LEAVE_MIN_STUDENTS ? "green" : "amber"}>
-              {count >= BLOCK_LEAVE_MIN_STUDENTS ? "Ready to submit" : `Needs ${BLOCK_LEAVE_MIN_STUDENTS - count} more to submit`}
+            <Badge tone={joinedCount >= BLOCK_LEAVE_MIN_STUDENTS ? "green" : "amber"}>
+              {joinedCount >= BLOCK_LEAVE_MIN_STUDENTS
+                ? "Ready to submit"
+                : `Needs ${BLOCK_LEAVE_MIN_STUDENTS - joinedCount} more to submit`}
             </Badge>
           </div>
           <div className={`${styles.formGrid} mb-4`}>
@@ -982,6 +1106,7 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
                   <th>No.</th>
                   <th>Index Number</th>
                   <th>Name</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -997,11 +1122,63 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
                         </span>
                       )}
                     </td>
+                    <td>
+                      {s.status === "INVITED" ? (
+                        <Badge tone="amber">Invited — awaiting response</Badge>
+                      ) : (
+                        <span className="text-xs text-[var(--muted)]">Joined</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {myEntry?.status === "JOINED" && (
+            <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--card2)] p-4">
+              <div className={styles.label}>Invite another student from your department</div>
+              <input
+                value={inviteQuery}
+                onChange={(e) => setInviteQuery(e.target.value)}
+                placeholder="Search by name or index number…"
+                className={`${styles.input} mt-1.5`}
+                disabled={totalCount >= BLOCK_LEAVE_MAX_STUDENTS}
+              />
+              {totalCount >= BLOCK_LEAVE_MAX_STUDENTS ? (
+                <p className="mt-2 text-[11px] text-[var(--muted)]">This Block Leave is full — no more seats to invite into.</p>
+              ) : (
+                inviteQuery.trim().length >= 2 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {searching ? (
+                      <p className="text-[11px] text-[var(--muted)]">Searching…</p>
+                    ) : inviteResults.length === 0 ? (
+                      <p className="text-[11px] text-[var(--muted)]">No matching students found.</p>
+                    ) : (
+                      inviteResults.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2"
+                        >
+                          <div className="text-xs text-[var(--white)]">
+                            {r.name} <span className="text-[var(--muted)]">· {r.indexNumber}</span>
+                          </div>
+                          <Button
+                            variant="secondary"
+                            className="!px-2.5 !py-1 !text-[11px]"
+                            disabled={invitingId === r.id}
+                            onClick={() => handleInvite(r.id)}
+                          >
+                            {invitingId === r.id ? "Inviting…" : "Invite"}
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          )}
 
           {formError && <p className="mt-3 text-sm text-[var(--err)]">{formError}</p>}
 
@@ -1010,19 +1187,23 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
               <Button variant="accent" onClick={handleJoin} disabled={submitting}>
                 {submitting ? "Joining…" : "Join this Block Leave"}
               </Button>
+            ) : myEntry?.status === "INVITED" ? (
+              <p className="text-xs text-[var(--muted)]">
+                You&apos;ve been invited to this roster — respond above under Invitations.
+              </p>
             ) : (
               <>
                 <p className="text-xs text-[var(--muted)]">You&apos;re No. {myEntry!.no} on this roster.</p>
                 <Button variant="primary" onClick={handleSubmitForApproval} disabled={submitting || !canSubmit}>
-                  {submitting ? "Submitting…" : `Submit for Approval (${count})`}
+                  {submitting ? "Submitting…" : `Submit for Approval (${joinedCount})`}
                 </Button>
               </>
             )}
           </div>
-          {isMember && !canSubmit && (
+          {myEntry?.status === "JOINED" && !canSubmit && (
             <p className="mt-2 text-xs text-[var(--muted)]">
-              At least {BLOCK_LEAVE_MIN_STUDENTS} students must join before this can be submitted — it also
-              auto-submits once {BLOCK_LEAVE_MAX_STUDENTS} students have joined.
+              At least {BLOCK_LEAVE_MIN_STUDENTS} joined students are needed before this can be submitted — it also
+              auto-submits once {BLOCK_LEAVE_MAX_STUDENTS} seats are filled.
             </p>
           )}
         </Card>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  CalendarDays,
   CalendarRange,
   Construction,
   GraduationCap,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { MyProfile } from "@/src/components/MyProfile";
+import { useAuth } from "@/src/AuthContext";
 import { useAdminPortal } from "@/src/hooks/useAdminPortal";
 import {
   Dashboard,
@@ -29,6 +31,7 @@ import {
   AuditLog,
   HodCover,
   PhotoRequests,
+  Calendar,
 } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
@@ -41,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "squadran", label: "Squadron Commander", icon: Swords },
   { key: "sdd", label: "Senior Deputy Dean", icon: Star },
   { key: "gate", label: "Gate Staff", icon: Construction },
+  { key: "calendar", label: "Event Calendar", icon: CalendarDays },
   { key: "photoRequests", label: "Photo Requests", icon: ImageIcon },
   { key: "profile", label: "My Profile", icon: User },
   { key: "passwords", label: "Password Changes", icon: KeyRound },
@@ -57,6 +61,7 @@ const TITLES: Record<string, string> = {
   squadran: "Squadron Commander",
   sdd: "Senior Deputy Dean",
   gate: "Gate Staff",
+  calendar: "Event Calendar",
   photoRequests: "Photo Requests",
   profile: "My Profile",
   passwords: "Password Changes",
@@ -64,6 +69,7 @@ const TITLES: Record<string, string> = {
 };
 
 export default function AdminPage() {
+  const { user } = useAuth();
   const [view, setView] = useState("dashboard");
   const portal = useAdminPortal();
 
@@ -74,6 +80,7 @@ export default function AdminPage() {
       navItems={NAV_ITEMS}
       activeView={view}
       onNavigate={setView}
+      roleTag={user?.department}
     >
       {view === "dashboard" && <Dashboard portal={portal} />}
       {view === "intakes" && <Intakes portal={portal} />}
@@ -86,6 +93,7 @@ export default function AdminPage() {
       )}
       {view === "gate" && <StaffRole portal={portal} role="GATE" title="Gate Staff" extraLabel="Post" extraPlaceholder="e.g. Main Gate" />}
       {view === "troop" && <Troop portal={portal} />}
+      {view === "calendar" && <Calendar portal={portal} />}
       {view === "photoRequests" && <PhotoRequests portal={portal} />}
       {view === "profile" && <MyProfile />}
       {view === "passwords" && <PasswordChanges portal={portal} />}
