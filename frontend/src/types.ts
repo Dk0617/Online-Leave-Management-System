@@ -259,10 +259,15 @@ export interface Movement {
   // backend/controllers/movementcontrol.js) — joined in from Student since
   // Movement itself doesn't store it.
   department?: string;
-  // Set on an Entry movement logged after the linked leave's own approved
-  // end date/time — gate staff still let the student back in, but this
-  // flags the late return. Always false/undefined for Exit movements.
+  // Set on an Entry movement logged after 18:00 (or after the linked
+  // leave's own approved end date/time) — gate staff still let the student
+  // back in, but this flags the late return. Always false/undefined for
+  // Exit movements.
   lateEntry?: boolean;
+  // Set on an Exit movement logged before 06:00 — gate staff still let the
+  // student out, but this flags the curfew violation. Always
+  // false/undefined for Entry movements.
+  earlyExit?: boolean;
 }
 
 // ── Admin: password-change notifications & audit log ─────────────────

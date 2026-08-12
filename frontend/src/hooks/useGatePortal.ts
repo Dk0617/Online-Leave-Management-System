@@ -60,14 +60,14 @@ export function useGatePortal() {
     direction: "Exit" | "Entry";
     leaveId?: string;
     notes?: string;
-    // Only meaningful for a curfew-blocked Entry — the first attempt gets
-    // the warning back from the server without logging anything; resubmit
-    // with this set to actually record it (flagged as late). See
-    // backend/controllers/gatecontrol.js logMovement.
-    confirmLate?: boolean;
-  }) {
-    await api.post("/gate/movements", input);
+  }): Promise<Movement> {
+    // Always logs in one call — a curfew violation (early exit / late
+    // entry) is recorded and flagged, never blocked or held for a second
+    // confirmation click. See backend/controllers/gatecontrol.js
+    // logMovement.
+    const raw = await api.post<Record<string, unknown>>("/gate/movements", input);
     await refresh();
+    return normalizeMovement(raw);
   }
 
   async function clearMovementLog() {

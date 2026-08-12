@@ -39,7 +39,7 @@ const TOKEN_KEY = "ols_token";
 // interval instead, so a newly-submitted leave (or a decision made on one)
 // shows up for other roles without anyone having to manually reload the
 // page. 20s balances "feels prompt" against not hammering the API.
-export const POLL_INTERVAL_MS = 20_000;
+export const POLL_INTERVAL_MS = 30_000;
 
 export class ApiError extends Error {
   status: number;
@@ -266,6 +266,7 @@ export function normalizeMovement(raw: Raw): Movement {
     timestamp: raw.createdAt as string,
     department: raw.department as string | undefined,
     lateEntry: raw.lateEntry as boolean | undefined,
+    earlyExit: raw.earlyExit as boolean | undefined,
   };
 }
 

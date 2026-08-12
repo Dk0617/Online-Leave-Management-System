@@ -189,14 +189,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
@@ -269,7 +262,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSddPortal> })
               <tr key={l.id}>
                 <td>{l.studentName}</td>
                 <td>{l.indexNumber}</td>
-                <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td>{l.startDate}</td>
                 <td>
                   <Badge tone={tone(l.sddStatus)}>{l.sddStatus}</Badge>
@@ -322,14 +315,7 @@ export function Overview({ portal }: { portal: ReturnType<typeof useSddPortal> }
                   <tr key={l.id}>
                     <td>{l.studentName}</td>
                     <td>{l.indexNumber}</td>
-                    <td>
-                      {LEAVE_TYPE_LABELS[l.type]}
-                      {l.priority === "emergency" && (
-                        <span className="ml-1">
-                          <Badge tone="red">🚨</Badge>
-                        </span>
-                      )}
-                    </td>
+                    <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                     <td>{l.appliedDate}</td>
                     <td>
                       <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>

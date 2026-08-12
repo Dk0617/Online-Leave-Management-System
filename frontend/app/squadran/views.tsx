@@ -251,14 +251,7 @@ function SquadranPendingTable({
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
@@ -326,7 +319,7 @@ export function History({ portal }: { portal: ReturnType<typeof useSquadranPorta
                   {l.studentName}
                   <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                 </td>
-                <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td>{l.startDate}</td>
                 <td>
                   <Badge tone={tone(l.sqnStatus)}>{l.sqnStatus}</Badge>

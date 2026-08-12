@@ -305,7 +305,7 @@ export function LeaveRecords({ portal }: { portal: ReturnType<typeof useAdminPor
                     {l.studentName}
                     <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                   </td>
-                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td className="text-xs text-[var(--muted)]">{l.appliedDate || "—"}</td>
                   <td>{l.startDate}</td>
                   <td>
@@ -1628,18 +1628,12 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const {
     hods,
     lecturers,
-    hodUnavailability,
-    lecturerUnavailability,
-    addHodUnavailability,
-    removeHodUnavailability,
     addLecturer,
     editLecturer,
     removeLecturer,
     addLecturerMember,
     editLecturerMember,
     removeLecturerMember,
-    addLecturerUnavailability,
-    removeLecturerUnavailability,
   } = portal;
 
   // ── Department covering accounts ─────────────────────────────────
@@ -1724,69 +1718,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
 
   const rosterLecturer = lecturers.find((l) => l.id === rosterFor) || null;
   const existingDepartments = new Set(lecturers.map((l) => l.department));
-
-  // ── HOD unavailability ────────────────────────────────────────────
-  const [hodId, setHodId] = useState("");
-  const [hodFrom, setHodFrom] = useState(todayStr());
-  const [hodTo, setHodTo] = useState(todayStr());
-  const [hodReason, setHodReason] = useState("");
-  const [hodError, setHodError] = useState<string | null>(null);
-
-  // ── Mark a roster lecturer unavailable ────────────────────────────
-  const [lectAccountId, setLectAccountId] = useState("");
-  const [lectMemberId, setLectMemberId] = useState("");
-  const [lectFrom, setLectFrom] = useState(todayStr());
-  const [lectTo, setLectTo] = useState(todayStr());
-  const [lectReason, setLectReason] = useState("");
-  const [lectError, setLectError] = useState<string | null>(null);
-
-  const today = todayStr();
-  const selectedLectAccount = lecturers.find((l) => l.id === lectAccountId) || null;
-
-  async function handleAddHod() {
-    if (!hodId) {
-      setHodError("Select an HOD.");
-      return;
-    }
-    if (hodTo < hodFrom) {
-      setHodError("End date can't be before start date.");
-      return;
-    }
-    setHodError(null);
-    try {
-      await addHodUnavailability({ hodId, fromDate: hodFrom, toDate: hodTo, reason: hodReason.trim() || undefined });
-      setHodId("");
-      setHodReason("");
-    } catch (err) {
-      setHodError(err instanceof Error ? err.message : "Failed to mark HOD unavailable");
-    }
-  }
-
-  async function handleAddLecturerUnavailability() {
-    if (!lectAccountId || !lectMemberId) {
-      setLectError("Select a department and a lecturer.");
-      return;
-    }
-    if (lectTo < lectFrom) {
-      setLectError("End date can't be before start date.");
-      return;
-    }
-    setLectError(null);
-    try {
-      await addLecturerUnavailability({
-        lecturerId: lectAccountId,
-        memberId: lectMemberId,
-        fromDate: lectFrom,
-        toDate: lectTo,
-        reason: lectReason.trim() || undefined,
-      });
-      setLectAccountId("");
-      setLectMemberId("");
-      setLectReason("");
-    } catch (err) {
-      setLectError(err instanceof Error ? err.message : "Failed to mark lecturer unavailable");
-    }
-  }
 
   return (
     <div>
@@ -1919,226 +1850,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
                     </td>
                   </tr>
                 ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark HOD Unavailable</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={styles.label}>HOD</label>
-            <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
-              <option value="">Select HOD…</option>
-              {hods.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name} {h.department ? `(${h.department})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={styles.label}>From Date</label>
-            <input type="date" value={hodFrom} onChange={(e) => setHodFrom(e.target.value)} className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>To Date</label>
-            <input type="date" value={hodTo} onChange={(e) => setHodTo(e.target.value)} className={styles.input} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={styles.label}>Reason (optional)</label>
-            <input
-              value={hodReason}
-              onChange={(e) => setHodReason(e.target.value)}
-              placeholder="e.g. On annual leave"
-              className={styles.input}
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <Button variant="primary" onClick={handleAddHod}>
-            Mark Unavailable
-          </Button>
-        </div>
-        {hodError && <p className="mt-2 text-xs text-[var(--err)]">{hodError}</p>}
-      </Card>
-
-      <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">HOD Unavailability</h2>
-        <div className="overflow-x-auto">
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>HOD</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hodUnavailability.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                    No HOD unavailability marked.
-                  </td>
-                </tr>
-              ) : (
-                hodUnavailability.map((u) => {
-                  const active = u.fromDate <= today && today <= u.toDate;
-                  return (
-                    <tr key={u.id}>
-                      <td>
-                        {u.hodName}
-                        {u.hodDepartment && <div className="text-xs text-[var(--muted)]">{u.hodDepartment}</div>}
-                      </td>
-                      <td>{u.fromDate}</td>
-                      <td>{u.toDate}</td>
-                      <td className="text-[var(--muted)]">{u.reason || "—"}</td>
-                      <td>
-                        <Badge tone={active ? "amber" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
-                      </td>
-                      <td>
-                        <Button
-                          variant="danger"
-                          className="!px-2.5 !py-1 !text-[11px]"
-                          onClick={() => removeHodUnavailability(u.id)}
-                        >
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Mark a Roster Lecturer Unavailable</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={styles.label}>Department</label>
-            <select
-              value={lectAccountId}
-              onChange={(e) => {
-                setLectAccountId(e.target.value);
-                setLectMemberId("");
-              }}
-              className={styles.input}
-            >
-              <option value="">Select department…</option>
-              {lecturers.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.department}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={styles.label}>Lecturer</label>
-            <select
-              value={lectMemberId}
-              onChange={(e) => setLectMemberId(e.target.value)}
-              className={styles.input}
-              disabled={!selectedLectAccount}
-            >
-              <option value="">Select lecturer…</option>
-              {selectedLectAccount?.members
-                .slice()
-                .sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({TIER_LABELS[m.tier]}, rank {m.rank})
-                  </option>
-                ))}
-            </select>
-          </div>
-          <div>
-            <label className={styles.label}>From Date</label>
-            <input type="date" value={lectFrom} onChange={(e) => setLectFrom(e.target.value)} className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>To Date</label>
-            <input type="date" value={lectTo} onChange={(e) => setLectTo(e.target.value)} className={styles.input} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={styles.label}>Reason (optional)</label>
-            <input
-              value={lectReason}
-              onChange={(e) => setLectReason(e.target.value)}
-              placeholder="e.g. On annual leave"
-              className={styles.input}
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <Button variant="primary" onClick={handleAddLecturerUnavailability}>
-            Mark Unavailable
-          </Button>
-        </div>
-        {lectError && <p className="mt-2 text-xs text-[var(--err)]">{lectError}</p>}
-      </Card>
-
-      <Card className="p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Roster Unavailability</h2>
-        <div className="overflow-x-auto">
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Lecturer</th>
-                <th>Department</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lecturerUnavailability.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                    No lecturer unavailability marked.
-                  </td>
-                </tr>
-              ) : (
-                lecturerUnavailability.map((u) => {
-                  const active = u.fromDate <= today && today <= u.toDate;
-                  return (
-                    <tr key={u.id}>
-                      <td>
-                        {u.memberName || "Unknown"}
-                        {u.memberTier && (
-                          <div className="text-xs text-[var(--muted)]">
-                            {TIER_LABELS[u.memberTier]}, rank {u.memberRank}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-[var(--muted)]">{u.department || "—"}</td>
-                      <td>{u.fromDate}</td>
-                      <td>{u.toDate}</td>
-                      <td className="text-[var(--muted)]">{u.reason || "—"}</td>
-                      <td>
-                        <Badge tone={active ? "amber" : "gray"}>{active ? "Active" : "Not Active"}</Badge>
-                      </td>
-                      <td>
-                        <Button
-                          variant="danger"
-                          className="!px-2.5 !py-1 !text-[11px]"
-                          onClick={() => removeLecturerUnavailability(u.id)}
-                        >
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
               )}
             </tbody>
           </table>
@@ -2345,5 +2056,308 @@ export function Calendar({ portal }: { portal: ReturnType<typeof useAdminPortal>
         </>
       }
     />
+  );
+}
+
+// ==================================================================
+// Reports — an audit-ready view of leave activity over a date range, for
+// when a higher authority asks "who was away, from which department, and
+// when." Built entirely from portal.leaves (already loaded for the
+// Dashboard's own stats) filtered to the selected window — no separate
+// backend endpoint needed, so this can never drift from what the Dashboard
+// itself shows for the same records.
+// ==================================================================
+
+const REPORT_STATUS_COLORS = { Approved: "#22c55e", Pending: "#f59332", Rejected: "#ef4444" } as const;
+
+// Fixed order, never cycled per the department actually present — a
+// department keeps the same color across the donut/bars/CSV even as the
+// date range changes which ones show up. Avoids the reserved status hues
+// above (green/amber/red) so a department bar is never mistaken for a
+// status.
+const REPORT_DEPT_COLORS = ["#2563b0", "#7c3aed", "#0891b2", "#db2777", "#4338ca", "#78716c", "#ca8a04", "#059669"];
+
+function reportStatus(l: LeaveRequest): "Approved" | "Rejected" | "Pending" {
+  if (isApproved(l)) return "Approved";
+  if (isRejected(l)) return "Rejected";
+  return "Pending";
+}
+
+// Two leave-date ranges overlap the requested window — same inclusive
+// overlap test used server-side for event/workshop blocking — rather than
+// only counting leaves that started inside it, so a leave that was already
+// underway when the window opens (or still running when it closes) isn't
+// silently dropped from the audit.
+function overlapsWindow(l: LeaveRequest, from: string, to: string): boolean {
+  return l.startDate <= to && l.endDate >= from;
+}
+
+function StatusDonut({ approved, rejected, pending }: { approved: number; rejected: number; pending: number }) {
+  const total = approved + rejected + pending;
+  const segments: { label: keyof typeof REPORT_STATUS_COLORS; value: number }[] = [
+    { label: "Approved", value: approved },
+    { label: "Pending", value: pending },
+    { label: "Rejected", value: rejected },
+  ];
+  const r = 42;
+  const circumference = 2 * Math.PI * r;
+  const gap = total ? 3 : 0;
+  let offset = 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-6">
+      <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90 shrink-0">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--card2)" strokeWidth="16" />
+        {total > 0 &&
+          segments.map((s) => {
+            if (s.value === 0) return null;
+            const len = (s.value / total) * circumference;
+            const dash = Math.max(len - gap, 0);
+            const el = (
+              <circle
+                key={s.label}
+                cx="60"
+                cy="60"
+                r={r}
+                fill="none"
+                stroke={REPORT_STATUS_COLORS[s.label]}
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${circumference - dash}`}
+                strokeDashoffset={-offset}
+              />
+            );
+            offset += len;
+            return el;
+          })}
+      </svg>
+      <div className="space-y-1.5">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-2 text-xs">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: REPORT_STATUS_COLORS[s.label] }} />
+            <span className="w-16 text-[var(--white)]">{s.label}</span>
+            <span className="text-[var(--muted)]">
+              {s.value} ({total ? Math.round((s.value / total) * 100) : 0}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Leave.department is a snapshot taken at application time (see
+// studentcontrol.js applyLeave), not a live lookup — an older leave can
+// carry a shorter department string a student's record used before it was
+// standardized to "Department of X" (current Student.department always
+// uses the full form). Normalizing to the short form for grouping/display
+// here keeps one department's leaves from splitting into two report rows
+// just because some predate that standardization.
+function normalizeDept(department: string | undefined): string {
+  return (department || "—").replace(/^Department of\s+/i, "").trim();
+}
+
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+// A "2026-08-16 09:00"-shaped string opened in Excel gets auto-detected as
+// a date/time and reformatted to a wider display format than the column's
+// default width — showing as "########" until the column is manually
+// widened, not because the data is missing. A leading apostrophe is
+// Excel's own signal (honored on CSVs it opens, not just manual entry) to
+// keep a cell as literal text instead, so the value is always immediately
+// readable on open.
+function csvDateTime(value: string): string {
+  return `'${value}`;
+}
+
+function downloadCsv(filename: string, header: string[], rows: string[][]) {
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { leaves } = portal;
+  const today = new Date().toISOString().split("T")[0];
+  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [from, setFrom] = useState(monthAgo);
+  const [to, setTo] = useState(today);
+  const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+
+  const inRange = from && to && from <= to ? leaves.filter((l) => overlapsWindow(l, from, to)) : [];
+  const approved = inRange.filter(isApproved);
+  const rejected = inRange.filter(isRejected);
+  const pending = inRange.filter((l) => !isApproved(l) && !isRejected(l));
+  const approvalRate = inRange.length ? Math.round((approved.length / inRange.length) * 100) : 0;
+
+  const departments = Array.from(new Set(inRange.map((l) => normalizeDept(l.department)))).sort();
+  const byDept = departments
+    .map((d, i) => {
+      const rows = inRange.filter((l) => normalizeDept(l.department) === d);
+      return { department: d, color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length], rows };
+    })
+    .sort((a, b) => b.rows.length - a.rows.length);
+
+  const types = Array.from(new Set(inRange.map((l) => l.type)));
+  const byType = types
+    .map((t) => ({ type: t, rows: inRange.filter((l) => l.type === t) }))
+    .sort((a, b) => b.rows.length - a.rows.length);
+
+  function exportCsv() {
+    downloadCsv(
+      `leave-audit-${from}_to_${to}.csv`,
+      ["Student", "Index Number", "Department", "Leave Type", "From", "To", "Applied", "Status"],
+      inRange.map((l) => [
+        l.studentName,
+        l.indexNumber,
+        normalizeDept(l.department),
+        LEAVE_TYPE_LABELS[l.type],
+        csvDateTime(`${l.startDate} ${l.startTime}`),
+        csvDateTime(`${l.endDate} ${l.endTime}`),
+        l.appliedDate,
+        reportStatus(l),
+      ])
+    );
+  }
+
+  return (
+    <div>
+      <div className={styles.welcomeBanner}>
+        <div>
+          <h2 className="text-lg font-bold text-[var(--white)]">📊 Leave Audit Report</h2>
+          <p className="text-xs text-[var(--muted)]">
+            Pick a date range to see every leave active during it, broken down by department and status — for
+            audits, inspections, or reporting up the chain.
+          </p>
+        </div>
+      </div>
+
+      <Card className="mb-6 p-5 print:hidden">
+        <div className={styles.formGrid3}>
+          <div>
+            <label className={styles.label}>From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={styles.input} />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => window.print()} disabled={!inRange.length}>
+              🖨️ Print
+            </Button>
+            <Button type="button" variant="primary" onClick={exportCsv} disabled={!inRange.length}>
+              ⬇️ Export CSV
+            </Button>
+          </div>
+        </div>
+        {from && to && from > to && <p className="mt-3 text-xs text-[var(--err)]">&quot;From&quot; must be on or before &quot;To&quot;.</p>}
+      </Card>
+
+      {inRange.length === 0 ? (
+        <Card className="p-5">
+          <p className="text-xs text-[var(--muted)]">No leave records overlap this date range.</p>
+        </Card>
+      ) : (
+        <>
+          <div className={styles.statRow}>
+            <StatTile label="Leaves in Range" value={inRange.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Approved" value={approved.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Rejected" value={rejected.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Pending" value={pending.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Approval Rate" value={`${approvalRate}%`} icon={<ClipboardList size={20} />} />
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Status Breakdown</h2>
+              <StatusDonut approved={approved.length} rejected={rejected.length} pending={pending.length} />
+            </Card>
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-bold text-[var(--white)]">By Department</h2>
+              <div className="space-y-2.5">
+                {byDept.map((d) => (
+                  <Breakdown
+                    key={d.department}
+                    label={d.department}
+                    value={d.rows.length}
+                    total={inRange.length}
+                    color={d.color}
+                    onClick={() => setDrilldown({ title: `${d.department} (${from} – ${to})`, leaves: d.rows })}
+                  />
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <Card className="mb-6 p-5">
+            <h2 className="mb-4 text-sm font-bold text-[var(--white)]">By Leave Type</h2>
+            <div className="space-y-2.5">
+              {byType.map((t) => (
+                <Breakdown
+                  key={t.type}
+                  label={LEAVE_TYPE_LABELS[t.type]}
+                  value={t.rows.length}
+                  total={inRange.length}
+                  color="#2563b0"
+                  onClick={() => setDrilldown({ title: `${LEAVE_TYPE_LABELS[t.type]} (${from} – ${to})`, leaves: t.rows })}
+                />
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Every Leave in Range</h2>
+            <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Type</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inRange
+                    .slice()
+                    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                    .map((l) => (
+                      <tr key={l.id}>
+                        <td>
+                          {l.studentName}
+                          <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                        </td>
+                        <td>{normalizeDept(l.department)}</td>
+                        <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
+                        <td className="whitespace-nowrap">{l.startDate}</td>
+                        <td className="whitespace-nowrap">{l.endDate}</td>
+                        <td>
+                          <Badge tone={reportStatus(l) === "Approved" ? "green" : reportStatus(l) === "Rejected" ? "red" : "amber"}>
+                            {reportStatus(l)}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {drilldown && (
+        <LeaveListDrilldownModal title={drilldown.title} leaves={drilldown.leaves} onClose={() => setDrilldown(null)} />
+      )}
+    </div>
   );
 }

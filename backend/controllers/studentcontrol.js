@@ -136,6 +136,21 @@ export const applyLeave = async (req, res) => {
       .status(400)
       .json({ message: `Please complete: ${missing.join(", ")}` });
   }
+  // Emergency Leave skips the 2-day notice period and the campus curfew
+  // (see below) — a real safety valve for genuine emergencies, not a
+  // shortcut for "I feel like leaving early." A one-word or generic reason
+  // is the clearest sign of that misuse, so it's held to a stricter length
+  // than every other type's reason (which just needs to be non-empty).
+  // This can't detect a fabricated-but-detailed reason — that judgment call
+  // stays with the HOD reviewing it (see LeaveDetailModal) — but it does
+  // stop the laziest, most common form of gaming it.
+  const EMERGENCY_REASON_MIN_LENGTH = 20;
+  if (type === "Emergency Leave" && reason.trim().length < EMERGENCY_REASON_MIN_LENGTH) {
+    return res.status(400).json({
+      message:
+        "Emergency Leave needs a genuine emergency reason (at least 20 characters) — e.g. a serious family emergency, a death/funeral, an urgent medical situation, or another genuine unexpected circumstance. Use Personal Leave instead if this isn't a real emergency.",
+    });
+  }
   if (!/^\d{10}$/.test(contactNumber.trim())) {
     return res.status(400).json({ message: "Contact number must be exactly 10 digits, numbers only." });
   }
@@ -169,15 +184,17 @@ export const applyLeave = async (req, res) => {
   }
 
   // Every leave type except Emergency Leave and Medical Leave must be
-  // submitted at least 2 days ahead of the leave's own start date/time —
-  // Emergency Leave exists for same-day needs, Medical Leave for the
-  // backdating case just above (both would otherwise fail this check).
+  // submitted a minimum amount of time ahead of the leave's own start
+  // date/time — Emergency Leave exists for same-day needs, Medical Leave
+  // for the backdating case just above (both would otherwise fail this
+  // check). Personal Leave only needs 24 hours' notice; everything else
+  // in this bucket (currently just Academic Leave) still needs 2 days.
   if (type !== "Emergency Leave") {
-    const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+    const MIN_NOTICE_MS = type === "Personal Leave" ? 24 * 60 * 60 * 1000 : 2 * 24 * 60 * 60 * 1000;
     if (type !== "Medical Leave" && startDateTime.getTime() - Date.now() < MIN_NOTICE_MS) {
+      const noticeLabel = type === "Personal Leave" ? "24 hours" : "2 days";
       return res.status(400).json({
-        message:
-          "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.",
+        message: `This leave type must be applied for at least ${noticeLabel} before the leave start date. Use Emergency Leave if you need to apply later than that.`,
       });
     }
     if (minutesFromTimeString(startTime) < CAMPUS_EXIT_EARLIEST_MINUTES) {
@@ -373,9 +390,9 @@ export const myBlockedDays = async (req, res) => {
 };
 
 export const myLeaves = async (req, res) => {
-  // Newest application first (descending by submission date/time) — the
-  // most recently applied leave always appears at the top of the dashboard.
-  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: -1 });
+  const leaves = await Leave.find({ studentId: req.user.id })
+    .sort({ createdAt: -1 })
+    .select("-attachmentData");
   res.json(leaves);
 };
 
@@ -465,6 +482,7 @@ export const requestPhotoChange = async (req, res) => {
 export const myPhotoRequests = async (req, res) => {
   const requests = await PhotoChangeRequest.find({ studentId: req.user.id })
     .sort({ createdAt: -1 })
-    .limit(5);
+    .limit(5)
+    .select("-requestedPhoto");
   res.json(requests);
 };

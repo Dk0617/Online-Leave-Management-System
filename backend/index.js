@@ -15,9 +15,15 @@ import gateRoutes from "./routes/gateRoutes.js";
 dotenv.config();
 
 const app = express();
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
+
+app.use(express.json());
 
 // Middleware
-app.use(cors());
 // Raised from the default 100kb — leave attachments (capped at 20MB raw,
 // ~27MB once base64-encoded — see MAX_ATTACHMENT_BYTES in studentcontrol.js)
 // and student photos (~2MB) are stored as base64 in the request body. An

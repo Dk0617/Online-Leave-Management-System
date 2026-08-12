@@ -200,14 +200,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useStudentPort
                 return (
                   <tr key={l.id}>
                     <td className={companion ? "!border-l-4 !border-l-[var(--sky)]" : ""}>{l.appliedDate}</td>
-                    <td>
+                    <td className="whitespace-nowrap">
                       {LEAVE_TYPE_LABELS[l.type]}
                       {companion && " + Personal Leave"}
-                      {l.priority === "emergency" && (
-                        <span className="ml-1">
-                          <Badge tone="red">Emergency</Badge>
-                        </span>
-                      )}
                     </td>
                     <td className="whitespace-nowrap">
                       {l.startDate}
@@ -316,6 +311,11 @@ const LEAVE_TYPES: LeaveType[] = [
 ];
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+// Mirrors the backend check in studentcontrol.js applyLeave — a longer
+// minimum than every other leave type's reason, since Emergency Leave skips
+// the 2-day notice period and the campus curfew and is meant only for a
+// genuine emergency, not a shortcut for leaving early.
+const EMERGENCY_REASON_MIN_LENGTH = 20;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -365,6 +365,20 @@ export function ApplyLeave({
   const isEmergency = type === "Emergency Leave";
   const isMedical = type === "Medical Leave";
   const isAcademic = type === "Academic Leave";
+  const isPersonal = type === "Personal Leave";
+  // Addresses the student has actually stayed at before, most recently
+  // applied first — lets them pick the same place again with one click
+  // instead of retyping it, without needing a separate saved-addresses
+  // endpoint (their own leave history already has this).
+  const pastAddresses = Array.from(
+    new Set(
+      portal.leaves
+        .slice()
+        .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate))
+        .map((l) => l.address?.trim())
+        .filter((a): a is string => !!a)
+    )
+  ).slice(0, 6);
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   // The linked Personal Leave that always accompanies an Academic Leave
   // follows the same document rule as a standalone Personal Leave —
@@ -380,7 +394,7 @@ export function ApplyLeave({
     ? medicalBackdateFloor
     : isEmergency
     ? today
-    : new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    : new Date(Date.now() + (isPersonal ? 24 : 48) * 60 * 60 * 1000).toISOString().split("T")[0];
 
   // Workshop days (or other mandatory-attendance academic days) the HOD has
   // marked block ordinary leave applications that overlap their actual
@@ -423,15 +437,15 @@ export function ApplyLeave({
       return "Start date/time can't be in the past.";
     }
     if (!isEmergency && !isMedical && startDate < minStartDate) {
-      return "Leave must be applied at least 2 days before the start date. Use Emergency Leave if this is urgent.";
+      return `Leave must be applied at least ${isPersonal ? "24 hours" : "2 days"} before the start date. Use Emergency Leave if this is urgent.`;
     }
     if (new Date(`${endDate}T${endTime}`) <= new Date(`${startDate}T${startTime}`)) {
       return "End date/time must be after start date/time — they can't be the same.";
     }
     if (!isEmergency) {
-      const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+      const MIN_NOTICE_MS = (isPersonal ? 24 : 48) * 60 * 60 * 1000;
       if (!isMedical && new Date(`${startDate}T${startTime}`).getTime() - Date.now() < MIN_NOTICE_MS) {
-        return "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.";
+        return `This leave type must be applied for at least ${isPersonal ? "24 hours" : "2 days"} before the leave start date. Use Emergency Leave if you need to apply later than that.`;
       }
       const [startHour, startMinute] = startTime.split(":").map(Number);
       const [endHour, endMinute] = endTime.split(":").map(Number);
@@ -460,6 +474,12 @@ export function ApplyLeave({
     if (personalDocRequired && !personalFile) missing.push("Personal Leave Supporting Document");
     if (missing.length) {
       setError(`Please complete: ${missing.join(", ")}`);
+      return;
+    }
+    if (isEmergency && reason.trim().length < EMERGENCY_REASON_MIN_LENGTH) {
+      setError(
+        "Emergency Leave needs a genuine emergency reason (at least 20 characters) — describe what happened, not just that you need to leave."
+      );
       return;
     }
     if (!/^\d{10}$/.test(contactNumber.trim())) {
@@ -563,7 +583,7 @@ export function ApplyLeave({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-[var(--white)]">{user?.name}</div>
+            <div className="truncate text-sm font-bold text-[var(--white)]">{user?.name}</div>
             <div className="mt-0.5 flex items-center gap-1 text-xs text-[var(--muted)]">
               📍{" "}
               <span className="truncate">
@@ -718,15 +738,30 @@ export function ApplyLeave({
           ) : (
             <div>
               <label className={styles.label}>
-                Reason<span className="ml-0.5 text-[var(--err)]">*</span>
+                {isEmergency ? "Emergency Reason" : "Reason"}
+                <span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
+              {isEmergency && (
+                <p className="mb-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                  Describe the genuine emergency — e.g. a serious family emergency, a death/funeral, an urgent
+                  medical situation, or another genuine unexpected circumstance. Your HOD reviews this before
+                  approving; a vague or one-line reason won&apos;t be accepted.
+                </p>
+              )}
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
-                placeholder="Describe your reason…"
+                placeholder={isEmergency ? "What happened, and why it can't wait…" : "Describe your reason…"}
                 className={styles.input}
               />
+              {isEmergency && reason.trim().length > 0 && reason.trim().length < EMERGENCY_REASON_MIN_LENGTH && (
+                <p className="mt-1 text-[11px] text-[var(--warn)]">
+                  {EMERGENCY_REASON_MIN_LENGTH - reason.trim().length} more character
+                  {EMERGENCY_REASON_MIN_LENGTH - reason.trim().length === 1 ? "" : "s"} needed — describe the
+                  actual emergency, not just that you need to leave.
+                </p>
+              )}
             </div>
           )}
 
@@ -734,6 +769,26 @@ export function ApplyLeave({
             <label className={styles.label}>
               Current Address During Leave<span className="ml-0.5 text-[var(--err)]">*</span>
             </label>
+            {pastAddresses.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Used before:</span>
+                {pastAddresses.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setAddress(a)}
+                    className={`max-w-[220px] truncate rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      address.trim() === a
+                        ? "border-[var(--sky)] bg-[rgba(74,144,217,0.18)] text-[var(--white)]"
+                        : "border-[var(--border)] text-[var(--muted)] hover:border-[rgba(74,144,217,0.4)] hover:text-[var(--white)]"
+                    }`}
+                    title={a}
+                  >
+                    📍 {a}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               value={address}
               onChange={(e) => setAddress(e.target.value)}

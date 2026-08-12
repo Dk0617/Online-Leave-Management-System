@@ -185,7 +185,9 @@ export function DashboardShell({
           <div className="text-[9px] font-bold uppercase tracking-widest text-[var(--sky)]">
             Logged in as
           </div>
-          <div className="mt-0.5 text-[13px] font-bold text-white">{user.name}</div>
+          <div className="mt-0.5 truncate text-[13px] font-bold text-white" title={user.name}>
+            {user.name}
+          </div>
           {roleTag && (
             <div className="mt-0.5 whitespace-pre-line font-mono text-[11px] text-[var(--muted)]">{roleTag}</div>
           )}

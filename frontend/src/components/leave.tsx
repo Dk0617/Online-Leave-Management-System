@@ -311,44 +311,52 @@ export function LeaveDetailModal({
             </div>
           )}
 
-          <Row
-            label="Leave Type"
-            value={
-              <>
-                {LEAVE_TYPE_LABELS[leave.type]}
-                {leave.priority === "emergency" && (
-                  <span className="ml-2">
-                    <Badge tone="red">Emergency</Badge>
-                  </span>
-                )}
-              </>
-            }
-          />
-          <Row
-            label="From"
-            value={
-              <>
-                {leave.startDate} {leave.startTime}
-                {leave.dateTimeCorrectedByHod && (
-                  <span className="ml-2">
-                    <Badge tone="amber">✏️ Edited by HOD</Badge>
-                  </span>
-                )}
-              </>
-            }
-          />
-          <Row label="To" value={`${leave.endDate} ${leave.endTime}`} />
+          <Row label="Leave Type" value={LEAVE_TYPE_LABELS[leave.type]} />
+          {/* From/To are only shown here as plain rows when they were never
+              corrected — once corrected, the table right below already
+              carries both the original and corrected values, so repeating
+              just the corrected side up here would be redundant. */}
+          {!leave.dateTimeCorrectedByHod && (
+            <>
+              <Row label="From" value={`${leave.startDate} ${leave.startTime}`} />
+              <Row label="To" value={`${leave.endDate} ${leave.endTime}`} />
+            </>
+          )}
 
           {leave.dateTimeCorrectedByHod && (
-            <div className="mb-4 rounded-xl border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.1)] p-3.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-[var(--warn)]">
+            <div className="mb-4 overflow-hidden rounded-xl border border-[rgba(245,158,11,0.4)]">
+              <div className="bg-[rgba(245,158,11,0.1)] px-3.5 py-2 text-[10px] font-bold uppercase tracking-wide text-[var(--warn)]">
                 ✏️ Date/Time Corrected by HOD
               </div>
-              <div className="mt-1 text-[13px] text-[var(--white)]">
-                You originally applied for {leave.originalStartDate} {leave.originalStartTime} →{" "}
-                {leave.originalEndDate} {leave.originalEndTime}. Your HOD corrected this to the dates/times
-                shown above before approving.
-              </div>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[rgba(245,158,11,0.06)]">
+                    <th className="px-3.5 py-1.5 text-left font-semibold text-[var(--muted)]">&nbsp;</th>
+                    <th className="px-3.5 py-1.5 text-left font-semibold text-[var(--muted)]">From</th>
+                    <th className="px-3.5 py-1.5 text-left font-semibold text-[var(--muted)]">To</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-[rgba(245,158,11,0.2)]">
+                    <td className="px-3.5 py-1.5 font-semibold text-[var(--muted)]">Student applied</td>
+                    <td className="whitespace-nowrap px-3.5 py-1.5 text-[var(--white)]">
+                      {leave.originalStartDate} {leave.originalStartTime}
+                    </td>
+                    <td className="whitespace-nowrap px-3.5 py-1.5 text-[var(--white)]">
+                      {leave.originalEndDate} {leave.originalEndTime}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-[rgba(245,158,11,0.2)]">
+                    <td className="px-3.5 py-1.5 font-semibold text-[var(--warn)]">HOD corrected</td>
+                    <td className="whitespace-nowrap px-3.5 py-1.5 font-semibold text-[var(--white)]">
+                      {leave.startDate} {leave.startTime}
+                    </td>
+                    <td className="whitespace-nowrap px-3.5 py-1.5 font-semibold text-[var(--white)]">
+                      {leave.endDate} {leave.endTime}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
 

@@ -56,8 +56,16 @@ async function resolveDeptHod(req, res) {
 }
 
 export const adminListEvents = async (req, res) => {
-  const hod = await resolveDeptHod(req, res);
-  if (!hod) return;
+  // Read-only, so a department-less admin account (e.g. a general System
+  // Administrator login, not one of the per-department ones) gets an empty
+  // calendar here rather than a hard error — useAdminPortal's refresh()
+  // fetches this in the same Promise.all as every other admin screen's
+  // data, so throwing here would blank the admin's entire dashboard just
+  // because they have no Calendar tab to use anyway. Creating/deleting an
+  // event still requires a real department (see resolveDeptHod below).
+  const admin = await Admin.findById(req.user.id);
+  const hod = admin?.department ? await Hod.findOne({ department: admin.department }) : null;
+  if (!hod) return res.json([]);
   const events = await EventDay.find({ hodId: hod._id }).sort({ date: 1 });
   res.json(events);
 };

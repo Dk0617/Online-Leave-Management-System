@@ -59,7 +59,7 @@ const blockLeaveSchema = new mongoose.Schema(
     // (either a joined student chose to submit once the 5-student minimum
     // was reached, or the 30-student cap was hit and it auto-submitted) and
     // now routing through hodStatus -> troopStatus like a normal leave.
-    stage: { type: String, enum: ["FILLING", "SUBMITTED"], default: "FILLING" },
+    stage: { type: String, enum: ["FILLING", "SUBMITTED", "EXPIRED"], default: "FILLING" },
     submittedAt: String,
     submittedByStudentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
 

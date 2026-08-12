@@ -82,9 +82,12 @@ async function findConflict(studentId, startDate, startTime, endDate, endTime, e
     }
   }
 
+  // $elemMatch, not two separate "students.x" conditions — otherwise Mongo
+  // matches studentId against one roster entry and status against any other
+  // (e.g. a different student's JOINED entry), not necessarily this
+  // student's own.
   const blockCandidates = await BlockLeave.find({
-    "students.studentId": studentId,
-    "students.status": "JOINED",
+    students: { $elemMatch: { studentId, status: "JOINED" } },
     startDate: { $lte: endDate },
     endDate: { $gte: startDate },
     ...(excludeBlockLeaveId ? { _id: { $ne: excludeBlockLeaveId } } : {}),
@@ -283,9 +286,9 @@ export const submitBlockLeave = async (req, res) => {
 };
 
 export const myBlockLeaves = async (req, res) => {
-  const blocks = await BlockLeave.find({ "students.studentId": req.user.id, "students.status": "JOINED" }).sort({
-    createdAt: -1,
-  });
+  const blocks = await BlockLeave.find({
+    students: { $elemMatch: { studentId: req.user.id, status: "JOINED" } },
+  }).sort({ createdAt: -1 });
   res.json(blocks);
 };
 
@@ -379,8 +382,7 @@ export const inviteToBlockLeave = async (req, res) => {
 
 export const myBlockLeaveInvitations = async (req, res) => {
   const blocks = await BlockLeave.find({
-    "students.studentId": req.user.id,
-    "students.status": "INVITED",
+    students: { $elemMatch: { studentId: req.user.id, status: "INVITED" } },
     stage: "FILLING",
   }).sort({ createdAt: -1 });
   res.json(blocks);

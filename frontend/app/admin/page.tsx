@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  BarChart3,
   CalendarDays,
   CalendarRange,
   Construction,
@@ -32,10 +33,12 @@ import {
   HodCover,
   PhotoRequests,
   Calendar,
+  Reports,
 } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "reports", label: "Reports", icon: BarChart3 },
   { key: "intakes", label: "Intakes", icon: CalendarRange },
   { key: "students", label: "Students", icon: GraduationCap },
   { key: "hod", label: "HODs", icon: Landmark },
@@ -53,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
+  reports: "Reports",
   intakes: "Intakes",
   students: "Students",
   hod: "HODs",
@@ -83,6 +87,7 @@ export default function AdminPage() {
       roleTag={user?.department}
     >
       {view === "dashboard" && <Dashboard portal={portal} />}
+      {view === "reports" && <Reports portal={portal} />}
       {view === "intakes" && <Intakes portal={portal} />}
       {view === "students" && <Students portal={portal} />}
       {view === "hod" && <StaffRole portal={portal} role="HOD" title="HOD" extraLabel="Department" />}

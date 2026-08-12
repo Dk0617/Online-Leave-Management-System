@@ -5,11 +5,9 @@ import {
   api,
   normalizeAudit,
   normalizeEventDay,
-  normalizeHodUnavailability,
   normalizeIntake,
   normalizeLeave,
   normalizeLecturer,
-  normalizeLecturerUnavailability,
   normalizeNotification,
   normalizePhotoChangeRequest,
   normalizeStaff,
@@ -19,11 +17,9 @@ import {
 import {
   AuditEntry,
   EventDay,
-  HodUnavailability,
   Intake,
   LeaveRequest,
   LecturerAccount,
-  LecturerUnavailability,
   NotificationEntry,
   PhotoChangeRequest,
   StaffAccount,
@@ -90,8 +86,6 @@ export function useAdminPortal() {
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
-  const [hodUnavailability, setHodUnavailability] = useState<HodUnavailability[]>([]);
-  const [lecturerUnavailability, setLecturerUnavailability] = useState<LecturerUnavailability[]>([]);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,8 +107,6 @@ export function useAdminPortal() {
         auditRaw,
         lecturersRaw,
         eventsRaw,
-        hodUnavailabilityRaw,
-        lecturerUnavailabilityRaw,
         photoRequestsRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
@@ -129,8 +121,6 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/audit"),
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/events"),
-        api.get<Record<string, unknown>[]>("/admin/hod-unavailability"),
-        api.get<Record<string, unknown>[]>("/admin/lecturer-unavailability"),
         api.get<Record<string, unknown>[]>("/admin/photo-requests"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
@@ -145,8 +135,6 @@ export function useAdminPortal() {
       setAudit(auditRaw.map(normalizeAudit));
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setEvents(eventsRaw.map(normalizeEventDay));
-      setHodUnavailability(hodUnavailabilityRaw.map(normalizeHodUnavailability));
-      setLecturerUnavailability(lecturerUnavailabilityRaw.map(normalizeLecturerUnavailability));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
@@ -268,30 +256,6 @@ export function useAdminPortal() {
     await refresh();
   }
 
-  // ── HOD / Lecturer unavailability (feeds the seniority-chain cover) ─
-  async function addHodUnavailability(input: { hodId: string; fromDate: string; toDate: string; reason?: string }) {
-    await api.post("/admin/hod-unavailability", input);
-    await refresh();
-  }
-  async function removeHodUnavailability(id: string) {
-    await api.delete(`/admin/hod-unavailability/${id}`);
-    await refresh();
-  }
-  async function addLecturerUnavailability(input: {
-    lecturerId: string;
-    memberId: string;
-    fromDate: string;
-    toDate: string;
-    reason?: string;
-  }) {
-    await api.post("/admin/lecturer-unavailability", input);
-    await refresh();
-  }
-  async function removeLecturerUnavailability(id: string) {
-    await api.delete(`/admin/lecturer-unavailability/${id}`);
-    await refresh();
-  }
-
   // ── Photo change requests (student's photo is locked after their first
   // self-service set — see backend/models/Student.js photoLocked) ────
   async function approvePhotoRequest(id: string) {
@@ -316,8 +280,6 @@ export function useAdminPortal() {
     audit,
     lecturers,
     events,
-    hodUnavailability,
-    lecturerUnavailability,
     photoRequests,
     loading,
     error,
@@ -343,10 +305,6 @@ export function useAdminPortal() {
     removeLecturerMember,
     addEvent,
     removeEvent,
-    addHodUnavailability,
-    removeHodUnavailability,
-    addLecturerUnavailability,
-    removeLecturerUnavailability,
     approvePhotoRequest,
     rejectPhotoRequest,
   };
