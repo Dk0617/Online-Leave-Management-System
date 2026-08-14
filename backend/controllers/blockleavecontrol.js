@@ -52,6 +52,27 @@ function validateWindow(startDate, startTime, endDate, endTime) {
   return null;
 }
 
+// A FILLING roster whose window has already passed without being
+// submitted gets flipped to EXPIRED right here, the moment anything reads
+// it — no separate cron job needed since every relevant screen (open
+// roster, my block leaves) already queries through these two functions.
+async function expireIfPast(block) {
+  if (!block || block.stage !== "FILLING") return block;
+  const windowEnd = new Date(`${block.endDate}T${block.endTime}`);
+  if (windowEnd.getTime() < Date.now()) {
+    block.stage = "EXPIRED";
+    await block.save();
+  }
+  return block;
+}
+
+async function expireStaleFillingBlocks(blocks) {
+  for (const block of blocks) {
+    await expireIfPast(block);
+  }
+  return blocks;
+}
+
 // A student can't be committed to two overlapping leaves at once — same
 // physical-presence constraint applyLeave enforces for an ordinary Leave
 // (see studentcontrol.js), checked here against both their individual
@@ -139,8 +160,11 @@ export const openBlockLeave = async (req, res) => {
   if (student.studentType !== "DAY_SCHOLAR") {
     return res.json(null);
   }
-  const open = await BlockLeave.findOne({ department: student.department, stage: "FILLING" });
-  res.json(open);
+  let open = await BlockLeave.findOne({ department: student.department, stage: "FILLING" });
+  open = await expireIfPast(open);
+  // Once expired it's no longer "open" to join — a fresh Block Leave can
+  // now be started for the department instead.
+  res.json(open && open.stage === "FILLING" ? open : null);
 };
 
 export const createBlockLeave = async (req, res) => {
@@ -210,8 +234,9 @@ export const joinBlockLeave = async (req, res) => {
     return res.status(403).json({ message: "Block Leave is only available to Day Scholars" });
   }
 
-  const block = await BlockLeave.findById(req.params.id);
+  let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
+  block = await expireIfPast(block);
   if (block.stage !== "FILLING") {
     return res.status(409).json({ message: "This Block Leave is no longer accepting students" });
   }
@@ -258,8 +283,9 @@ export const joinBlockLeave = async (req, res) => {
 };
 
 export const submitBlockLeave = async (req, res) => {
-  const block = await BlockLeave.findById(req.params.id);
+  let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
+  block = await expireIfPast(block);
   if (block.stage !== "FILLING") {
     return res.status(409).json({ message: "This Block Leave has already been submitted" });
   }
@@ -289,6 +315,7 @@ export const myBlockLeaves = async (req, res) => {
   const blocks = await BlockLeave.find({
     students: { $elemMatch: { studentId: req.user.id, status: "JOINED" } },
   }).sort({ createdAt: -1 });
+  await expireStaleFillingBlocks(blocks);
   res.json(blocks);
 };
 
@@ -338,8 +365,9 @@ export const inviteToBlockLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
 
-  const block = await BlockLeave.findById(req.params.id);
+  let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
+  block = await expireIfPast(block);
   if (block.stage !== "FILLING") {
     return res.status(409).json({ message: "This Block Leave is no longer accepting students" });
   }
@@ -385,17 +413,21 @@ export const myBlockLeaveInvitations = async (req, res) => {
     students: { $elemMatch: { studentId: req.user.id, status: "INVITED" } },
     stage: "FILLING",
   }).sort({ createdAt: -1 });
-  res.json(blocks);
+  await expireStaleFillingBlocks(blocks);
+  // Re-filter after expiry — an invitation to a roster that just expired is
+  // no longer something to accept/decline.
+  res.json(blocks.filter((b) => b.stage === "FILLING"));
 };
 
 export const respondToBlockLeaveInvite = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
 
-  const block = await BlockLeave.findById(req.params.id);
+  let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
   const entry = block.students.find((s) => String(s.studentId) === student._id.toString() && s.status === "INVITED");
   if (!entry) return res.status(404).json({ message: "You have no pending invitation to this Block Leave" });
+  block = await expireIfPast(block);
   if (block.stage !== "FILLING") {
     return res.status(409).json({ message: "This Block Leave is no longer accepting students" });
   }
