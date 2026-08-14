@@ -1,5 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import { connectDB } from "./db.js";
 
@@ -11,8 +11,6 @@ import troopRoutes from "./routes/troopRoutes.js";
 import squadranRoutes from "./routes/squadranRoutes.js";
 import sddRoutes from "./routes/sddRoutes.js";
 import gateRoutes from "./routes/gateRoutes.js";
-
-dotenv.config();
 
 const app = express();
 app.use(cors({

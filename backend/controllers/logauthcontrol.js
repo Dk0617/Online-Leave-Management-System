@@ -30,37 +30,51 @@ export const login = async (req, res) => {
       .json({ message: "Username and password are required" });
   }
 
-  // Every login checks all 7 role collections for this username — done in
-  // parallel (same first-match order as before) instead of one at a time,
-  // since this runs on every single login attempt in the whole system.
+  const normalizedUsername = String(username).trim();
+
+  // Every login checks all role collections for this username. A username can
+  // legally exist in more than one role collection, so we must compare the
+  // submitted password against every matching record instead of stopping at
+  // the first match. That is the cause of the false "Invalid username or
+  // password" result when a valid account is hidden behind an earlier duplicate.
   const matches = await Promise.all(
     Object.entries(ROLE_MODELS).map(async ([role, Model]) => {
-      const user = await Model.findOne({ username });
+      const user = await Model.findOne({ username: normalizedUsername });
       return user ? { role, user } : null;
     })
   );
-  const found = matches.find(Boolean);
-  if (!found) {
-    return res.status(401).json({ message: "Invalid username or password" });
-  }
-  const { role, user } = found;
 
-  const isMatch = await user.comparePassword(password);
-  if (!isMatch) {
-    await writeAudit(role, username, "login_failed", "");
+  const candidates = matches.filter(Boolean);
+  if (!candidates.length) {
     return res.status(401).json({ message: "Invalid username or password" });
   }
 
-  const token = signToken(user, role);
+  let matchedUser = null;
+  let matchedRole = null;
 
-  const { password: _pw, ...safeUser } = user.toObject();
-  await writeAudit(role, username, "login_success", "");
+  for (const { role, user } of candidates) {
+    const isMatch = await user.comparePassword(password);
+    if (isMatch) {
+      matchedUser = user;
+      matchedRole = role;
+      break;
+    }
+  }
+
+  if (!matchedUser) {
+    await writeAudit(candidates[0].role, normalizedUsername, "login_failed", "");
+    return res.status(401).json({ message: "Invalid username or password" });
+  }
+
+  const token = signToken(matchedUser, matchedRole);
+  const { password: _pw, ...safeUser } = matchedUser.toObject();
+
+  writeAudit(matchedRole, normalizedUsername, "login_success", "");
   return res.json({
     token,
-    user: { ...safeUser, role, mustChangePassword: !!user.mustChangePassword },
+    user: { ...safeUser, role: matchedRole, mustChangePassword: !!matchedUser.mustChangePassword },
   });
 };
-
 // Shared by every role — looks up the caller's own model via their token.
 export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
