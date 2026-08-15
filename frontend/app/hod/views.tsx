@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ClipboardList, Eye, Hourglass, LogIn, Pencil, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Hourglass, LogIn, Pencil, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
@@ -152,14 +152,13 @@ export function Dashboard({
             icon={<XCircle size={20} />}
           />
         </ClickableStatCard>
-        <StatTile label="Total" value={history.length + pending.length} icon={<ClipboardList size={20} />} />
         <ClickableStatCard
           onClick={() => setMovementDrilldown({ title: "Entries Today — Your Department", entries: todayEntryEntries })}
         >
           <StatTile
             label="Entries Today (click for details)"
             value={todayEntryEntries.length}
-            tone="green"
+            tone="blue"
             icon={<LogIn size={20} />}
           />
         </ClickableStatCard>

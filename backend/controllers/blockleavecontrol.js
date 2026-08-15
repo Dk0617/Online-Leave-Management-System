@@ -9,9 +9,9 @@ import { generateVerifyCode } from "./studentcontrol.js";
 import { writeAudit } from "../utils/audit.js";
 import { sendApprovalEmail, sendRejectionEmail } from "../utils/mailer.js";
 import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
-
+ 
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
-
+ 
 // Same notice period and campus curfew as an ordinary Personal Leave (see
 // studentcontrol.js applyLeave) — a Block Leave is really just a Personal
 // Leave shared by a whole roster, so every rule that applies to one applies
@@ -23,7 +23,7 @@ function minutesFromTimeString(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
-
+ 
 function validateWindow(startDate, startTime, endDate, endTime) {
   if (!startDate || !startTime || !endDate || !endTime) {
     return "Start/end date and time are all required";
@@ -51,7 +51,7 @@ function validateWindow(startDate, startTime, endDate, endTime) {
   }
   return null;
 }
-
+ 
 // A FILLING roster whose window has already passed without being
 // submitted gets flipped to EXPIRED right here, the moment anything reads
 // it — no separate cron job needed since every relevant screen (open
@@ -65,14 +65,14 @@ async function expireIfPast(block) {
   }
   return block;
 }
-
+ 
 async function expireStaleFillingBlocks(blocks) {
   for (const block of blocks) {
     await expireIfPast(block);
   }
   return blocks;
 }
-
+ 
 // A student can't be committed to two overlapping leaves at once — same
 // physical-presence constraint applyLeave enforces for an ordinary Leave
 // (see studentcontrol.js), checked here against both their individual
@@ -82,7 +82,7 @@ async function expireStaleFillingBlocks(blocks) {
 async function findConflict(studentId, startDate, startTime, endDate, endTime, excludeBlockLeaveId) {
   const newStart = new Date(`${startDate}T${startTime}`);
   const newEnd = new Date(`${endDate}T${endTime}`);
-
+ 
   const leaveCandidates = await Leave.find({
     studentId,
     startDate: { $lte: endDate },
@@ -102,7 +102,7 @@ async function findConflict(studentId, startDate, startTime, endDate, endTime, e
       return `Already has a ${candidate.type} leave for ${candidate.startDate} ${candidate.startTime} – ${candidate.endDate} ${candidate.endTime} that overlaps with these dates/times.`;
     }
   }
-
+ 
   // $elemMatch, not two separate "students.x" conditions — otherwise Mongo
   // matches studentId against one roster entry and status against any other
   // (e.g. a different student's JOINED entry), not necessarily this
@@ -121,10 +121,10 @@ async function findConflict(studentId, startDate, startTime, endDate, endTime, e
       return `Already on another Block Leave (${block.department}) for ${block.startDate} ${block.startTime} – ${block.endDate} ${block.endTime} that overlaps with these dates/times.`;
     }
   }
-
+ 
   return null;
 }
-
+ 
 // A Workshop day (or other mandatory-attendance academic day) the HOD has
 // marked blocks a Block Leave the same way it blocks an ordinary leave
 // application (see studentcontrol.js applyLeave) — checked once against the
@@ -148,9 +148,9 @@ async function findMandatoryEventConflict(hodId, startDate, endDate, startTime, 
   }
   return null;
 }
-
+ 
 // ── Student side ─────────────────────────────────────────────────────
-
+ 
 // The one open (still-filling) roster for the student's own department, if
 // any — the join screen either shows this to join, or lets the student
 // start a brand new one when there isn't one.
@@ -166,41 +166,41 @@ export const openBlockLeave = async (req, res) => {
   // now be started for the department instead.
   res.json(open && open.stage === "FILLING" ? open : null);
 };
-
+ 
 export const createBlockLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
   if (student.studentType !== "DAY_SCHOLAR") {
     return res.status(403).json({ message: "Block Leave is only available to Day Scholars" });
   }
-
+ 
   const { startDate, startTime, endDate, endTime, reason } = req.body;
   if (!reason?.trim()) return res.status(400).json({ message: "A reason is required" });
   const windowError = validateWindow(startDate, startTime, endDate, endTime);
   if (windowError) return res.status(400).json({ message: windowError });
-
+ 
   const existing = await BlockLeave.findOne({ department: student.department, stage: "FILLING" });
   if (existing) {
     return res.status(409).json({
       message: "A Block Leave is already open for your department — join it instead of starting a new one.",
     });
   }
-
+ 
   const hod = await Hod.findOne({ department: student.department });
   if (!hod) {
     return res.status(400).json({
       message: `No HOD found for department "${student.department || "—"}". Ask admin to check that department names match exactly.`,
     });
   }
-
+ 
   const eventConflict = await findMandatoryEventConflict(hod._id, startDate, endDate, startTime, endTime);
   if (eventConflict) return res.status(400).json({ message: eventConflict });
-
+ 
   const conflict = await findConflict(student._id, startDate, startTime, endDate, endTime);
   if (conflict) return res.status(400).json({ message: conflict });
-
+ 
   const troops = await Troop.find({ intakes: student.intake }).select("_id");
-
+ 
   const created = await BlockLeave.create({
     department: student.department,
     hodId: hod._id,
@@ -222,18 +222,18 @@ export const createBlockLeave = async (req, res) => {
       },
     ],
   });
-
+ 
   await writeAudit("STUDENT", student.username, "block_leave_started", `id=${created._id}`);
   res.status(201).json(created);
 };
-
+ 
 export const joinBlockLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
   if (student.studentType !== "DAY_SCHOLAR") {
     return res.status(403).json({ message: "Block Leave is only available to Day Scholars" });
   }
-
+ 
   let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
   block = await expireIfPast(block);
@@ -249,10 +249,10 @@ export const joinBlockLeave = async (req, res) => {
   if (block.students.length >= BLOCK_LEAVE_MAX_STUDENTS) {
     return res.status(409).json({ message: "This Block Leave is already full" });
   }
-
+ 
   const conflict = await findConflict(student._id, block.startDate, block.startTime, block.endDate, block.endTime, block._id);
   if (conflict) return res.status(400).json({ message: conflict });
-
+ 
   block.students.push({
     no: block.students.length + 1,
     studentId: student._id,
@@ -267,7 +267,7 @@ export const joinBlockLeave = async (req, res) => {
   for (const t of troops) {
     if (!block.troopIds.some((id) => String(id) === String(t._id))) block.troopIds.push(t._id);
   }
-
+ 
   // Hits the cap — locks the roster and sends it for approval automatically
   // rather than leaving it stuck at 30/30 with nobody able to add an
   // (impossible) 31st student to trigger submission themselves.
@@ -276,12 +276,12 @@ export const joinBlockLeave = async (req, res) => {
     block.submittedAt = new Date().toLocaleString();
     block.submittedByStudentId = student._id;
   }
-
+ 
   await block.save();
   await writeAudit("STUDENT", student.username, "block_leave_joined", `id=${block._id}, no=${block.students.length}`);
   res.json(block);
 };
-
+ 
 export const submitBlockLeave = async (req, res) => {
   let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
@@ -301,16 +301,57 @@ export const submitBlockLeave = async (req, res) => {
       message: `At least ${BLOCK_LEAVE_MIN_STUDENTS} joined students are needed before this can be submitted (currently ${joinedCount}).`,
     });
   }
-
+ 
   block.stage = "SUBMITTED";
   block.submittedAt = new Date().toLocaleString();
   block.submittedByStudentId = req.user.id;
   await block.save();
-
+ 
   await writeAudit("STUDENT", req.user.name, "block_leave_submitted", `id=${block._id}, count=${joinedCount}`);
   res.json(block);
 };
-
+ 
+// Only the student who originally started the roster (students[0] — the
+// entry pushed in createBlockLeave) has authority to cancel the whole Block
+// Leave. A joined or invited member has their own seat on it, but didn't
+// create it and can't pull the roster out from under everyone else — they
+// can still decline/leave their own spot through the existing invite-decline
+// flow, this is a separate authority.
+// Cancellable only while both hodStatus and troopStatus are still "Pending"
+// — once either approver has actually decided, that decision is now part of
+// the record and should be reversed with a Reject by that approver, not
+// silently erased by a student-initiated cancel. Works from either FILLING
+// (still collecting students) or SUBMITTED (locked, awaiting approval) —
+// both are still Pending/Pending at that point.
+export const cancelBlockLeave = async (req, res) => {
+  const block = await BlockLeave.findById(req.params.id);
+  if (!block) return res.status(404).json({ message: "Block Leave not found" });
+ 
+  const starter = block.students[0];
+  if (!starter || String(starter.studentId) !== req.user.id) {
+    return res.status(403).json({ message: "Only the student who started this Block Leave can cancel it" });
+  }
+  if (block.stage === "CANCELLED") {
+    return res.status(409).json({ message: "This Block Leave has already been cancelled" });
+  }
+  if (block.stage === "EXPIRED") {
+    return res.status(409).json({ message: "This Block Leave has already expired and can no longer be cancelled" });
+  }
+  if (block.hodStatus !== "Pending" || block.troopStatus !== "Pending") {
+    return res.status(409).json({
+      message:
+        "This Block Leave has already been decided by an approver and can no longer be self-cancelled — contact your HOD or Troop Commander instead.",
+    });
+  }
+ 
+  block.stage = "CANCELLED";
+  block.cancelledAt = new Date().toLocaleString();
+  await block.save();
+ 
+  await writeAudit("STUDENT", req.user.name, "block_leave_cancelled", `id=${block._id}`);
+  res.json(block);
+};
+ 
 export const myBlockLeaves = async (req, res) => {
   const blocks = await BlockLeave.find({
     students: { $elemMatch: { studentId: req.user.id, status: "JOINED" } },
@@ -318,7 +359,7 @@ export const myBlockLeaves = async (req, res) => {
   await expireStaleFillingBlocks(blocks);
   res.json(blocks);
 };
-
+ 
 // ── Invitations ──────────────────────────────────────────────────────
 // A roster member picks another Day Scholar from their own department (see
 // searchInvitableStudents) to invite instead of leaving the roster fully
@@ -326,21 +367,21 @@ export const myBlockLeaves = async (req, res) => {
 // myBlockLeaveInvitations) and has to accept before they're actually
 // committed to the roster, same as any other leave decision being theirs
 // to make, not something another student can commit them to unilaterally.
-
+ 
 export const searchInvitableStudents = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   const block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
   if (block.stage !== "FILLING") return res.json([]);
   if (!block.students.some((s) => String(s.studentId) === student._id.toString() && s.status === "JOINED")) {
     return res.status(403).json({ message: "Only a joined student on this Block Leave can invite others" });
   }
-
+ 
   const q = (req.query.q || "").toString().trim();
   if (q.length < 2) return res.json([]);
-
+ 
   const alreadyOnRoster = block.students.map((s) => s.studentId);
   const matches = await Student.find({
     _id: { $nin: alreadyOnRoster },
@@ -357,14 +398,14 @@ export const searchInvitableStudents = async (req, res) => {
   })
     .select("firstName lastName indexNumber intake")
     .limit(10);
-
+ 
   res.json(matches.map((m) => ({ id: m._id, name: m.name, indexNumber: m.indexNumber, intake: m.intake })));
 };
-
+ 
 export const inviteToBlockLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
   block = await expireIfPast(block);
@@ -377,7 +418,7 @@ export const inviteToBlockLeave = async (req, res) => {
   if (block.students.length >= BLOCK_LEAVE_MAX_STUDENTS) {
     return res.status(409).json({ message: "This Block Leave is already full" });
   }
-
+ 
   const { studentId } = req.body;
   const invitee = await Student.findById(studentId);
   if (!invitee) return res.status(404).json({ message: "Student not found" });
@@ -387,7 +428,7 @@ export const inviteToBlockLeave = async (req, res) => {
   if (block.students.some((s) => String(s.studentId) === studentId)) {
     return res.status(409).json({ message: `${invitee.name} is already on this Block Leave's roster` });
   }
-
+ 
   block.students.push({
     no: block.students.length + 1,
     studentId: invitee._id,
@@ -398,7 +439,7 @@ export const inviteToBlockLeave = async (req, res) => {
     status: "INVITED",
   });
   await block.save();
-
+ 
   await writeAudit(
     "STUDENT",
     student.username,
@@ -407,7 +448,7 @@ export const inviteToBlockLeave = async (req, res) => {
   );
   res.status(201).json(block);
 };
-
+ 
 export const myBlockLeaveInvitations = async (req, res) => {
   const blocks = await BlockLeave.find({
     students: { $elemMatch: { studentId: req.user.id, status: "INVITED" } },
@@ -418,11 +459,11 @@ export const myBlockLeaveInvitations = async (req, res) => {
   // no longer something to accept/decline.
   res.json(blocks.filter((b) => b.stage === "FILLING"));
 };
-
+ 
 export const respondToBlockLeaveInvite = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   let block = await BlockLeave.findById(req.params.id);
   if (!block) return res.status(404).json({ message: "Block Leave not found" });
   const entry = block.students.find((s) => String(s.studentId) === student._id.toString() && s.status === "INVITED");
@@ -431,7 +472,7 @@ export const respondToBlockLeaveInvite = async (req, res) => {
   if (block.stage !== "FILLING") {
     return res.status(409).json({ message: "This Block Leave is no longer accepting students" });
   }
-
+ 
   const { accept } = req.body;
   if (!accept) {
     block.students = block.students.filter((s) => String(s.studentId) !== student._id.toString());
@@ -439,12 +480,12 @@ export const respondToBlockLeaveInvite = async (req, res) => {
     await writeAudit("STUDENT", student.username, "block_leave_invite_declined", `id=${block._id}`);
     return res.json({ ok: true });
   }
-
+ 
   // Re-check conflicts at accept time, not just when invited — time has
   // passed, and the student may have picked up another leave since.
   const conflict = await findConflict(student._id, block.startDate, block.startTime, block.endDate, block.endTime, block._id);
   if (conflict) return res.status(400).json({ message: conflict });
-
+ 
   entry.status = "JOINED";
   if (!block.intakes.includes(student.intake)) block.intakes.push(student.intake);
   const troops = await Troop.find({ intakes: student.intake }).select("_id");
@@ -457,27 +498,27 @@ export const respondToBlockLeaveInvite = async (req, res) => {
     block.submittedByStudentId = student._id;
   }
   await block.save();
-
+ 
   await writeAudit("STUDENT", student.username, "block_leave_invite_accepted", `id=${block._id}`);
   res.json(block);
 };
-
+ 
 // ── HOD side ─────────────────────────────────────────────────────────
-
+ 
 export const hodBlockLeavePending = async (req, res) => {
   const blocks = await BlockLeave.find({ hodId: req.user.id, stage: "SUBMITTED", hodStatus: "Pending" }).sort({
     createdAt: -1,
   });
   res.json(blocks);
 };
-
+ 
 export const hodBlockLeaveHistory = async (req, res) => {
   const blocks = await BlockLeave.find({ hodId: req.user.id, hodStatus: { $ne: "Pending" } }).sort({
     createdAt: -1,
   });
   res.json(blocks);
 };
-
+ 
 async function decideBlockLeave(req, res, { role, decision, statusField, commentField, atField, scope, decidedByField }) {
   const { comment } = req.body;
   if (decision === "Rejected" && !comment?.trim()) {
@@ -488,15 +529,15 @@ async function decideBlockLeave(req, res, { role, decision, statusField, comment
   if (block[statusField] !== "Pending") {
     return res.status(403).json({ message: "This Block Leave is not pending your decision" });
   }
-
+ 
   block[statusField] = decision;
   block[commentField] = comment || "";
   block[atField] = new Date().toLocaleString();
   if (decidedByField) block[decidedByField] = req.user.id;
   await block.save();
-
+ 
   writeAudit(role, req.user.name, `block_leave_${decision.toLowerCase()}`, `id=${block._id}`);
-
+ 
   // Fire-and-forget, same reasoning as leavecontrol.js applyDecision — the
   // approver's response doesn't wait on an SMTP round-trip per student.
   (async () => {
@@ -517,10 +558,10 @@ async function decideBlockLeave(req, res, { role, decision, statusField, comment
       console.error("Failed to send Block Leave decision emails:", err.message);
     }
   })();
-
+ 
   res.json(block);
 }
-
+ 
 export const hodApproveBlockLeave = (req, res) =>
   decideBlockLeave(req, res, {
     role: "HOD",
@@ -530,7 +571,7 @@ export const hodApproveBlockLeave = (req, res) =>
     atField: "hodApprovedAt",
     scope: { hodId: req.user.id },
   });
-
+ 
 export const hodRejectBlockLeave = (req, res) =>
   decideBlockLeave(req, res, {
     role: "HOD",
@@ -540,7 +581,7 @@ export const hodRejectBlockLeave = (req, res) =>
     atField: "hodApprovedAt",
     scope: { hodId: req.user.id },
   });
-
+ 
 // ── Troop side — same intake-based scoping as an ordinary Leave (see
 // leavecontrol.js troopScopeFilter): any Troop Commander assigned to one of
 // the roster's intakes can decide, and only becomes visible once the HOD
@@ -549,7 +590,7 @@ async function troopBlockScopeFilter(req) {
   const troop = await Troop.findById(req.user.id);
   return { intakes: { $in: troop?.intakes || [] } };
 }
-
+ 
 export const troopBlockLeavePending = async (req, res) => {
   const scope = await troopBlockScopeFilter(req);
   const blocks = await BlockLeave.find({
@@ -560,13 +601,13 @@ export const troopBlockLeavePending = async (req, res) => {
   }).sort({ createdAt: -1 });
   res.json(blocks);
 };
-
+ 
 export const troopBlockLeaveHistory = async (req, res) => {
   const scope = await troopBlockScopeFilter(req);
   const blocks = await BlockLeave.find({ ...scope, troopStatus: { $ne: "Pending" } }).sort({ createdAt: -1 });
   res.json(blocks);
 };
-
+ 
 export const troopApproveBlockLeave = async (req, res) => {
   const scope = await troopBlockScopeFilter(req);
   return decideBlockLeave(req, res, {
@@ -579,7 +620,7 @@ export const troopApproveBlockLeave = async (req, res) => {
     decidedByField: "decidedByTroopId",
   });
 };
-
+ 
 export const troopRejectBlockLeave = async (req, res) => {
   const scope = await troopBlockScopeFilter(req);
   return decideBlockLeave(req, res, {
@@ -592,5 +633,6 @@ export const troopRejectBlockLeave = async (req, res) => {
     decidedByField: "decidedByTroopId",
   });
 };
-
+ 
 export { BLOCK_LEAVE_MIN_STUDENTS, BLOCK_LEAVE_MAX_STUDENTS };
+ 

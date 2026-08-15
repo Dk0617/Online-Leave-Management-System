@@ -1,5 +1,5 @@
 "use client";
-
+ 
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
@@ -12,7 +12,7 @@ import {
 } from "@/src/api";
 import { BlockLeaveRequest, EventDay, InvitableStudent, LeaveRequest, LeaveType, PhotoChangeRequest, Student } from "@/src/types";
 import { PassVerification } from "@/src/pdf";
-
+ 
 export interface NewLeaveInput {
   type: LeaveType;
   startDate: string;
@@ -30,14 +30,14 @@ export interface NewLeaveInput {
   personalAttachmentName?: string;
   personalAttachmentData?: string;
 }
-
+ 
 // firstName/lastName/email are all fixed once the account is created (only
 // Admin can change them) — mobile is the only thing a student can update
 // themselves. See backend/controllers/studentcontrol.js updateProfile.
 export interface ProfileInput {
   mobile?: string;
 }
-
+ 
 export interface NewBlockLeaveInput {
   startDate: string;
   startTime: string;
@@ -45,7 +45,7 @@ export interface NewBlockLeaveInput {
   endTime: string;
   reason: string;
 }
-
+ 
 export function useStudentPortal() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [profile, setProfile] = useState<Student | null>(null);
@@ -56,7 +56,7 @@ export function useStudentPortal() {
   const [blockLeaveInvitations, setBlockLeaveInvitations] = useState<BlockLeaveRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+ 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -84,11 +84,11 @@ export function useStudentPortal() {
       setLoading(false);
     }
   }, []);
-
+ 
   useEffect(() => {
     refresh();
   }, [refresh]);
-
+ 
   // No push/websocket infra — poll instead, so a decision made on one of
   // their leaves shows up here without a manual reload. See api.ts
   // POLL_INTERVAL_MS.
@@ -96,17 +96,17 @@ export function useStudentPortal() {
     const id = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [refresh]);
-
+ 
   async function applyLeave(input: NewLeaveInput) {
     await api.post("/student/leaves", input);
     await refresh();
   }
-
+ 
   async function updateProfile(input: ProfileInput) {
     await api.patch("/student/profile", input);
     await refresh();
   }
-
+ 
   // Only reachable once profile.photoLocked is true — see student/views.tsx
   // Profile for the UI that swaps to this. The initial (unlocked) photo set
   // goes through AuthContext's updatePhoto instead (see student/views.tsx
@@ -115,11 +115,11 @@ export function useStudentPortal() {
     await api.post("/student/photo-request", { photo, reason });
     await refresh();
   }
-
+ 
   async function getMovements(leaveId: string): Promise<PassVerification> {
     return api.get<PassVerification>(`/student/leaves/${leaveId}/movements`);
   }
-
+ 
   async function startBlockLeave(input: NewBlockLeaveInput) {
     await api.post("/student/block-leave", input);
     await refresh();
@@ -130,6 +130,15 @@ export function useStudentPortal() {
   }
   async function submitBlockLeave(id: string) {
     await api.post(`/student/block-leave/${id}/submit`);
+    await refresh();
+  }
+  // Only the roster's starting student (students[0] on the backend) can
+  // call this — enforced server-side in blockleavecontrol.js
+  // cancelBlockLeave. Works while the roster is still FILLING (before the
+  // student-minimum submit) or already SUBMITTED but not yet decided by
+  // HOD/Troop.
+  async function cancelBlockLeave(id: string) {
+    await api.post(`/student/block-leave/${id}/cancel`);
     await refresh();
   }
   async function searchInvitableStudents(id: string, q: string): Promise<InvitableStudent[]> {
@@ -143,7 +152,7 @@ export function useStudentPortal() {
     await api.post(`/student/block-leave/${id}/invite/respond`, { accept });
     await refresh();
   }
-
+ 
   return {
     leaves,
     profile,
@@ -162,6 +171,7 @@ export function useStudentPortal() {
     startBlockLeave,
     joinBlockLeave,
     submitBlockLeave,
+    cancelBlockLeave,
     searchInvitableStudents,
     inviteToBlockLeave,
     respondToBlockLeaveInvite,

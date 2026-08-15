@@ -863,6 +863,7 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
     startBlockLeave,
     joinBlockLeave,
     submitBlockLeave,
+    cancelBlockLeave,
     searchInvitableStudents,
     inviteToBlockLeave,
     respondToBlockLeaveInvite,
@@ -916,6 +917,11 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
   const totalCount = openBlockLeave?.students.length ?? 0;
   const joinedCount = openBlockLeave?.students.filter((s) => s.status === "JOINED").length ?? 0;
   const canSubmit = isMember && myEntry?.status === "JOINED" && joinedCount >= BLOCK_LEAVE_MIN_STUDENTS;
+  // Only the roster's starting student (no. 1 — see backend
+  // createBlockLeave, which always pushes them first) can cancel the whole
+  // Block Leave — mirrors the server-side check in
+  // blockleavecontrol.js cancelBlockLeave.
+  const isStarter = myEntry?.no === 1;
 
   async function handleInvite(studentId: string) {
     if (!openBlockLeave) return;
@@ -995,6 +1001,29 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
       await submitBlockLeave(openBlockLeave.id);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to submit Block Leave");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Only available to the roster starter, and only before it's been decided
+  // by an approver — mirrors backend/controllers/blockleavecontrol.js
+  // cancelBlockLeave, which enforces the same two checks server-side.
+  async function handleCancel() {
+    if (!openBlockLeave) return;
+    if (
+      !confirm(
+        "Cancel this Block Leave? This removes it for everyone currently on the roster and can't be undone."
+      )
+    ) {
+      return;
+    }
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await cancelBlockLeave(openBlockLeave.id);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to cancel Block Leave");
     } finally {
       setSubmitting(false);
     }
@@ -1252,6 +1281,11 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
                 <Button variant="primary" onClick={handleSubmitForApproval} disabled={submitting || !canSubmit}>
                   {submitting ? "Submitting…" : `Submit for Approval (${joinedCount})`}
                 </Button>
+                {isStarter && (
+                  <Button variant="danger" onClick={handleCancel} disabled={submitting}>
+                    {submitting ? "Cancelling…" : "Cancel Block Leave"}
+                  </Button>
+                )}
               </>
             )}
           </div>
