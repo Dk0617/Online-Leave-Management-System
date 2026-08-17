@@ -63,11 +63,6 @@ export function LeaveListDrilldownModal({
                       <div className="text-sm font-bold text-[var(--white)]">{l.studentName}</div>
                       <div className="text-xs text-[var(--muted)]">
                         {l.indexNumber} · {LEAVE_TYPE_LABELS[l.type]}
-                        {l.priority === "emergency" && (
-                          <span className="ml-1">
-                            <Badge tone="red">Emergency</Badge>
-                          </span>
-                        )}
                       </div>
                     </div>
                     <div className="shrink-0 text-right text-[10px] text-[var(--muted)]">

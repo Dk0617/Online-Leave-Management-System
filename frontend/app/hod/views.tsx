@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ClipboardList, Eye, Hourglass, LogIn, Pencil, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Hourglass, LogIn, Pencil, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
@@ -152,14 +152,13 @@ export function Dashboard({
             icon={<XCircle size={20} />}
           />
         </ClickableStatCard>
-        <StatTile label="Total" value={history.length + pending.length} icon={<ClipboardList size={20} />} />
         <ClickableStatCard
           onClick={() => setMovementDrilldown({ title: "Entries Today — Your Department", entries: todayEntryEntries })}
         >
           <StatTile
             label="Entries Today (click for details)"
             value={todayEntryEntries.length}
-            tone="green"
+            tone="blue"
             icon={<LogIn size={20} />}
           />
         </ClickableStatCard>
@@ -289,21 +288,14 @@ function PendingTable({
           ) : (
             sorted.map((l) => (
               <tr key={l.id}>
-                <td>
+                <td className="whitespace-nowrap">
                   {l.studentName}
-                  <div className="text-[10px] text-[var(--muted)]">
-                    {l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}
-                  </div>
+                  <span className="ml-1.5" title={l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}>
+                    {l.studentType === "CADET" ? "🎖️" : "🏠"}
+                  </span>
                 </td>
                 <td>{l.indexNumber}</td>
-                <td>
-                  {LEAVE_TYPE_LABELS[l.type]}
-                  {l.priority === "emergency" && (
-                    <span className="ml-1">
-                      <Badge tone="red">Emergency</Badge>
-                    </span>
-                  )}
-                </td>
+                <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td className="whitespace-nowrap">
                   {l.startDate}
                   <EditedMark note={correctionNote(l.startDate, l.startTime, l.originalStartDate, l.originalStartTime)} />
@@ -317,7 +309,7 @@ function PendingTable({
                   <Button variant="secondary" className="!h-8 !w-8 !p-0" title="View" onClick={() => onView(l)}>
                     <Eye size={16} />
                   </Button>
-                  {onCorrect && (
+                  {onCorrect && !l.dateTimeCorrectedByHod && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -376,6 +368,16 @@ function CorrectDateTimeModal({
       setError("End date/time must be after start date/time — they can't be the same.");
       return;
     }
+    if (leave.type !== "Emergency Leave") {
+      if (startTime < "06:00") {
+        setError("Corrected start time must be 06:00 or later — campus exit is only allowed from 06:00 onward.");
+        return;
+      }
+      if (endTime > "18:00") {
+        setError("Corrected end time must be 18:00 or earlier — campus entry must be logged by 18:00.");
+        return;
+      }
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -394,7 +396,9 @@ function CorrectDateTimeModal({
         <p className="mb-4 text-xs text-[var(--muted)]">
           {leave.studentName} ({leave.indexNumber}) — use this only to fix a time-of-day mistake (e.g. the
           student meant 08:00, not 18:00). The date itself is locked to what they applied for — reject the
-          application instead if the date is wrong.
+          application instead if the date is wrong. You get <strong>one</strong> correction per leave, and
+          {leave.type === "Emergency Leave" ? " it" : " the time must stay within 06:00–18:00 — it"} can&apos;t be
+          edited again after saving.
         </p>
         <div className="mb-3 grid grid-cols-2 gap-3">
           <div>
@@ -485,7 +489,7 @@ function HodHistoryTable({
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
-                  <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td className="whitespace-nowrap">
                     {l.startDate}
                     <EditedMark note={correctionNote(l.startDate, l.startTime, l.originalStartDate, l.originalStartTime)} />

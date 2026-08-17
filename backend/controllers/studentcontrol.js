@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import Student from "../models/Student.js";
 import Leave from "../models/Leave.js";
+import BlockLeave from "../models/BlockLeave.js";
 import Movement from "../models/Movement.js";
 import Hod from "../models/HOD.js";
 import Troop from "../models/Troop.js";
@@ -8,7 +9,7 @@ import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
-
+ 
 // Academic Leave never requires a supporting document, for either student
 // type — it's an academic excuse, not a campus-exit reason. Day Scholars
 // otherwise require Medical; Cadets require Medical + Personal.
@@ -17,7 +18,7 @@ const DOC_REQUIRED_TYPES_CADET = ["Medical Leave", "Personal Leave"];
 function requiresAttachment(type, studentType) {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES_DAY_SCHOLAR).includes(type);
 }
-
+ 
 // Campus curfew: except Emergency Leave, students may only exit from 06.00
 // hrs onward and must be back by 18.00 hrs.
 const CAMPUS_EXIT_EARLIEST_MINUTES = 6 * 60;
@@ -26,7 +27,7 @@ function minutesFromTimeString(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
-
+ 
 // 20MB of raw file becomes ~26.7MB once base64-encoded.
 const MAX_ATTACHMENT_BYTES = (20 * 1024 * 1024 * 4) / 3;
 // Excludes ambiguous characters (0/O, 1/I/L) so gate staff can read/type it easily.
@@ -37,7 +38,7 @@ export function generateVerifyCode() {
   for (let i = 0; i < 6; i++) code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
   return code;
 }
-
+ 
 // Academic Leave always requires a companion Personal Leave (same dates) —
 // for Day Scholars this is a standing policy; for Cadets it covers the
 // "going home during a lecture-day period" case. These are two separate
@@ -88,11 +89,11 @@ async function createLinkedPersonalLeave(primary, student, hodIdForLeave, troopI
   await primary.save();
   return linked;
 }
-
+ 
 export const applyLeave = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   const {
     type,
     startDate,
@@ -107,9 +108,9 @@ export const applyLeave = async (req, res) => {
     personalAttachmentName,
     personalAttachmentData,
   } = req.body;
-
+ 
   const isAcademicRequest = type === "Academic Leave";
-
+ 
   const missing = [];
   if (!type) missing.push("Leave Type");
   if (!startDate) missing.push("Start Date");
@@ -135,6 +136,21 @@ export const applyLeave = async (req, res) => {
     return res
       .status(400)
       .json({ message: `Please complete: ${missing.join(", ")}` });
+  }
+  // Emergency Leave skips the 2-day notice period and the campus curfew
+  // (see below) — a real safety valve for genuine emergencies, not a
+  // shortcut for "I feel like leaving early." A one-word or generic reason
+  // is the clearest sign of that misuse, so it's held to a stricter length
+  // than every other type's reason (which just needs to be non-empty).
+  // This can't detect a fabricated-but-detailed reason — that judgment call
+  // stays with the HOD reviewing it (see LeaveDetailModal) — but it does
+  // stop the laziest, most common form of gaming it.
+  const EMERGENCY_REASON_MIN_LENGTH = 20;
+  if (type === "Emergency Leave" && reason.trim().length < EMERGENCY_REASON_MIN_LENGTH) {
+    return res.status(400).json({
+      message:
+        "Emergency Leave needs a genuine emergency reason (at least 20 characters) — e.g. a serious family emergency, a death/funeral, an urgent medical situation, or another genuine unexpected circumstance. Use Personal Leave instead if this isn't a real emergency.",
+    });
   }
   if (!/^\d{10}$/.test(contactNumber.trim())) {
     return res.status(400).json({ message: "Contact number must be exactly 10 digits, numbers only." });
@@ -167,17 +183,19 @@ export const applyLeave = async (req, res) => {
   if (personalAttachmentData && Buffer.byteLength(personalAttachmentData, "utf8") > MAX_ATTACHMENT_BYTES) {
     return res.status(400).json({ message: "Personal Leave attachment too large (max 20MB)" });
   }
-
+ 
   // Every leave type except Emergency Leave and Medical Leave must be
-  // submitted at least 2 days ahead of the leave's own start date/time —
-  // Emergency Leave exists for same-day needs, Medical Leave for the
-  // backdating case just above (both would otherwise fail this check).
+  // submitted a minimum amount of time ahead of the leave's own start
+  // date/time — Emergency Leave exists for same-day needs, Medical Leave
+  // for the backdating case just above (both would otherwise fail this
+  // check). Personal Leave only needs 24 hours' notice; everything else
+  // in this bucket (currently just Academic Leave) still needs 2 days.
   if (type !== "Emergency Leave") {
-    const MIN_NOTICE_MS = 2 * 24 * 60 * 60 * 1000;
+    const MIN_NOTICE_MS = type === "Personal Leave" ? 24 * 60 * 60 * 1000 : 2 * 24 * 60 * 60 * 1000;
     if (type !== "Medical Leave" && startDateTime.getTime() - Date.now() < MIN_NOTICE_MS) {
+      const noticeLabel = type === "Personal Leave" ? "24 hours" : "2 days";
       return res.status(400).json({
-        message:
-          "This leave type must be applied for at least 2 days before the leave start date. Use Emergency Leave if you need to apply later than that.",
+        message: `This leave type must be applied for at least ${noticeLabel} before the leave start date. Use Emergency Leave if you need to apply later than that.`,
       });
     }
     if (minutesFromTimeString(startTime) < CAMPUS_EXIT_EARLIEST_MINUTES) {
@@ -191,14 +209,14 @@ export const applyLeave = async (req, res) => {
       });
     }
   }
-
+ 
   const isCadet = student.studentType === "CADET";
   const isEmergency = type === "Emergency Leave";
   const isMedical = type === "Medical Leave";
   const isAcademic = type === "Academic Leave";
   const skipTroop = isCadet && isAcademic;
   const needsHod = !isCadet || isAcademic;
-
+ 
   // HOD and Troop Commander are looked up live (by department / intake)
   // rather than trusting a value stored once on the student record — this
   // makes both self-healing: if an HOD or Troop account is ever deleted
@@ -217,7 +235,7 @@ export const applyLeave = async (req, res) => {
     Hod.findOne({ department: student.department }),
     Troop.find({ intakes: student.intake }).select("_id"),
   ]);
-
+ 
   let hodIdForLeave;
   if (needsHod) {
     if (!hod) {
@@ -227,17 +245,17 @@ export const applyLeave = async (req, res) => {
     }
     hodIdForLeave = hod._id;
   }
-
+ 
   if (!troops.length && !skipTroop) {
     return res.status(400).json({
       message: `No Troop Commander is assigned to Intake ${student.intake || "—"}. Ask admin to assign one first.`,
     });
   }
   const troopIdsForLeave = troops.map((t) => t._id);
-
+ 
   const newStart = new Date(`${startDate}T${startTime}`);
   const newEnd = new Date(`${endDate}T${endTime}`);
-
+ 
   // A Workshop day (or other mandatory-attendance academic day) the HOD has
   // marked on the calendar blocks ordinary leave applications that overlap
   // its actual hours — not necessarily the whole day. An event created
@@ -266,7 +284,7 @@ export const applyLeave = async (req, res) => {
       }
     }
   }
-
+ 
   // A student can't be on two leaves at once — block a new application that
   // overlaps the date/time window of one of their own still-active leaves
   // (Pending, or Approved and not yet returned from). Applies to every
@@ -297,7 +315,31 @@ export const applyLeave = async (req, res) => {
       });
     }
   }
-
+ 
+  // Same physical-presence constraint as above, but checked against Block
+  // Leaves too — a student JOINED on a Block Leave (whether they started
+  // it, joined an open roster, or accepted an invitation) is just as
+  // unavailable for those dates/times as if it were an ordinary Leave.
+  // Only status "JOINED" is checked — someone still "INVITED" hasn't
+  // committed to the roster yet, so it shouldn't block them from applying
+  // for something else in the meantime. A Block Leave already fully
+  // rejected by HOD or Troop no longer holds the student to those dates.
+  const blockConflicts = await BlockLeave.find({
+    students: { $elemMatch: { studentId: student._id, status: "JOINED" } },
+    startDate: { $lte: endDate },
+    endDate: { $gte: startDate },
+  });
+  for (const block of blockConflicts) {
+    if (block.hodStatus === "Rejected" || block.troopStatus === "Rejected") continue;
+    const blockStart = new Date(`${block.startDate}T${block.startTime}`);
+    const blockEnd = new Date(`${block.endDate}T${block.endTime}`);
+    if (blockStart < newEnd && blockEnd > newStart) {
+      return res.status(400).json({
+        message: `You're already on a Block Leave (${block.department}) for ${block.startDate} ${block.startTime} – ${block.endDate} ${block.endTime} that overlaps with these dates/times.`,
+      });
+    }
+  }
+ 
   const leave = await Leave.create({
     studentId: student._id,
     studentName: student.name,
@@ -326,7 +368,7 @@ export const applyLeave = async (req, res) => {
     sqnStatus: isCadet ? "Pending" : "N/A",
     sddStatus: isCadet && !isAcademic ? "Pending" : "N/A",
   });
-
+ 
   let linkedLeave = null;
   if (isAcademic) {
     linkedLeave = await createLinkedPersonalLeave(
@@ -339,7 +381,7 @@ export const applyLeave = async (req, res) => {
       personalAttachmentData || undefined
     );
   }
-
+ 
   // Not awaited: writeAudit already swallows its own errors, so there's no
   // reason for the student's submit click to wait on this write too.
   writeAudit(
@@ -350,7 +392,7 @@ export const applyLeave = async (req, res) => {
   );
   res.status(201).json(leave);
 };
-
+ 
 // Lets the leave-application form warn the student (and block the relevant
 // dates client-side, mirroring the server-side check in applyLeave above)
 // before they even submit — mandatory event days only, from their own
@@ -359,10 +401,10 @@ export const applyLeave = async (req, res) => {
 export const myBlockedDays = async (req, res) => {
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   const hod = await Hod.findOne({ department: student.department });
   if (!hod) return res.json([]);
-
+ 
   const today = new Date().toISOString().split("T")[0];
   const days = await EventDay.find({
     hodId: hod._id,
@@ -371,14 +413,14 @@ export const myBlockedDays = async (req, res) => {
   }).sort({ date: 1 });
   res.json(days);
 };
-
+ 
 export const myLeaves = async (req, res) => {
-  // Newest application first (descending by submission date/time) — the
-  // most recently applied leave always appears at the top of the dashboard.
-  const leaves = await Leave.find({ studentId: req.user.id }).sort({ createdAt: -1 });
+  const leaves = await Leave.find({ studentId: req.user.id })
+    .sort({ createdAt: -1 })
+    .select("-attachmentData");
   res.json(leaves);
 };
-
+ 
 // Powers the "digital signature" section of the leave-pass PDF — the
 // student's own client re-downloads the pass after gate staff have
 // verified Exit / Re-Entry so the PDF can show who verified it and when,
@@ -396,13 +438,13 @@ export const leaveMovements = async (req, res) => {
     entry: entry ? { by: entry.loggedBy, at: entry.createdAt } : null,
   });
 };
-
+ 
 export const getProfile = async (req, res) => {
   const student = await Student.findById(req.user.id).select("-password");
   if (!student) return res.status(404).json({ message: "Student not found" });
   res.json(student);
 };
-
+ 
 // firstName/lastName/email/indexNumber/department/studentType are all
 // fixed once the account is created — email is used for approval/rejection
 // notifications (a self-change could redirect those to the wrong inbox),
@@ -414,7 +456,7 @@ export const updateProfile = async (req, res) => {
   const { mobile } = req.body;
   const student = await Student.findById(req.user.id);
   if (!student) return res.status(404).json({ message: "Student not found" });
-
+ 
   if (mobile) {
     if (!/^\d{10}$/.test(mobile)) {
       return res.status(400).json({ message: "Mobile number must be exactly 10 digits, numbers only." });
@@ -424,11 +466,11 @@ export const updateProfile = async (req, res) => {
     student.mobile = mobile;
   }
   await student.save();
-
+ 
   const { password: _pw, ...safe } = student.toObject();
   res.json(safe);
 };
-
+ 
 // A student's initial (unlocked) photo set goes through the generic
 // /auth/photo route (logauthcontrol.js updateMyPhoto — shared by every
 // role, and what the dashboard-header avatar itself uses) rather than a
@@ -436,21 +478,21 @@ export const updateProfile = async (req, res) => {
 // instead of only on next login. That route enforces the same
 // photoLocked-after-first-set rule for students. Anything after that goes
 // through requestPhotoChange below for Admin approval instead.
-
+ 
 // Submits a new photo for Admin approval — doesn't touch Student.photo
 // itself until admincontrol.js approvePhotoRequest does. Only one pending
 // request at a time so a student can't spam duplicates while waiting.
 export const requestPhotoChange = async (req, res) => {
   const { photo, reason } = req.body;
   if (!photo) return res.status(400).json({ message: "A new photo is required" });
-
+ 
   const existing = await PhotoChangeRequest.findOne({ studentId: req.user.id, status: "PENDING" });
   if (existing) {
     return res
       .status(409)
       .json({ message: "You already have a photo change request awaiting Admin approval." });
   }
-
+ 
   const request = await PhotoChangeRequest.create({
     studentId: req.user.id,
     requestedPhoto: photo,
@@ -459,12 +501,13 @@ export const requestPhotoChange = async (req, res) => {
   await writeAudit("STUDENT", req.user.name, "photo_change_requested", `student=${req.user.id}`);
   res.status(201).json(request);
 };
-
+ 
 // The student's own request history, newest first — lets My Profile show
 // whether they have one pending/recently decided.
 export const myPhotoRequests = async (req, res) => {
   const requests = await PhotoChangeRequest.find({ studentId: req.user.id })
     .sort({ createdAt: -1 })
-    .limit(5);
+    .limit(5)
+    .select("-requestedPhoto");
   res.json(requests);
 };

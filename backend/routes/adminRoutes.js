@@ -37,6 +37,7 @@ import {
   listHodUnavailability,
   createHodUnavailability,
   deleteHodUnavailability,
+  endHodUnavailabilityNow,
   listLecturerUnavailability,
   createLecturerUnavailability,
   deleteLecturerUnavailability,
@@ -87,6 +88,7 @@ router.delete("/audit", clearAudit);
 router.get("/hod-unavailability", listHodUnavailability);
 router.post("/hod-unavailability", createHodUnavailability);
 router.delete("/hod-unavailability/:id", deleteHodUnavailability);
+router.patch("/hod-unavailability/:id/end-now", endHodUnavailabilityNow);
 
 router.get("/lecturer-unavailability", listLecturerUnavailability);
 router.post("/lecturer-unavailability", createLecturerUnavailability);

@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { AlertTriangle, DoorOpen, FileText, LogIn, LogOut } from "lucide-react";
-import { StatTile, Badge, Button, Card, SearchInput, SortableTh } from "@/src/components/ui";
+import { StatTile, Badge, Button, Card, SearchInput } from "@/src/components/ui";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useGatePortal, VerifyResult } from "@/src/hooks/useGatePortal";
-import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
+import { useSearchFilter } from "@/src/hooks/useTableControls";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -115,13 +115,15 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
     plannedDate: `${l.endDate} ${l.endTime}`,
   }));
 
-  // Order received, not grouped by leave type — Mongo ObjectIds are
-  // time-ordered, so a plain string sort on `id` gives the exact order
-  // these applications came in without needing a separate timestamp field.
-  const orderedLeaves = [...approvedLeaves].sort((a, b) => a.id.localeCompare(b.id));
-  const { query: leaveQuery, setQuery: setLeaveQuery, filtered: searchedLeaves } = useSearchFilter(
-    orderedLeaves,
-    (l) => [l.studentName, l.indexNumber]
+  // Only students who've actually exited and/or entered — an approved pass
+  // nobody has used yet has nothing to show here (that's what "Approved
+  // Passes" above already counts). Same paired Departure/Actual Entry view
+  // as the full Movement Log, so a late entry or early exit is just as
+  // visible here as it is there.
+  const movementRows = pairMovements(movements, approvedLeaves);
+  const { query: movementQuery, setQuery: setMovementQuery, filtered: searchedMovementRows } = useSearchFilter(
+    movementRows,
+    (r) => [r.studentName, r.indexNumber]
   );
 
   return (
@@ -170,114 +172,26 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useGatePortal>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-[var(--white)]">
-          Leave Passes — Exit / Entry &amp; Validity Status ({searchedLeaves.length})
+          Student Movements — Exit / Entry ({searchedMovementRows.length})
         </h2>
         <SearchInput
-          value={leaveQuery}
-          onChange={setLeaveQuery}
+          value={movementQuery}
+          onChange={setMovementQuery}
           placeholder="Search by name or index number…"
           className="w-full sm:w-72"
         />
       </div>
-      {orderedLeaves.length === 0 ? (
+      {movementRows.length === 0 ? (
         <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
-          No approved leave passes in system.
+          No students have exited or entered yet.
         </div>
-      ) : searchedLeaves.length === 0 ? (
+      ) : searchedMovementRows.length === 0 ? (
         <div className="mb-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] py-8 text-center text-sm text-[var(--muted)]">
-          No leave passes match your search.
+          No movements match your search.
         </div>
       ) : (
-        <LeavePassTable leaves={searchedLeaves} lastMovementFor={lastMovementFor} />
+        <PairedMovementTable rows={searchedMovementRows} emptyMessage="No students have exited or entered yet." />
       )}
-    </div>
-  );
-}
-
-function LeavePassTable({
-  leaves,
-  lastMovementFor,
-}: {
-  leaves: LeaveRequest[];
-  lastMovementFor: (indexNumber: string, leaveId: string) => { direction: "Exit" | "Entry" } | null;
-}) {
-  const { sortKey, sortDir, toggleSort } = useSort();
-  // Status/Validity are derived per row (need lastMovementFor/validity), not
-  // raw fields — computed once here so both the sort accessors and the
-  // render below share the same values instead of recomputing per row twice.
-  const rows = leaves.map((l) => {
-    const last = lastMovementFor(l.indexNumber, l.id);
-    const state = validity(l);
-    return { leave: l, last, state, isOverdue: last?.direction === "Exit" && state === "expired" };
-  });
-  const sortedRows = sortRows(rows, sortKey, sortDir, {
-    student: (r) => r.leave.studentName,
-    studentType: (r) => r.leave.studentType,
-    type: (r) => r.leave.type,
-    from: (r) => r.leave.startDate,
-    to: (r) => r.leave.endDate,
-    status: (r) => (r.last ? r.last.direction : ""),
-    validity: (r) => r.state,
-  });
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="Type" sortKey="studentType" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="From (Exit)" sortKey="from" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="To (Entry)" sortKey="to" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="Status" sortKey="status" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            <SortableTh label="Validity" sortKey="validity" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.map(({ leave: l, last, state, isOverdue }) => {
-            return (
-              <tr key={l.id} className={isOverdue ? "bg-[rgba(239,68,68,0.1)]" : undefined}>
-                <td className={isOverdue ? "text-[var(--err)]" : undefined}>
-                  {isOverdue && "⚠️ "}
-                  {l.studentName}
-                  <div className={isOverdue ? "text-xs text-[var(--err-soft)]" : "text-xs text-[var(--muted)]"}>
-                    {l.indexNumber}
-                  </div>
-                </td>
-                <td>{l.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
-                <td>
-                  {LEAVE_TYPE_LABELS[l.type]}
-                  {l.priority === "emergency" && (
-                    <span className="ml-1">
-                      <Badge tone="red">Emergency</Badge>
-                    </span>
-                  )}
-                </td>
-                <td className="font-mono text-xs">
-                  {l.startDate} {l.startTime}
-                </td>
-                <td className={isOverdue ? "font-mono text-xs font-bold text-[var(--err)]" : "font-mono text-xs"}>
-                  {l.endDate} {l.endTime}
-                </td>
-                <td>
-                  {!last ? (
-                    <Badge tone="gray">Not Yet Exited</Badge>
-                  ) : last.direction === "Exit" ? (
-                    <Badge tone="red">Exited (Out)</Badge>
-                  ) : (
-                    <Badge tone="green">Returned</Badge>
-                  )}
-                </td>
-                <td>
-                  <Badge tone={state === "valid" ? "green" : state === "upcoming" ? "amber" : "red"}>
-                    {state === "valid" ? "Valid" : state === "upcoming" ? "Upcoming" : "Expired"}
-                  </Badge>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -292,12 +206,10 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loggingDirection, setLoggingDirection] = useState<"Exit" | "Entry" | null>(null);
-  // Set after a curfew-blocked Entry attempt — clicking Log Entry again
-  // while this is set confirms and logs it as a late entry instead of
-  // blocking it a second time. Exit has no equivalent: it stays a hard
-  // block, see quickLog below. Cleared on every fresh verification so it
-  // never carries over to a different student.
-  const [pendingCurfewOverride, setPendingCurfewOverride] = useState(false);
+  // Set right after a successful log that turned out to be past curfew —
+  // shown as a one-time info banner, not something that gated the click
+  // that produced it (see quickLog below: it's always a single click).
+  const [flaggedNotice, setFlaggedNotice] = useState<string | null>(null);
   // A ref (not state) so it's set synchronously on the very first click —
   // state updates are batched/async and wouldn't block a same-tick second
   // click from also passing the guard.
@@ -318,14 +230,13 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
     setMode(next);
     setQuery("");
     setResult(null);
-    setPendingCurfewOverride(false);
+    setFlaggedNotice(null);
   }
 
   async function runVerify(rawQuery: string, viaMode: "code" | "index") {
     if (!rawQuery.trim()) return;
     setLoading(true);
     setError(null);
-    setPendingCurfewOverride(false);
     try {
       const res =
         viaMode === "code" ? await verifyByCode(rawQuery.trim()) : await verify(rawQuery.trim().toUpperCase());
@@ -339,6 +250,7 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
   }
 
   async function handleVerify() {
+    setFlaggedNotice(null);
     await runVerify(query, mode);
   }
 
@@ -346,45 +258,40 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
     setScannerOpen(false);
     setMode("code");
     setQuery(code);
+    setFlaggedNotice(null);
     runVerify(code, "code");
   }
 
+  // One click, always logs — a curfew violation is recorded and flagged
+  // (see the info banner it leaves behind below), never blocked or held
+  // for a second confirmation click. Only the Exit/Entry sequence check
+  // (can't log twice in the same direction in a row) still stops the
+  // click outright, since that's catching a mis-click, not a real event.
   async function quickLog(direction: "Exit" | "Entry") {
     if (!result?.leave || loggingRef.current) return;
     const leave = result.leave as unknown as LeaveRequest;
     const sequenceReason = sequenceBlockReason(direction, leave.indexNumber, movements);
     if (sequenceReason) {
       setError(sequenceReason);
-      setPendingCurfewOverride(false);
-      return;
-    }
-    const curfewReason = curfewBlockReason(direction, leave.type);
-    const confirmLate = direction === "Entry" && pendingCurfewOverride;
-    // Exit past curfew stays a hard block every time — letting someone out
-    // early is a preventable mistake, not a "they're stuck outside"
-    // problem. Entry gets one warning, then a second click confirms it.
-    if (curfewReason && !confirmLate) {
-      setError(
-        direction === "Entry"
-          ? `${curfewReason} Click "Log Entry" again to confirm and record this as a late entry.`
-          : curfewReason
-      );
-      setPendingCurfewOverride(direction === "Entry");
       return;
     }
     setError(null);
-    setPendingCurfewOverride(false);
+    setFlaggedNotice(null);
     loggingRef.current = true;
     setLoggingDirection(direction);
     try {
-      await logMovement({
+      const movement = await logMovement({
         indexNumber: leave.indexNumber,
         direction,
         leaveId: leave.id,
         notes: "Verified at gate",
-        confirmLate: confirmLate || undefined,
       });
-      await handleVerify();
+      if (movement.earlyExit) {
+        setFlaggedNotice(`⚠️ Exit logged — before 6:00 AM curfew. Flagged as EARLY EXIT in the movement log.`);
+      } else if (movement.lateEntry) {
+        setFlaggedNotice(`⚠️ Entry logged — past 6:00 PM curfew (or leave had already ended). Flagged as LATE ENTRY in the movement log.`);
+      }
+      await runVerify(query, mode);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log movement");
     } finally {
@@ -478,34 +385,41 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
               </p>
             </>
           )}
-          {result.found && result.valid && result.leave && (
-            <>
-              <div className="mb-3 text-lg font-bold text-[var(--ok)]">✅ Valid Leave Pass</div>
-              <VerifyRows leave={result.leave as unknown as LeaveRequest} photo={result.studentPhoto} />
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant="danger"
-                  className="!text-xs"
-                  disabled={loggingDirection !== null}
-                  onClick={() => quickLog("Exit")}
-                >
-                  {loggingDirection === "Exit" ? "Logging…" : "🚪 Log Exit"}
-                </Button>
-                <Button
-                  variant="success"
-                  className="!text-xs"
-                  disabled={loggingDirection !== null}
-                  onClick={() => quickLog("Entry")}
-                >
-                  {loggingDirection === "Entry"
-                    ? "Logging…"
-                    : pendingCurfewOverride
-                    ? "⚠️ Confirm Late Entry"
-                    : "🏫 Log Entry"}
-                </Button>
-              </div>
-            </>
-          )}
+          {result.found && result.valid && result.leave && (() => {
+            const leave = result.leave as unknown as LeaveRequest;
+            const exitHint = curfewBlockReason("Exit", leave.type);
+            const entryHint = curfewBlockReason("Entry", leave.type);
+            return (
+              <>
+                <div className="mb-3 text-lg font-bold text-[var(--ok)]">✅ Valid Leave Pass</div>
+                <VerifyRows leave={leave} photo={result.studentPhoto} />
+                {(exitHint || entryHint) && (
+                  <p className="mt-2 text-[11px] text-[var(--warn)]">
+                    ⚠️ It&apos;s currently outside the 6:00 AM–6:00 PM curfew window — logging {exitHint ? "an exit" : "an entry"} now will still go through, flagged as a violation.
+                  </p>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="danger"
+                    className="!text-xs"
+                    disabled={loggingDirection !== null}
+                    onClick={() => quickLog("Exit")}
+                  >
+                    {loggingDirection === "Exit" ? "Logging…" : "🚪 Log Exit"}
+                  </Button>
+                  <Button
+                    variant="success"
+                    className="!text-xs"
+                    disabled={loggingDirection !== null}
+                    onClick={() => quickLog("Entry")}
+                  >
+                    {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry"}
+                  </Button>
+                </div>
+                {flaggedNotice && <p className="mt-2 text-[11px] font-semibold text-[var(--warn)]">{flaggedNotice}</p>}
+              </>
+            );
+          })()}
           {result.found && !result.valid && result.reason === "late_return" && result.leave && (() => {
             const leave = result.leave as unknown as LeaveRequest;
             return (
@@ -525,13 +439,10 @@ export function Verify({ portal }: { portal: ReturnType<typeof useGatePortal> })
                     disabled={loggingDirection !== null}
                     onClick={() => quickLog("Entry")}
                   >
-                    {loggingDirection === "Entry"
-                      ? "Logging…"
-                      : pendingCurfewOverride
-                      ? "⚠️ Confirm Late Entry"
-                      : "🏫 Log Entry (Late)"}
+                    {loggingDirection === "Entry" ? "Logging…" : "🏫 Log Entry (Late)"}
                   </Button>
                 </div>
+                {flaggedNotice && <p className="mt-2 text-[11px] font-semibold text-[var(--warn)]">{flaggedNotice}</p>}
               </>
             );
           })()}
@@ -683,8 +594,154 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+// One row per leave, not per movement — the Exit and Entry that belong to
+// the same leave pass are paired up here so gate staff see a single
+// Departure → Actual Entry story per student instead of two disconnected
+// rows they'd have to mentally match up themselves. A student who's only
+// exited so far (no Entry yet) still gets one row, just with Actual Entry
+// blank and status "Out". Whole-row highlight (not just a badge) is what
+// makes an early exit or late entry actually jump out while scanning the
+// list, per the request that these "immediately identify" a violation.
+interface PairedMovementRow {
+  leaveId: string;
+  studentName: string;
+  indexNumber: string;
+  studentType?: LeaveRequest["studentType"];
+  leaveType?: LeaveRequest["type"];
+  departure: string | null;
+  expectedReturn: string;
+  actualEntry: string | null;
+  loggedBy: string;
+  earlyExit: boolean;
+  lateEntry: boolean;
+  status: "Normal" | "LATE ENTRY" | "EARLY EXIT" | "LATE ENTRY + EARLY EXIT" | "Out";
+}
+
+function pairMovements(
+  movements: ReturnType<typeof useGatePortal>["movements"],
+  approvedLeaves: LeaveRequest[]
+): PairedMovementRow[] {
+  const byLeave = new Map<string, typeof movements>();
+  for (const m of movements) {
+    if (!m.leaveId) continue;
+    const list = byLeave.get(m.leaveId) ?? [];
+    list.push(m);
+    byLeave.set(m.leaveId, list);
+  }
+
+  const byTime = (a: { timestamp: string }, b: { timestamp: string }) => +new Date(a.timestamp) - +new Date(b.timestamp);
+
+  return Array.from(byLeave.entries())
+    .map(([leaveId, ms]) => {
+      const exit = ms.filter((m) => m.direction === "Exit").sort(byTime)[0];
+      const entry = ms.filter((m) => m.direction === "Entry").sort(byTime)[0];
+      const rep = entry ?? exit;
+      const leave = approvedLeaves.find((l) => l.id === leaveId);
+      const earlyExit = !!exit?.earlyExit;
+      const lateEntry = !!entry?.lateEntry;
+      const status: PairedMovementRow["status"] =
+        earlyExit && lateEntry
+          ? "LATE ENTRY + EARLY EXIT"
+          : earlyExit
+          ? "EARLY EXIT"
+          : lateEntry
+          ? "LATE ENTRY"
+          : exit && !entry
+          ? "Out"
+          : "Normal";
+      return {
+        leaveId,
+        studentName: rep.studentName,
+        indexNumber: rep.indexNumber,
+        studentType: rep.studentType,
+        leaveType: leave?.type,
+        departure: exit?.timestamp ?? null,
+        expectedReturn: leave ? `${leave.endDate} ${leave.endTime}` : "—",
+        actualEntry: entry?.timestamp ?? null,
+        loggedBy: rep.loggedBy,
+        earlyExit,
+        lateEntry,
+        status,
+      };
+    })
+    .sort((a, b) => +new Date(b.departure ?? b.actualEntry ?? 0) - +new Date(a.departure ?? a.actualEntry ?? 0));
+}
+
+const MOVEMENT_STATUS_TONE: Record<PairedMovementRow["status"], "green" | "red" | "amber" | "gray"> = {
+  Normal: "green",
+  "LATE ENTRY": "red",
+  "EARLY EXIT": "red",
+  "LATE ENTRY + EARLY EXIT": "red",
+  Out: "amber",
+};
+
+// Shared by the Dashboard (filtered to today isn't required — every row
+// here already only exists because a real Exit/Entry happened) and the
+// full Movement Log — one row per leave that's actually seen movement,
+// never a leave that's merely approved-and-unused. Whole-row highlight
+// (not just a badge) is what makes an early exit or late entry actually
+// jump out while scanning the list.
+function PairedMovementTable({ rows, emptyMessage }: { rows: PairedMovementRow[]; emptyMessage: string }) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Leave Type</th>
+            <th>Departure</th>
+            <th>Expected Return</th>
+            <th>Actual Entry</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                {emptyMessage}
+              </td>
+            </tr>
+          ) : (
+            rows.map((r) => {
+              const violation = r.earlyExit || r.lateEntry;
+              return (
+                <tr key={r.leaveId} className={violation ? "!bg-[rgba(239,68,68,0.12)]" : undefined}>
+                  <td className={`whitespace-nowrap ${violation ? "text-[var(--err)]" : ""}`}>
+                    {violation && "⚠️ "}
+                    {r.studentName}
+                    <span className="ml-1.5" title={r.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}>
+                      {r.studentType === "CADET" ? "🎖️" : "🏠"}
+                    </span>
+                    <div className={violation ? "text-xs text-[var(--err-soft)]" : "text-xs text-[var(--muted)]"}>
+                      {r.indexNumber}
+                    </div>
+                  </td>
+                  <td>{r.leaveType ? LEAVE_TYPE_LABELS[r.leaveType] : "—"}</td>
+                  <td className="font-mono text-xs">
+                    {r.departure ? new Date(r.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                  </td>
+                  <td className="font-mono text-xs">{r.expectedReturn.split(" ")[1] ?? "—"}</td>
+                  <td className="font-mono text-xs">
+                    {r.actualEntry
+                      ? new Date(r.actualEntry).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : "—"}
+                  </td>
+                  <td>
+                    <Badge tone={MOVEMENT_STATUS_TONE[r.status]}>{r.status}</Badge>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePortal> }) {
-  const { movements, clearMovementLog } = portal;
+  const { movements, approvedLeaves, clearMovementLog } = portal;
   const [error, setError] = useState<string | null>(null);
 
   async function handleClear() {
@@ -696,55 +753,18 @@ export function MovementLog({ portal }: { portal: ReturnType<typeof useGatePorta
     }
   }
 
+  const rows = pairMovements(movements, approvedLeaves);
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-bold text-[var(--white)]">Full Movement Log</span>
+        <span className="text-sm font-bold text-[var(--white)]">Movement Log</span>
         <Button variant="secondary" className="!text-xs" onClick={handleClear}>
           Clear Log
         </Button>
       </div>
       {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Date &amp; Time</th>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Student Type</th>
-              <th>Direction</th>
-              <th>Notes</th>
-              <th>Logged By</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
-                  No movements logged.
-                </td>
-              </tr>
-            ) : (
-              movements.map((m) => (
-                <tr key={m.id}>
-                  <td className="font-mono text-xs">{new Date(m.timestamp).toLocaleString()}</td>
-                  <td>{m.studentName}</td>
-                  <td className="text-xs">{m.indexNumber}</td>
-                  <td>{m.studentType === "CADET" ? "🎖️ Officer Cadet" : "🏠 Day Scholar"}</td>
-                  <td>
-                    <Badge tone={m.direction === "Exit" ? "red" : "green"}>
-                      {m.direction === "Exit" ? "🚪 Exit" : "🏫 Entry"}
-                    </Badge>
-                  </td>
-                  <td className="text-xs text-[var(--muted)]">{m.notes || "—"}</td>
-                  <td className="text-xs text-[var(--muted)]">{m.loggedBy}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <PairedMovementTable rows={rows} emptyMessage="No movements logged." />
     </div>
   );
 }

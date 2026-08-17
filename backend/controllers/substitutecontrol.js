@@ -37,6 +37,35 @@ export const deleteHodUnavailability = async (req, res) => {
   res.json({ message: "Deleted" });
 };
 
+// The manual "switch it back" admin needs once an HOD is available again,
+// rather than waiting for toDate to pass on its own — hodScopeFilter (see
+// leavecontrol.js) checks today's date against [fromDate, toDate] live on
+// every request, so shortening toDate to before today hands the queue back
+// to the real HOD immediately, no separate "who covers" flag to flip.
+// Truncates rather than deletes so the audit trail still shows the cover
+// really was in effect from fromDate up to the day it was switched off —
+// unless it never actually started yet, in which case there's no history
+// worth keeping a stub record for.
+export const endHodUnavailabilityNow = async (req, res) => {
+  const row = await HodUnavailability.findById(req.params.id).populate("hodId", "name department");
+  if (!row) return res.status(404).json({ message: "Not found" });
+  const today = new Date().toISOString().split("T")[0];
+  if (today > row.toDate) {
+    return res.status(400).json({ message: "This cover has already ended." });
+  }
+  const hodName = row.hodId?.name || "HOD";
+  if (row.fromDate >= today) {
+    await row.deleteOne();
+    await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover cancelled before taking effect`);
+    return res.json({ ok: true, removed: true });
+  }
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  row.toDate = yesterday;
+  await row.save();
+  await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover switched back as of ${today}`);
+  res.json(row);
+};
+
 // lecturerId now identifies a department's shared covering account, not an
 // individual — enriched here with that account's department and the
 // specific named roster member (memberId) this row is actually about,

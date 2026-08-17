@@ -1,5 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import { connectDB } from "./db.js";
 
@@ -12,12 +12,17 @@ import squadranRoutes from "./routes/squadranRoutes.js";
 import sddRoutes from "./routes/sddRoutes.js";
 import gateRoutes from "./routes/gateRoutes.js";
 
-dotenv.config();
-
 const app = express();
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
 
 // Middleware
-app.use(cors());
 // Raised from the default 100kb — leave attachments (capped at 20MB raw,
 // ~27MB once base64-encoded — see MAX_ATTACHMENT_BYTES in studentcontrol.js)
 // and student photos (~2MB) are stored as base64 in the request body. An

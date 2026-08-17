@@ -90,8 +90,10 @@ export function Card({
   );
 }
 
-const STAT_TILE_BAR_GRADIENTS: Record<string, string> = {
-  default: "from-[var(--orange)] to-[var(--gold)]",
+type StatTone = "indigo" | "amber" | "green" | "red" | "blue";
+
+const STAT_TILE_BAR_GRADIENTS: Record<StatTone, string> = {
+  indigo: "from-[#6366f1] to-[#4338ca]",
   amber: "from-[var(--orange)] to-[var(--gold)]",
   green: "from-[#22c55e] to-[#16a34a]",
   red: "from-[#ef4444] to-[#b91c1c]",
@@ -101,8 +103,8 @@ const STAT_TILE_BAR_GRADIENTS: Record<string, string> = {
 // Tone-matched circular backdrop behind a StatTile's icon (soft tint, not a
 // solid fill) — same low-opacity-tint convention Badge already uses, so an
 // amber tile's icon sits in a soft amber circle instead of floating bare.
-const STAT_TILE_ICON_CHIP_CLASSES: Record<string, string> = {
-  default: "bg-[rgba(224,123,32,0.14)] text-[var(--orange)]",
+const STAT_TILE_ICON_CHIP_CLASSES: Record<StatTone, string> = {
+  indigo: "bg-[rgba(99,102,241,0.14)] text-[#6366f1]",
   amber: "bg-[rgba(245,158,11,0.14)] text-[var(--warn)]",
   green: "bg-[rgba(34,197,94,0.14)] text-[var(--ok)]",
   red: "bg-[rgba(239,68,68,0.14)] text-[var(--err)]",
@@ -112,12 +114,12 @@ const STAT_TILE_ICON_CHIP_CLASSES: Record<string, string> = {
 export function StatTile({
   label,
   value,
-  tone = "default",
+  tone = "indigo",
   icon,
 }: {
   label: string;
   value: string | number;
-  tone?: "default" | "amber" | "green" | "red" | "blue";
+  tone?: StatTone;
   icon?: ReactNode;
 }) {
   const toneClass =
@@ -129,20 +131,20 @@ export function StatTile({
       ? "text-[var(--err)]"
       : tone === "blue"
       ? "text-[var(--sky)]"
-      : "text-[var(--white)]";
+      : "text-[#6366f1]"; // indigo
 
   return (
-    <div className="relative overflow-hidden rounded-[28px] border border-[var(--border)] bg-[var(--card)] px-5 py-4 shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
       <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${STAT_TILE_BAR_GRADIENTS[tone]}`} />
       {icon && (
-        <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-full ${STAT_TILE_ICON_CHIP_CLASSES[tone]}`}>
+        <div className={`mb-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full ${STAT_TILE_ICON_CHIP_CLASSES[tone]}`}>
           {icon}
         </div>
       )}
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--muted)]">
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-[var(--muted)]">
         {label}
       </p>
-      <p className={`mt-1 text-2xl font-extrabold ${toneClass}`}>{value}</p>
+      <p className={`mt-0.5 text-xl font-extrabold ${toneClass}`}>{value}</p>
     </div>
   );
 }

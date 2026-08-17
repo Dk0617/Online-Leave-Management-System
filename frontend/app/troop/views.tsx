@@ -277,14 +277,7 @@ function TroopPendingTable({
                     {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
                   </Badge>
                 </td>
-                <td>
-                  {LEAVE_TYPE_LABELS[l.type]}
-                  {l.priority === "emergency" && (
-                    <span className="ml-1">
-                      <Badge tone="red">Emergency</Badge>
-                    </span>
-                  )}
-                </td>
+                <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td>{l.startDate}</td>
                 <td>{l.endDate}</td>
                 <td className="text-xs text-[var(--muted)]">
@@ -354,14 +347,7 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
@@ -432,14 +418,7 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
                 <tr key={l.id}>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
-                  <td>
-                    {LEAVE_TYPE_LABELS[l.type]}
-                    {l.priority === "emergency" && (
-                      <span className="ml-1">
-                        <Badge tone="red">Emergency</Badge>
-                      </span>
-                    )}
-                  </td>
+                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td className="space-x-1.5 whitespace-nowrap">
@@ -517,7 +496,7 @@ function HistoryTable({
                   <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                 </td>
                 <td>{l.intake ? `Intake ${l.intake}` : "—"}</td>
-                <td>{LEAVE_TYPE_LABELS[l.type]}</td>
+                <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                 <td>{l.startDate}</td>
                 <td>
                   <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
@@ -670,14 +649,7 @@ export function AllRecords({ portal }: { portal: ReturnType<typeof useTroopPorta
                         {l.studentType === "CADET" ? "Officer Cadet" : "Day Scholar"}
                       </Badge>
                     </td>
-                    <td>
-                      {LEAVE_TYPE_LABELS[l.type]}
-                      {l.priority === "emergency" && (
-                        <span className="ml-1">
-                          <Badge tone="red">Emergency</Badge>
-                        </span>
-                      )}
-                    </td>
+                    <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                     <td>{l.startDate}</td>
                     <td>{l.endDate}</td>
                     <td>

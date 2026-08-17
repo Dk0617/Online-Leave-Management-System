@@ -39,7 +39,7 @@ const TOKEN_KEY = "ols_token";
 // interval instead, so a newly-submitted leave (or a decision made on one)
 // shows up for other roles without anyone having to manually reload the
 // page. 20s balances "feels prompt" against not hammering the API.
-export const POLL_INTERVAL_MS = 20_000;
+export const POLL_INTERVAL_MS = 30_000;
 
 export class ApiError extends Error {
   status: number;
@@ -60,7 +60,11 @@ export function setToken(token: string | null) {
   else window.localStorage.removeItem(TOKEN_KEY);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function request<T>(path: string, options: RequestInit = {}, attempt = 1): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -68,7 +72,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err) {
+    // "Failed to fetch" — the request never reached the server at all
+    // (dev server mid-restart, brief network blip, etc). This is a
+    // TypeError, distinct from a normal 4xx/5xx response, and is safe to
+    // silently retry once before bothering the user with an error.
+    if (attempt < 3) {
+      await sleep(attempt * 400);
+      return request<T>(path, options, attempt + 1);
+    }
+    throw err;
+  }
 
   const isJson = res.headers.get("content-type")?.includes("application/json");
   const body = isJson ? await res.json().catch(() => null) : null;
@@ -266,6 +283,7 @@ export function normalizeMovement(raw: Raw): Movement {
     timestamp: raw.createdAt as string,
     department: raw.department as string | undefined,
     lateEntry: raw.lateEntry as boolean | undefined,
+    earlyExit: raw.earlyExit as boolean | undefined,
   };
 }
 

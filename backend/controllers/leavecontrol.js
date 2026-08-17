@@ -350,10 +350,18 @@ export const hodCorrectDateTime = async (req, res) => {
   if (leave.hodStatus !== "Pending") {
     return res.status(403).json({ message: "This leave is not pending your decision" });
   }
+  // One correction only, ever — a second edit on top of a first would let a
+  // mistake in the correction itself go uncaught, with no record of what it
+  // actually looked like in between. If this one wasn't right, reject the
+  // application instead and have the student reapply correctly.
+  if (leave.dateTimeCorrectedByHod) {
+    return res.status(403).json({
+      message: "This leave's date/time has already been corrected once — it can't be edited again. Reject it instead if it's still wrong.",
+    });
+  }
   // This tool exists to fix a time-of-day typo (e.g. the student meant
   // 08:00, not 18:00) — not to reschedule the leave. The dates themselves
-  // are locked to whatever the student actually applied for (their very
-  // first submission, even across a second correction), so the HOD can
+  // are locked to whatever the student actually applied for, so the HOD can
   // never move a leave to a different day, only correct the time on the
   // day(s) already applied for.
   if (startDate !== leave.startDate || endDate !== leave.endDate) {
@@ -361,16 +369,24 @@ export const hodCorrectDateTime = async (req, res) => {
       message: "The date can't be changed here — only the time. Reject the application if the date itself is wrong.",
     });
   }
-
-  // Keep the student's own first-submitted values (not overwritten by a
-  // second correction) so the "originally applied for" figure shown to the
-  // student stays accurate even if the HOD corrects the same leave twice.
-  if (!leave.dateTimeCorrectedByHod) {
-    leave.originalStartDate = leave.startDate;
-    leave.originalStartTime = leave.startTime;
-    leave.originalEndDate = leave.endDate;
-    leave.originalEndTime = leave.endTime;
+  // Same campus curfew the student's own application was held to at submit
+  // time (see studentcontrol.js applyLeave) — a correction can't be used to
+  // sneak a leave outside it. Emergency Leave stays exempt, same as there.
+  if (leave.type !== "Emergency Leave") {
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const [endHour, endMinute] = endTime.split(":").map(Number);
+    if (startHour * 60 + startMinute < 6 * 60) {
+      return res.status(400).json({ message: "Corrected start time must be 06:00 or later — campus exit is only allowed from 06:00 onward." });
+    }
+    if (endHour * 60 + endMinute > 18 * 60) {
+      return res.status(400).json({ message: "Corrected end time must be 18:00 or earlier — campus entry must be logged by 18:00." });
+    }
   }
+
+  leave.originalStartDate = leave.startDate;
+  leave.originalStartTime = leave.startTime;
+  leave.originalEndDate = leave.endDate;
+  leave.originalEndTime = leave.endTime;
   leave.dateTimeCorrectedByHod = true;
   leave.startDate = startDate;
   leave.startTime = startTime;

@@ -16,14 +16,18 @@ const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 // with the bulk-reject action). Poya Day is a public holiday in its own
 // right, so it's colored the same green as Holiday, not red — students
 // are normally free to leave on it, nothing to restrict.
-const CATEGORY_CELL_CLASS: Record<EventCategory, string> = {
+// Exported so the student's own leave-application calendar (see
+// DateRangeCalendar.tsx) can mark the exact same Poya/Holiday/Workshop days
+// with the exact same colors — one source of truth instead of two calendars
+// silently drifting apart on what a given day means.
+export const CATEGORY_CELL_CLASS: Record<EventCategory, string> = {
   WORKSHOP: "border-[var(--err)] bg-[rgba(239,68,68,0.12)] text-[var(--err)]",
   POYA: "border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]",
   HOLIDAY: "border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]",
   NO_LECTURE: "border-[var(--sky)] bg-[rgba(74,144,217,0.12)] text-[var(--sky)]",
   OTHER: "border-[var(--border)] bg-[rgba(148,163,184,0.12)] text-[var(--muted)]",
 };
-const CATEGORY_BADGE_TONE: Record<EventCategory, "red" | "green" | "blue" | "gray"> = {
+export const CATEGORY_BADGE_TONE: Record<EventCategory, "red" | "green" | "blue" | "gray"> = {
   WORKSHOP: "red",
   POYA: "green",
   HOLIDAY: "green",
@@ -34,7 +38,7 @@ const CATEGORY_BADGE_TONE: Record<EventCategory, "red" | "green" | "blue" | "gra
 // Sourced from PublicHolidays.lk and CalendarLabs.com (cross-checked against
 // each other) — shown automatically on every calendar, nothing to add or
 // maintain.
-const SRI_LANKA_2026_HOLIDAYS: { date: string; title: string; category: EventCategory }[] = [
+export const SRI_LANKA_2026_HOLIDAYS: { date: string; title: string; category: EventCategory }[] = [
   { date: "2026-01-03", title: "Duruthu Full Moon Poya Day", category: "POYA" },
   { date: "2026-01-15", title: "Tamil Thai Pongal Day", category: "HOLIDAY" },
   { date: "2026-02-01", title: "Nawam Full Moon Poya Day", category: "POYA" },

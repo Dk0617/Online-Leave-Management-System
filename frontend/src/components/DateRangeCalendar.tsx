@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Badge } from "@/src/components/ui";
-import { EventDay } from "@/src/types";
+import { CATEGORY_BADGE_TONE, CATEGORY_CELL_CLASS, SRI_LANKA_2026_HOLIDAYS } from "@/src/components/eventCalendar";
+import { EVENT_CATEGORY_LABELS, EventCategory, EventDay } from "@/src/types";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -16,6 +17,20 @@ function ymd(d: Date): string {
 }
 function parseYmd(s: string): Date {
   return new Date(`${s}T00:00:00`);
+}
+
+// A day on the calendar, whichever source it came from — mirrors the exact
+// same overlay eventCalendar.tsx builds for the Admin/HOD calendars (Sri
+// Lanka's Poya/holiday calendar, then this department's own Workshop days
+// layered on top), so a student sees precisely the same picture when
+// picking dates as the HOD sees when deciding on their leave.
+interface CalendarEntry {
+  date: string;
+  title: string;
+  category: EventCategory;
+  isSystem: boolean;
+  startTime?: string;
+  endTime?: string;
 }
 
 // A click-to-select date range: first click sets the anchor day, a second
@@ -51,7 +66,25 @@ export function DateRangeCalendar({
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
 
-  const blockedByDate = new Map(blockedDays.map((b) => [b.date, b]));
+  // Sri Lanka's national Poya/holiday calendar first, then this
+  // department's own Workshop days layered on top — same overlay rule as
+  // eventCalendar.tsx: the department's own entry wins on the rare date
+  // where both would otherwise collide, since it's the more specific,
+  // actionable one for a student actually picking dates to apply for.
+  const eventsByDate = new Map<string, CalendarEntry>();
+  for (const h of SRI_LANKA_2026_HOLIDAYS) {
+    eventsByDate.set(h.date, { ...h, isSystem: true });
+  }
+  for (const b of blockedDays) {
+    eventsByDate.set(b.date, {
+      date: b.date,
+      title: b.title,
+      category: b.category,
+      isSystem: false,
+      startTime: b.startTime,
+      endTime: b.endTime,
+    });
+  }
 
   function handleClick(date: string) {
     if (date < minDate) return;
@@ -107,7 +140,7 @@ export function DateRangeCalendar({
             if (day === null) return <div key={i} />;
             const date = ymd(new Date(year, month, day));
             const disabled = date < minDate;
-            const blocked = blockedByDate.get(date);
+            const event = eventsByDate.get(date);
             const inRange = Boolean(startDate && endDate && date >= startDate && date <= endDate);
             const isEdge = date === startDate || date === endDate || date === anchor;
             return (
@@ -117,23 +150,21 @@ export function DateRangeCalendar({
                 disabled={disabled}
                 onClick={() => handleClick(date)}
                 title={
-                  blocked
-                    ? `${blocked.title} — mandatory attendance day${
-                        blocked.startTime && blocked.endTime ? ` (${blocked.startTime}–${blocked.endTime})` : ""
+                  event
+                    ? `${event.title} (${EVENT_CATEGORY_LABELS[event.category]})${
+                        event.startTime && event.endTime ? ` ${event.startTime}–${event.endTime}` : ""
                       }`
                     : undefined
                 }
                 className={`h-9 rounded-lg text-xs font-semibold transition-colors ${
                   disabled
                     ? "cursor-not-allowed text-[var(--muted)] opacity-30"
-                    : isEdge
-                    ? "bg-[var(--sky)] text-white"
-                    : blocked
-                    ? "bg-[rgba(239,68,68,0.15)] text-[var(--err)] ring-1 ring-inset ring-[rgba(239,68,68,0.3)]"
+                    : event
+                    ? `font-bold ${CATEGORY_CELL_CLASS[event.category]}`
                     : inRange
                     ? "bg-[rgba(74,144,217,0.18)] text-[var(--white)]"
                     : "text-[var(--white)] hover:bg-[rgba(74,144,217,0.08)]"
-                }`}
+                } ${isEdge ? "ring-2 ring-[var(--sky)]" : ""}`}
               >
                 {day}
               </button>
@@ -147,6 +178,15 @@ export function DateRangeCalendar({
             ? "Click any day to pick a new range."
             : "Click a day to start your leave range."}
         </p>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--muted)]">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded border border-[var(--err)] bg-[rgba(239,68,68,0.12)]" /> Workshop
+            (mandatory)
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded border border-[#22c55e] bg-[rgba(34,197,94,0.12)]" /> Poya / Holiday
+          </span>
+        </div>
       </div>
 
       {rangeDays.length > 0 && (
@@ -164,7 +204,7 @@ export function DateRangeCalendar({
             </thead>
             <tbody>
               {rangeDays.map((d) => {
-                const blocked = blockedByDate.get(d);
+                const event = eventsByDate.get(d);
                 return (
                   <tr key={d}>
                     <td className="whitespace-nowrap px-4 py-2 text-xs text-[var(--white)]">
@@ -172,9 +212,9 @@ export function DateRangeCalendar({
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-xs text-[var(--white)]">
                       {d}
-                      {blocked && (
-                        <span className="ml-2">
-                          <Badge tone="red">Blocked</Badge>
+                      {event && (
+                        <span className="ml-2" title={event.title}>
+                          <Badge tone={CATEGORY_BADGE_TONE[event.category]}>{EVENT_CATEGORY_LABELS[event.category]}</Badge>
                         </span>
                       )}
                     </td>
