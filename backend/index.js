@@ -1,5 +1,5 @@
-import "dotenv/config";
 import express from "express";
+import dotenv from "dotenv";
 import cors from "cors";
 import { connectDB } from "./db.js";
 
@@ -12,12 +12,20 @@ import squadranRoutes from "./routes/squadranRoutes.js";
 import sddRoutes from "./routes/sddRoutes.js";
 import gateRoutes from "./routes/gateRoutes.js";
 
+dotenv.config({ path: "./backend/.env" });
+
 const app = express();
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: 'http://localhost:3000',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+}));
+
+app.options('*', cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 }));
 
 app.use(express.json());
