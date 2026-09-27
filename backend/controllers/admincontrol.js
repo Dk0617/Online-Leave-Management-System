@@ -205,13 +205,14 @@ export const updateStudent = async (req, res) => {
   }
 
   await student.save();
-  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber}`);
-  const { password: _pw, ...safe } = student.toObject();
-  res.json(safe);
+  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber} (intake ${student.intake})`);  res.json(safe);
 };
 
 export const deleteStudent = async (req, res) => {
-  await Student.findByIdAndDelete(req.params.id);
+  const student = await Student.findByIdAndDelete(req.params.id);
+  if (student) {
+    await writeAudit("ADMIN", req.user.name, "account_deleted", `student ${student.indexNumber} (intake ${student.intake})`);
+  }
   res.json({ message: "Deleted" });
 };
 
