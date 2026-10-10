@@ -7,6 +7,7 @@ import Sdd from "../models/Sdd.js";
 import Gate from "../models/Gate.js";
 import Lecturer from "../models/Lecturer.js";
 import LecturerUnavailability from "../models/LecturerUnavailability.js";
+import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
 import Notification from "../models/Notification.js";
@@ -584,6 +585,10 @@ export const removeLecturerMember = async (req, res) => {
   if (!member) return res.status(404).json({ message: "Roster member not found" });
 
   await LecturerUnavailability.deleteMany({ lecturerId: lecturer._id, memberId: member._id });
+  // Upcoming Acting HOD days for a removed lecturer are dropped (Admin is
+  // then alerted to reassign); past ones stay as history.
+  const today = new Date().toISOString().split("T")[0];
+  await ActingHodAssignment.deleteMany({ department: lecturer.department, memberId: member._id, date: { $gte: today } });
   member.deleteOne();
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);

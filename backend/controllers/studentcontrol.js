@@ -9,6 +9,9 @@ import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
+import HodUnavailability from "../models/HodUnavailability.js";
+import ActingHodAssignment from "../models/ActingHodAssignment.js";
+import { localDateStr } from "./leavecontrol.js";
  
 // Academic Leave never requires a supporting document, for either student
 // type — it's an academic excuse, not a campus-exit reason. Day Scholars
@@ -390,9 +393,32 @@ export const applyLeave = async (req, res) => {
     "leave_submitted",
     `type=${type}, id=${leave._id}${isEmergency ? " [EMERGENCY]" : ""}${linkedLeave ? `, linked_personal=${linkedLeave._id}` : ""}`
   );
+  if (hodIdForLeave) notifyAdminIfNoActingHod(hod, leave);
   res.status(201).json(leave);
 };
  
+// Acting HOD routing: a leave just routed to an HOD who is unavailable today,
+// with no Acting HOD assigned for their department, would otherwise sit
+// unseen — flag it to Admin in the audit log (the HOD Cover screen also
+// lists every such gap, see substitutecontrol.js listActingHodGaps).
+async function notifyAdminIfNoActingHod(hod, leave) {
+  try {
+    const today = localDateStr();
+    const unavailable = await HodUnavailability.exists({ hodId: hod._id, fromDate: { $lte: today }, toDate: { $gte: today } });
+    if (!unavailable) return;
+    const assigned = await ActingHodAssignment.exists({ department: hod.department, date: today });
+    if (assigned) return;
+    await writeAudit(
+      "ADMIN",
+      "system",
+      "acting_hod_missing",
+      `${hod.department}: ${hod.name} is unavailable today and no Acting HOD is assigned — leave id=${leave._id} is waiting`
+    );
+  } catch (err) {
+    console.error("Failed to check Acting HOD cover:", err.message);
+  }
+}
+
 // Lets the leave-application form warn the student (and block the relevant
 // dates client-side, mirroring the server-side check in applyLeave above)
 // before they even submit — mandatory event days only, from their own

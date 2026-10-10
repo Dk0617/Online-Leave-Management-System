@@ -38,6 +38,9 @@ export const squadranMovements = async (req, res) => {
 // sees that HOD's movements too, not just their own (empty) scope — same
 // widening their leave queue already gets.
 export const hodMovements = async (req, res) => {
+  // Acting HOD (LECTURER) permissions are limited to the leave queue itself
+  // — gate movements stay with the regular HOD.
+  if (req.user.role === "LECTURER") return res.json([]);
   res.json(await scopedMovements(await hodScopeFilter(req)));
 };
 

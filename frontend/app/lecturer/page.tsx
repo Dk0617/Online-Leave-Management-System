@@ -85,51 +85,54 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
         </p>
       ) : status.activeMember ? (
         <p className="text-sm text-[var(--white)]">
-          🔔 <strong>{status.hodName || "The HOD"}</strong> is unavailable today. Their queue is currently with{" "}
-          <strong>{status.activeMember.name}</strong> ({tierLabel(status.activeMember.tier)}, rank{" "}
-          {status.activeMember.rank}) — log in with this department&apos;s shared account to act on it.
+          🔔 <strong>{status.hodName || "The HOD"}</strong> is unavailable today. Acting HOD for {status.department}:{" "}
+          <strong>{status.activeMember.name}</strong> ({tierLabel(status.activeMember.tier)}). Their leave approvals
+          are in the queue below.
         </p>
       ) : (
         <p className="text-sm text-[var(--warn)]">
-          ⚠️ <strong>{status.hodName || "The HOD"}</strong> is unavailable today, and every lecturer on{" "}
-          {status.department}&apos;s roster is also marked unavailable — nobody can act on this queue until
-          that changes.
+          ⚠️ <strong>{status.hodName || "The HOD"}</strong> is unavailable today, but Admin hasn&apos;t assigned an
+          Acting HOD for {status.department} yet. Admin has been alerted; the queue opens here once someone is
+          assigned.
         </p>
       )}
 
-      {status.roster.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="text-left uppercase tracking-wide text-[var(--muted)]">
-                <th className="py-1.5 pr-4">Order</th>
-                <th className="py-1.5 pr-4">Name</th>
-                <th className="py-1.5 pr-4">Tier</th>
-                <th className="py-1.5">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {status.roster.map((m, i) => (
-                <tr key={m.id} className="border-t border-[rgba(255,255,255,0.05)]">
-                  <td className="py-1.5 pr-4 text-[var(--white)]">{i + 1}</td>
-                  <td className="py-1.5 pr-4 text-[var(--white)]">
-                    {m.name}
-                    {status.activeMember?.id === m.id && (
-                      <span className="ml-1.5">
-                        <Badge tone="green">Active Today</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-4">
-                    <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{tierLabel(m.tier)}</Badge>
-                  </td>
-                  <td className="py-1.5 text-[var(--white)]">{m.rank}</td>
-                </tr>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div>
+          <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+            HOD availability (next 30 days)
+          </h4>
+          {status.unavailability.length === 0 ? (
+            <p className="text-xs text-[var(--muted)]">Available on every day.</p>
+          ) : (
+            <ul className="space-y-1 text-xs text-[var(--white)]">
+              {status.unavailability.map((u) => (
+                <li key={u.id}>
+                  <Badge tone="red">Unavailable</Badge> {u.fromDate === u.toDate ? u.fromDate : `${u.fromDate} → ${u.toDate}`}
+                  {u.reason && <span className="text-[var(--muted)]"> · {u.reason}</span>}
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          )}
         </div>
-      )}
+        <div>
+          <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+            Acting HOD assignments
+          </h4>
+          {status.assignments.length === 0 ? (
+            <p className="text-xs text-[var(--muted)]">None assigned.</p>
+          ) : (
+            <ul className="space-y-1 text-xs text-[var(--white)]">
+              {status.assignments.map((a) => (
+                <li key={a.id}>
+                  {a.date}: <strong>{a.memberName}</strong>{" "}
+                  <Badge tone={a.memberTier === "SENIOR" ? "blue" : "gray"}>{tierLabel(a.memberTier)}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

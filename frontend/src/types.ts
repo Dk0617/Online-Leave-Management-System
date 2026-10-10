@@ -185,6 +185,9 @@ export interface LeaveRequest {
   troopApprovedAt?: string;
   sqnApprovedAt?: string;
   sddApprovedAt?: string;
+  // Who actually made the HOD-stage decision — regular HOD or Acting HOD.
+  // See backend/models/Leave.js hodApprover.
+  hodApprover?: HodApprover;
 }
 
 // ── Block Leave — one shared 24-hour window a department's Day Scholars
@@ -378,6 +381,41 @@ export interface LecturerCoverStatus {
   department: string;
   hodName?: string;
   hodUnavailable: boolean;
+  // Today's assigned Acting HOD (null if the HOD is available or nobody is
+  // assigned).
   activeMember: LecturerMember | null;
-  roster: LecturerMember[];
+  // The HOD's unavailable windows and the Acting HOD assignments for the
+  // next 30 days.
+  unavailability: { id: string; fromDate: string; toDate: string; reason?: string }[];
+  assignments: { id: string; date: string; memberName: string; memberTier: "SENIOR" | "JUNIOR" }[];
+}
+
+export interface HodApprover {
+  name?: string;
+  role?: "HOD" | "ACTING_HOD";
+  department?: string;
+  decidedAt?: string;
+}
+
+// Admin's per-date Acting HOD pick — see
+// backend/models/ActingHodAssignment.js.
+export interface ActingHodAssignment {
+  id: string;
+  lecturerId: string;
+  department: string;
+  memberId: string;
+  memberName: string;
+  memberTier: "SENIOR" | "JUNIOR";
+  date: string; // "YYYY-MM-DD"
+  assignedBy?: string;
+}
+
+// A department whose HOD is unavailable on these dates with no Acting HOD
+// assigned — see backend/controllers/substitutecontrol.js listActingHodGaps.
+export interface ActingHodGap {
+  hodId: string;
+  hodName: string;
+  department: string;
+  dates: string[];
+  pendingCount: number;
 }

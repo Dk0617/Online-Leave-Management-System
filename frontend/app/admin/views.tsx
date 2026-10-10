@@ -29,21 +29,31 @@ function Breakdown({
   value,
   total,
   color,
+  onClick,
 }: {
   label: string;
   value: number;
   total: number;
   color: string;
+  onClick?: () => void;
 }) {
   const pct = total ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-3">
+  const content = (
+    <>
       <div className="w-24 shrink-0 text-xs text-[var(--muted)]">{label}</div>
       <div className="h-2.5 flex-1 overflow-hidden rounded-md bg-[var(--card2)]">
         <div className="h-full rounded-md" style={{ width: `${pct}%`, background: color }} />
       </div>
       <div className="w-8 shrink-0 text-right text-xs font-bold text-[var(--white)]">{value}</div>
-    </div>
+    </>
+  );
+  if (!onClick) {
+    return <div className="flex items-center gap-3">{content}</div>;
+  }
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 text-left">
+      {content}
+    </button>
   );
 }
 
@@ -61,6 +71,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
   return (
     <div>
+      <ActingHodGapAlert portal={portal} />
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load admin data: {error}</span>
@@ -1233,73 +1244,332 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
     </Card>
   );
 }
-export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { audit, clearAuditLog } = portal;
-  const [roleFilter, setRoleFilter] = useState("");
+
+
+// ==================================================================
+// HOD Cover — each department has exactly one shared "covering" login
+// used by all of its lecturers to stand in when the HOD is unavailable.
+// Admin creates that one account per department and maintains a named
+// roster inside it (Senior/Junior tier + rank); admin marks WHO is
+// unavailable (the HOD, or a specific named roster member) on WHICH days,
+// and the system works out on its own which named lecturer is currently
+// active — nobody picks a specific substitute by hand. See
+// leavecontrol.js resolveActiveMemberForDepartment for the resolution
+// logic.
+// ==================================================================
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+const TIER_LABELS: Record<"SENIOR" | "JUNIOR", string> = { SENIOR: "Senior Lecturer", JUNIOR: "Junior Lecturer" };
+
+function LecturerRosterModal({
+  lecturer,
+  onAddMember,
+  onEditMember,
+  onRemoveMember,
+  onClose,
+}: {
+  lecturer: LecturerAccount;
+  onAddMember: (input: { name: string; tier: "SENIOR" | "JUNIOR"; rank: number }) => Promise<void>;
+  onEditMember: (memberId: string, input: { name: string; tier: "SENIOR" | "JUNIOR"; rank: number }) => Promise<void>;
+  onRemoveMember: (memberId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [tier, setTier] = useState<"SENIOR" | "JUNIOR">("SENIOR");
+  const [rank, setRank] = useState("1");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const filtered = roleFilter ? audit.filter((a) => a.role === roleFilter) : audit;
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setTier("SENIOR");
+    setRank("1");
+  }
 
-  async function handleClear() {
-    if (!confirm("Clear the entire audit log? This cannot be undone.")) return;
+  function startEdit(m: LecturerAccount["members"][number]) {
+    setEditingId(m.id);
+    setName(m.name);
+    setTier(m.tier);
+    setRank(String(m.rank));
+  }
+
+  async function handleSubmit() {
+    if (!name.trim() || !rank.trim() || Number.isNaN(Number(rank)) || Number(rank) < 1) {
+      setError("Name and a positive rank are required.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
     try {
-      await clearAuditLog();
+      const input = { name: name.trim(), tier, rank: Number(rank) };
+      if (editingId) await onEditMember(editingId, input);
+      else await onAddMember(input);
+      resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to clear audit log");
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSubmitting(false);
     }
   }
 
+  async function handleRemove(memberId: string) {
+    if (!confirm("Remove this lecturer from the roster?")) return;
+    try {
+      await onRemoveMember(memberId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove");
+    }
+  }
+
+  const sorted = [...lecturer.members].sort((a, b) =>
+    a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1
+  );
+
   return (
-    <Card className="p-5">
-      <h2 className="mb-2 text-sm font-bold text-[var(--white)]">🛡️ System Audit Log</h2>
-      <p className="mb-4 text-xs text-[var(--muted)]">
-        Every login, leave submission, approval, rejection, and password change across all portals — most recent first.
-      </p>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={styles.input} style={{ width: "auto" }}>
-          <option value="">All roles</option>
-          {ROLE_OPTIONS.filter(Boolean).map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}
-            </option>
-          ))}
-        </select>
-        <Button variant="secondary" onClick={handleClear}>
-          Clear Log
-        </Button>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[rgba(5,13,31,0.85)] backdrop-blur-sm">
+      <div className="max-h-[85vh] w-[90%] max-w-[560px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-5">
+          <div>
+            <h3 className="text-[15px] font-bold text-[var(--white)]">{lecturer.department} Roster</h3>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Login: {lecturer.username} — shared by every lecturer below.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-xl leading-none text-[var(--muted)] hover:text-[var(--white)]">
+            ✕
+          </button>
+        </div>
+        <div className="px-6 py-4">
+          <div className="mb-4 overflow-x-auto rounded-xl border border-[var(--border)]">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                  <th className="px-3 py-2">Order</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Tier</th>
+                  <th className="px-3 py-2">Rank</th>
+                  <th className="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-[var(--muted)]">
+                      No lecturers on this roster yet.
+                    </td>
+                  </tr>
+                ) : (
+                  sorted.map((m, i) => (
+                    <tr key={m.id} className="border-t border-[rgba(255,255,255,0.05)]">
+                      <td className="px-3 py-2 text-[var(--white)]">{i + 1}</td>
+                      <td className="px-3 py-2 text-[var(--white)]">{m.name}</td>
+                      <td className="px-3 py-2">
+                        <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[m.tier]}</Badge>
+                      </td>
+                      <td className="px-3 py-2 text-[var(--white)]">{m.rank}</td>
+                      <td className="space-x-1.5 whitespace-nowrap px-3 py-2">
+                        <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEdit(m)}>
+                          Edit
+                        </Button>
+                        <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(m.id)}>
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card2)] p-4">
+            <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-[var(--muted)]">
+              {editingId ? "Edit Lecturer" : "Add Lecturer to Roster"}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className={styles.label}>Name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} className={styles.input} placeholder="Full name" />
+              </div>
+              <div>
+                <label className={styles.label}>Tier</label>
+                <select value={tier} onChange={(e) => setTier(e.target.value as "SENIOR" | "JUNIOR")} className={styles.input}>
+                  <option value="SENIOR">Senior Lecturer</option>
+                  <option value="JUNIOR">Junior Lecturer</option>
+                </select>
+              </div>
+              <div>
+                <label className={styles.label}>Rank</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={rank}
+                  onChange={(e) => setRank(e.target.value)}
+                  className={styles.input}
+                  placeholder="1 = highest"
+                />
+              </div>
+            </div>
+            {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+            <div className="mt-3 flex gap-2">
+              <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? "Saving…" : editingId ? "Save Changes" : "Add"}
+              </Button>
+              {editingId && (
+                <Button variant="ghost" onClick={resetForm}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
-      <div className="overflow-x-auto">
+    </div>
+  );
+}
+
+// Admin alert for requirement "no Acting HOD assigned → notify Admin":
+// every upcoming date where an HOD is unavailable and nobody covers.
+export function ActingHodGapAlert({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  if (!portal.actingGaps.length) return null;
+  return (
+    <div className="mb-5 rounded-xl border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-xs text-[var(--err)]">
+      <strong>⚠️ Acting HOD needed:</strong>
+      <ul className="mt-1.5 space-y-1">
+        {portal.actingGaps.map((g) => (
+          <li key={g.hodId}>
+            {g.department}: {g.hodName} is unavailable on {g.dates.slice(0, 6).join(", ")}
+            {g.dates.length > 6 ? ` and ${g.dates.length - 6} more day(s)` : ""} with no Acting HOD assigned
+            {g.pendingCount ? ` (${g.pendingCount} leave${g.pendingCount === 1 ? "" : "s"} waiting)` : ""}.
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function HodAvailabilityCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { hods, hodUnavailability, markHodUnavailable, markHodAvailable, removeHodUnavailability } = portal;
+  const [hodId, setHodId] = useState("");
+  const [fromDate, setFromDate] = useState(todayStr());
+  const [toDate, setToDate] = useState(todayStr());
+  const [reason, setReason] = useState("");
+  const [status, setStatus] = useState<"UNAVAILABLE" | "AVAILABLE">("UNAVAILABLE");
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    if (!hodId || !fromDate) {
+      setError("Select an HOD and a date.");
+      return;
+    }
+    setError(null);
+    try {
+      if (status === "UNAVAILABLE") {
+        await markHodUnavailable(hodId, fromDate, toDate || fromDate, reason.trim() || undefined);
+      } else {
+        await markHodAvailable(hodId, fromDate);
+      }
+      setReason("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    }
+  }
+
+  async function handleRemove(id: string) {
+    if (!confirm("Remove this unavailability? The HOD becomes available on all of these dates.")) return;
+    try {
+      await removeHodUnavailability(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove");
+    }
+  }
+
+  const today = todayStr();
+  const upcoming = hodUnavailability.filter((u) => u.toDate >= today).sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+
+  return (
+    <Card className="mb-5 p-5">
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📅 HOD Availability</h2>
+      <div className={`${styles.formGrid3} mb-3.5`}>
+        <div>
+          <label className={styles.label}>HOD</label>
+          <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
+            <option value="">Select HOD…</option>
+            {hods.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.name}
+                {h.department ? ` — ${h.department}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={styles.label}>Status</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as "UNAVAILABLE" | "AVAILABLE")} className={styles.input}>
+            <option value="UNAVAILABLE">Unavailable</option>
+            <option value="AVAILABLE">Available</option>
+          </select>
+        </div>
+        <div>
+          <label className={styles.label}>{status === "UNAVAILABLE" ? "From date" : "Date"}</label>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={styles.input} />
+        </div>
+      </div>
+      {status === "UNAVAILABLE" && (
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>To date</label>
+            <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>Reason (optional)</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} className={styles.input} placeholder="e.g. Conference" />
+          </div>
+          <div />
+        </div>
+      )}
+      <Button variant="primary" onClick={handleSave}>
+        {status === "UNAVAILABLE" ? "Mark Unavailable" : "Mark Available"}
+      </Button>
+      {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+
+      <div className="mt-5 overflow-x-auto">
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Date/Time</th>
-              <th>Role</th>
-              <th>Username</th>
-              <th>Action</th>
-              <th>Details</th>
+              <th>HOD</th>
+              <th>Department</th>
+              <th>Unavailable</th>
+              <th>Reason</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {upcoming.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
-                  No audit events recorded yet.
+                  Every HOD is available — nothing upcoming.
                 </td>
               </tr>
             ) : (
-              filtered.slice(0, 500).map((a) => (
-                <tr key={a.id}>
-                  <td>{new Date(a.time).toLocaleString()}</td>
-                  <td>{ROLE_LABELS[a.role as keyof typeof ROLE_LABELS] ?? a.role}</td>
-                  <td>{a.user}</td>
+              upcoming.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.hodName}</td>
+                  <td>{u.hodDepartment || "—"}</td>
                   <td>
-                    {a.action}
-                    {a.action === "leave_submitted" && (a.details || "").includes("EMERGENCY") && (
-                      <span className="ml-1 font-bold text-[var(--err)]">🚨</span>
-                    )}
+                    <Badge tone="red">Unavailable</Badge> {u.fromDate === u.toDate ? u.fromDate : `${u.fromDate} → ${u.toDate}`}
                   </td>
-                  <td className="text-[var(--muted)]">{a.details}</td>
+                  <td className="text-[var(--muted)]">{u.reason || "—"}</td>
+                  <td>
+                    <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(u.id)}>
+                      Remove
+                    </Button>
+                  </td>
                 </tr>
               ))
             )}
@@ -1310,93 +1580,893 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
   );
 }
 
-export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { leaves, students } = portal;
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { lecturers, actingAssignments, hodUnavailability, hods, assignActingHod, removeActingHod } = portal;
+  const [lecturerId, setLecturerId] = useState("");
+  const [memberId, setMemberId] = useState("");
+  const [date, setDate] = useState(todayStr());
+  const [toDate, setToDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  function handleExport() {
-    const filtered = leaves.filter((leave) => {
-      if (!startDate || !endDate) return true;
-      return leave.startDate >= startDate && leave.startDate <= endDate;
-    });
+  const account = lecturers.find((l) => l.id === lecturerId);
+  const members = account
+    ? [...account.members].sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
+    : [];
 
-    const headers = [
-      "Student", 
-      "Intake", 
-      "Index Number", 
-      "Department", 
-      "Leave Type", 
-      "From", 
-      "To", 
-      "Applied",
-      "Status"
-    ];
+  function hodAvailabilityOn(department: string, d: string): "Available" | "Unavailable" {
+    const hod = hods.find((h) => h.department === department);
+    if (!hod) return "Available";
+    return hodUnavailability.some((u) => u.hodId === hod.id && u.fromDate <= d && u.toDate >= d) ? "Unavailable" : "Available";
+  }
 
-    const rows = filtered.map((leave) => {
-      const student = students.find((s) => s.indexNumber === leave.indexNumber);
-      const intake = student?.intake || "N/A";
-      const department = student?.department || "N/A";
-      
-      const leaveType = leave.type === "PERSONAL" ? "Personal Leave" : 
-                        leave.type === "MEDICAL" ? "Medical Leave" : 
-                        leave.type === "OFFICIAL" ? "Official Leave" : leave.type;
+  async function handleAssign() {
+    if (!lecturerId || !memberId || !date) {
+      setError("Select a department, a lecturer and a date.");
+      return;
+    }
+    setError(null);
+    try {
+      await assignActingHod({ lecturerId, memberId, date, toDate: toDate || undefined });
+      setToDate("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign");
+    }
+  }
 
-      const appliedDate = new Date(leave.createdAt || Date.now()).toLocaleDateString();
+  async function handleRemove(id: string) {
+    if (!confirm("Remove this Acting HOD assignment?")) return;
+    try {
+      await removeActingHod(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove");
+    }
+  }
 
-      return [
-        `"${leave.studentName}"`,
-        `"${intake}"`,               
-        `"${leave.indexNumber}"`,
-        `"${department}"`,
-        `"${leaveType}"`,
-        `"${leave.startDate}"`,
-        `"${leave.endDate}"`,
-        `"${appliedDate}"`,
-        `"${leave.status}"`
-      ].join(",");
-    });
+  const today = todayStr();
+  const upcoming = actingAssignments.filter((a) => a.date >= today).sort((a, b) => a.date.localeCompare(b.date));
 
-    const csvContent = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `leave-audit-${startDate || "all"}_to_${endDate || "all"}.csv`;
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  return (
+    <Card className="mb-5 p-5">
+      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">🧑‍🏫 Assign Acting HOD</h2>
+      <div className={`${styles.formGrid3} mb-3.5`}>
+        <div>
+          <label className={styles.label}>Department</label>
+          <select
+            value={lecturerId}
+            onChange={(e) => {
+              setLecturerId(e.target.value);
+              setMemberId("");
+            }}
+            className={styles.input}
+          >
+            <option value="">Select department…</option>
+            {lecturers.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.department}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={styles.label}>Lecturer</label>
+          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className={styles.input} disabled={!account}>
+            <option value="">{account && !members.length ? "Roster is empty" : "Select lecturer…"}</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} — {TIER_LABELS[m.tier]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={styles.label}>Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={styles.input} />
+        </div>
+      </div>
+      <div className={`${styles.formGrid3} mb-3.5`}>
+        <div>
+          <label className={styles.label}>Until (optional, for several days)</label>
+          <input type="date" value={toDate} min={date} onChange={(e) => setToDate(e.target.value)} className={styles.input} />
+        </div>
+        <div className="flex items-end text-xs text-[var(--muted)]">
+          {account && date && (
+            <span>
+              HOD on {date}: <strong>{hodAvailabilityOn(account.department, date)}</strong>
+            </span>
+          )}
+        </div>
+        <div />
+      </div>
+      <Button variant="primary" onClick={handleAssign}>
+        Assign Acting HOD
+      </Button>
+      {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+
+      <div className="mt-5 overflow-x-auto">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Department</th>
+              <th>Acting HOD</th>
+              <th>HOD status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {upcoming.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
+                  No upcoming Acting HOD assignments.
+                </td>
+              </tr>
+            ) : (
+              upcoming.map((a) => {
+                const hodStatus = hodAvailabilityOn(a.department, a.date);
+                return (
+                  <tr key={a.id}>
+                    <td>{a.date}</td>
+                    <td>{a.department}</td>
+                    <td>
+                      {a.memberName}
+                      <div className="text-xs text-[var(--muted)]">{TIER_LABELS[a.memberTier]}</div>
+                    </td>
+                    <td>
+                      <Badge tone={hodStatus === "Available" ? "green" : "red"}>{hodStatus}</Badge>
+                    </td>
+                    <td>
+                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(a.id)}>
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const {
+    hods,
+    lecturers,
+    addLecturer,
+    editLecturer,
+    removeLecturer,
+    addLecturerMember,
+    editLecturerMember,
+    removeLecturerMember,
+  } = portal;
+
+  // ── Department covering accounts ─────────────────────────────────
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [acctDepartment, setAcctDepartment] = useState("");
+  const [acctUsername, setAcctUsername] = useState("");
+  const [acctName, setAcctName] = useState("");
+  const [acctEmail, setAcctEmail] = useState("");
+  const [acctPassword, setAcctPassword] = useState("");
+  const [acctError, setAcctError] = useState<string | null>(null);
+  const [rosterFor, setRosterFor] = useState<string | null>(null);
+
+  function resetAccountForm() {
+    setEditingAccountId(null);
+    setAcctDepartment("");
+    setAcctUsername("");
+    setAcctName("");
+    setAcctEmail("");
+    setAcctPassword("");
+  }
+
+  function startEditAccount(id: string) {
+    const l = lecturers.find((x) => x.id === id);
+    if (!l) return;
+    setEditingAccountId(id);
+    setAcctDepartment(l.department);
+    setAcctUsername(l.username);
+    setAcctName(l.name);
+    setAcctEmail(l.email || "");
+    setAcctPassword("");
+  }
+
+  async function handleSaveAccount() {
+    if (!editingAccountId) {
+      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctEmail.trim() || !acctPassword.trim()) {
+        setAcctError("All fields are required to create an account.");
+        return;
+      }
+    } else if (!acctUsername.trim() || !acctName.trim()) {
+      setAcctError("Please fill in username and name.");
+      return;
+    }
+    if (acctPassword.trim() && !isValidPassword(acctPassword.trim())) {
+      setAcctError(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+    setAcctError(null);
+    try {
+      if (editingAccountId) {
+        await editLecturer(editingAccountId, {
+          username: acctUsername.trim(),
+          name: acctName.trim(),
+          email: acctEmail.trim() || undefined,
+          department: acctDepartment.trim() || undefined,
+          password: acctPassword.trim() || undefined,
+        });
+      } else {
+        await addLecturer({
+          department: acctDepartment.trim(),
+          username: acctUsername.trim(),
+          name: acctName.trim(),
+          email: acctEmail.trim(),
+          password: acctPassword.trim(),
+        });
+      }
+      resetAccountForm();
+    } catch (err) {
+      setAcctError(err instanceof Error ? err.message : "Failed to save account");
+    }
+  }
+
+  async function handleDeleteAccount(id: string) {
+    if (!confirm("Delete this department's covering account? Its whole roster and unavailability history go with it.")) {
+      return;
+    }
+    try {
+      await removeLecturer(id);
+    } catch (err) {
+      setAcctError(err instanceof Error ? err.message : "Failed to delete account");
+    }
+  }
+
+  const rosterLecturer = lecturers.find((l) => l.id === rosterFor) || null;
+  const existingDepartments = new Set(lecturers.map((l) => l.department));
+
+  return (
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>Acting HOD:</strong> Each department has one Acting HOD login, shared by that department&apos;s
+        lecturers. Add the department&apos;s Senior and Junior lecturers to its roster, mark the HOD unavailable
+        for the dates they&apos;re away, then assign one lecturer as Acting HOD for each of those dates. While
+        the HOD is unavailable, that department&apos;s HOD-stage approvals go to the assigned Acting HOD; if
+        nobody is assigned, the leaves wait and you&apos;ll see an alert here.
+      </div>
+
+      <ActingHodGapAlert portal={portal} />
+      <HodAvailabilityCard portal={portal} />
+      <ActingHodCard portal={portal} />
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
+          {editingAccountId ? "✏️ Edit Department Acting HOD Account" : "➕ Create Department Acting HOD Account"}
+        </h2>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Department<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <select
+              value={acctDepartment}
+              onChange={(e) => setAcctDepartment(e.target.value)}
+              className={styles.input}
+              disabled={!!editingAccountId}
+            >
+              <option value="">Select department…</option>
+              {hods
+                .map((h) => h.department)
+                .filter((d, i, arr): d is string => !!d && arr.indexOf(d) === i)
+                .map((d) => (
+                  <option key={d} value={d} disabled={existingDepartments.has(d)}>
+                    {d}
+                    {existingDepartments.has(d) ? " (already has an account)" : ""}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className={styles.label}>
+              Username<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={acctUsername} onChange={(e) => setAcctUsername(e.target.value)} className={styles.input} placeholder="e.g. cover-it" />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Account Label<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input
+              value={acctName}
+              onChange={(e) => setAcctName(e.target.value)}
+              className={styles.input}
+              placeholder="e.g. IT Dept Covering Lecturers"
+            />
+          </div>
+        </div>
+        <div className={`${styles.formGrid3} mb-3.5`}>
+          <div>
+            <label className={styles.label}>
+              Email<span className="ml-0.5 text-[var(--err)]">*</span>
+            </label>
+            <input value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} className={styles.input} placeholder="name@kdu.ac.lk" />
+          </div>
+          <div>
+            <label className={styles.label}>
+              Password {editingAccountId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
+            </label>
+            <input value={acctPassword} onChange={(e) => setAcctPassword(e.target.value)} className={styles.input} />
+            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
+              This is the ONE shared password every lecturer in this department uses to log in and cover for
+              the HOD.
+            </p>
+          </div>
+          <div />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={handleSaveAccount}>
+            {editingAccountId ? "Save Changes" : "Create Account"}
+          </Button>
+          {editingAccountId && (
+            <Button variant="secondary" onClick={resetAccountForm}>
+              Cancel
+            </Button>
+          )}
+        </div>
+        {acctError && <p className="mt-2 text-xs text-[var(--err)]">{acctError}</p>}
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Department Acting HOD Accounts</h2>
+        <div className="overflow-x-auto">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Login</th>
+                <th>Roster</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lecturers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-[var(--muted)]">
+                    No covering accounts yet.
+                  </td>
+                </tr>
+              ) : (
+                lecturers.map((l) => (
+                  <tr key={l.id}>
+                    <td>{l.department}</td>
+                    <td>
+                      {l.username}
+                      <div className="text-xs text-[var(--muted)]">{l.name}</div>
+                    </td>
+                    <td className="text-[var(--muted)]">
+                      {l.members.length} lecturer{l.members.length === 1 ? "" : "s"}
+                    </td>
+                    <td className="space-x-1.5 whitespace-nowrap">
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setRosterFor(l.id)}>
+                        Manage Roster
+                      </Button>
+                      <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => startEditAccount(l.id)}>
+                        Edit
+                      </Button>
+                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDeleteAccount(l.id)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {rosterLecturer && (
+        <LecturerRosterModal
+          lecturer={rosterLecturer}
+          onAddMember={(input) => addLecturerMember(rosterLecturer.id, input)}
+          onEditMember={(memberId, input) => editLecturerMember(rosterLecturer.id, memberId, input)}
+          onRemoveMember={(memberId) => removeLecturerMember(rosterLecturer.id, memberId)}
+          onClose={() => setRosterFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==================================================================
+// Photo Requests — a student only gets one self-service photo set (see
+// backend/models/Student.js photoLocked); anything after that needs a
+// decision here before it actually replaces their photo.
+// ==================================================================
+
+export function PhotoRequests({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { photoRequests, approvePhotoRequest, rejectPhotoRequest } = portal;
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = photoRequests.filter((r) => r.status === "PENDING");
+  const decided = photoRequests.filter((r) => r.status !== "PENDING");
+
+  async function handleApprove(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await approvePhotoRequest(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to approve request");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReject(id: string) {
+    const reason = prompt("Reason for rejecting this photo change (optional):") ?? "";
+    setBusyId(id);
+    setError(null);
+    try {
+      await rejectPhotoRequest(id, reason.trim() || undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject request");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📊 Leave Reports</h2>
-      <p className="mb-4 text-xs text-[var(--muted)]">
-        Export a CSV spreadsheet of leave records. Select a date range below.
-      </p>
-      <div className="mb-4 flex gap-4">
-        <div>
-          <label className={styles.label}>Start Date</label>
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className={styles.input} 
-          />
+    <div>
+      <div className={styles.infoBanner}>
+        <strong>Photo Requests:</strong> A student can only set their own profile photo once — any change
+        after that needs your approval here, so a lost/stolen ID photo can&apos;t be swapped out
+        unilaterally by whoever&apos;s currently logged in.
+      </div>
+
+      {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Pending ({pending.length})</h2>
+      {pending.length === 0 ? (
+        <Card className="mb-6 p-5 text-center text-sm text-[var(--muted)]">No pending photo requests.</Card>
+      ) : (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {pending.map((r) => (
+            <Card key={r.id} className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold text-[var(--white)]">{r.studentName}</div>
+                  <div className="text-xs text-[var(--muted)]">{r.studentIndexNumber}</div>
+                </div>
+                <span className="text-[10px] text-[var(--muted)]">
+                  {new Date(r.createdAt).toLocaleString()}
+                </span>
+              </div>
+              <div className="mb-3 flex items-center justify-center gap-4">
+                <div className="text-center">
+                  <div className="mb-1 text-[10px] uppercase text-[var(--muted)]">Current</div>
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--border)] bg-[var(--card2)]">
+                    {r.currentPhoto ? (
+                      <img src={r.currentPhoto} alt="Current" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[9px] text-[var(--muted)]">No Photo</span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-lg text-[var(--muted)]">→</span>
+                <div className="text-center">
+                  <div className="mb-1 text-[10px] uppercase text-[var(--sky)]">Requested</div>
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--sky)] bg-[var(--card2)]">
+                    <img src={r.requestedPhoto} alt="Requested" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              </div>
+              {r.reason && (
+                <p className="mb-3 text-xs text-[var(--muted)]">
+                  <strong className="text-[var(--white)]">Reason:</strong> {r.reason}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="success"
+                  className="!text-xs"
+                  disabled={busyId === r.id}
+                  onClick={() => handleApprove(r.id)}
+                >
+                  {busyId === r.id ? "Working…" : "✅ Approve"}
+                </Button>
+                <Button
+                  variant="danger"
+                  className="!text-xs"
+                  disabled={busyId === r.id}
+                  onClick={() => handleReject(r.id)}
+                >
+                  ❌ Reject
+                </Button>
+              </div>
+            </Card>
+          ))}
         </div>
+      )}
+
+      <h2 className="mb-3 text-sm font-bold text-[var(--white)]">Decided</h2>
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Requested</th>
+              <th>Status</th>
+              <th>Decided By</th>
+              <th>Date</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {decided.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                  No decided requests yet.
+                </td>
+              </tr>
+            ) : (
+              decided.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    {r.studentName}
+                    <div className="text-xs text-[var(--muted)]">{r.studentIndexNumber}</div>
+                  </td>
+                  <td>
+                    <img src={r.requestedPhoto} alt="Requested" className="h-10 w-10 rounded-full object-cover" />
+                  </td>
+                  <td>
+                    <Badge tone={r.status === "APPROVED" ? "green" : "red"}>{r.status}</Badge>
+                  </td>
+                  <td className="text-[var(--muted)]">{r.decidedBy || "—"}</td>
+                  <td className="text-[var(--muted)]">{r.decidedAt || "—"}</td>
+                  <td className="max-w-[200px] text-[var(--muted)]">{r.decisionReason || "—"}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ==================================================================
+// Event Calendar — this admin's own department's Workshop days. Each of
+// the department admins manages only their own department here; students
+// in that department get blocked from ordinary leave during a marked
+// window (see backend/controllers/studentcontrol.js applyLeave). The
+// department's HOD/Lecturer portal shows the same calendar read-only (see
+// app/hod/views.tsx EventCalendar) and keeps the bulk reject-overlapping
+// action there, since that's a leave decision, not a calendar edit.
+// ==================================================================
+
+export function Calendar({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { events, addEvent, removeEvent } = portal;
+  return (
+    <EventCalendarView
+      events={events}
+      editable
+      onAdd={addEvent}
+      onRemove={removeEvent}
+      infoBanner={
+        <>
+          <strong>Event Calendar:</strong> Sri Lanka&apos;s Poya days and national holidays (niwadu dawasa)
+          are shown here automatically — nothing for you to add or maintain. Mark a mandatory{" "}
+          <strong>Workshop</strong> day for your department, with its actual start and end time — students
+          in your department can&apos;t apply for ordinary leave during that window, but are free to once
+          it ends, even on the same day. Your department&apos;s HOD can see this calendar and review any
+          pending leave requests that overlap a workshop.
+        </>
+      }
+    />
+  );
+}
+
+// ==================================================================
+// Reports — an audit-ready view of leave activity over a date range, for
+// when a higher authority asks "who was away, from which department, and
+// when." Built entirely from portal.leaves (already loaded for the
+// Dashboard's own stats) filtered to the selected window — no separate
+// backend endpoint needed, so this can never drift from what the Dashboard
+// itself shows for the same records.
+// ==================================================================
+
+const REPORT_STATUS_COLORS = { Approved: "#22c55e", Pending: "#f59332", Rejected: "#ef4444" } as const;
+
+// Fixed order, never cycled per the department actually present — a
+// department keeps the same color across the donut/bars/CSV even as the
+// date range changes which ones show up. Avoids the reserved status hues
+// above (green/amber/red) so a department bar is never mistaken for a
+// status.
+const REPORT_DEPT_COLORS = ["#2563b0", "#7c3aed", "#0891b2", "#db2777", "#4338ca", "#78716c", "#ca8a04", "#059669"];
+
+function reportStatus(l: LeaveRequest): "Approved" | "Rejected" | "Pending" {
+  if (isApproved(l)) return "Approved";
+  if (isRejected(l)) return "Rejected";
+  return "Pending";
+}
+
+// Two leave-date ranges overlap the requested window — same inclusive
+// overlap test used server-side for event/workshop blocking — rather than
+// only counting leaves that started inside it, so a leave that was already
+// underway when the window opens (or still running when it closes) isn't
+// silently dropped from the audit.
+function overlapsWindow(l: LeaveRequest, from: string, to: string): boolean {
+  return l.startDate <= to && l.endDate >= from;
+}
+
+function StatusDonut({ approved, rejected, pending }: { approved: number; rejected: number; pending: number }) {
+  const total = approved + rejected + pending;
+  const segments: { label: keyof typeof REPORT_STATUS_COLORS; value: number }[] = [
+    { label: "Approved", value: approved },
+    { label: "Pending", value: pending },
+    { label: "Rejected", value: rejected },
+  ];
+  const r = 42;
+  const circumference = 2 * Math.PI * r;
+  const gap = total ? 3 : 0;
+  let offset = 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-6">
+      <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90 shrink-0">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--card2)" strokeWidth="16" />
+        {total > 0 &&
+          segments.map((s) => {
+            if (s.value === 0) return null;
+            const len = (s.value / total) * circumference;
+            const dash = Math.max(len - gap, 0);
+            const el = (
+              <circle
+                key={s.label}
+                cx="60"
+                cy="60"
+                r={r}
+                fill="none"
+                stroke={REPORT_STATUS_COLORS[s.label]}
+                strokeWidth="16"
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${circumference - dash}`}
+                strokeDashoffset={-offset}
+              />
+            );
+            offset += len;
+            return el;
+          })}
+      </svg>
+      <div className="space-y-1.5">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-2 text-xs">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: REPORT_STATUS_COLORS[s.label] }} />
+            <span className="w-16 text-[var(--white)]">{s.label}</span>
+            <span className="text-[var(--muted)]">
+              {s.value} ({total ? Math.round((s.value / total) * 100) : 0}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Leave.department is a snapshot taken at application time (see
+// studentcontrol.js applyLeave), not a live lookup — an older leave can
+// carry a shorter department string a student's record used before it was
+// standardized to "Department of X" (current Student.department always
+// uses the full form). Normalizing to the short form for grouping/display
+// here keeps one department's leaves from splitting into two report rows
+// just because some predate that standardization.
+function normalizeDept(department: string | undefined): string {
+  return (department || "—").replace(/^Department of\s+/i, "").trim();
+}
+
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+// A "2026-08-16 09:00"-shaped string opened in Excel gets auto-detected as
+// a date/time and reformatted to a wider display format than the column's
+// default width — showing as "########" until the column is manually
+// widened, not because the data is missing. A leading apostrophe is
+// Excel's own signal (honored on CSVs it opens, not just manual entry) to
+// keep a cell as literal text instead, so the value is always immediately
+// readable on open.
+function csvDateTime(value: string): string {
+  return `'${value}`;
+}
+
+function downloadCsv(filename: string, header: string[], rows: string[][]) {
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { leaves } = portal;
+  const today = new Date().toISOString().split("T")[0];
+  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [from, setFrom] = useState(monthAgo);
+  const [to, setTo] = useState(today);
+  const [drilldown, setDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+
+  const inRange = from && to && from <= to ? leaves.filter((l) => overlapsWindow(l, from, to)) : [];
+  const approved = inRange.filter(isApproved);
+  const rejected = inRange.filter(isRejected);
+  const pending = inRange.filter((l) => !isApproved(l) && !isRejected(l));
+  const approvalRate = inRange.length ? Math.round((approved.length / inRange.length) * 100) : 0;
+
+  const departments = Array.from(new Set(inRange.map((l) => normalizeDept(l.department)))).sort();
+  const byDept = departments
+    .map((d, i) => {
+      const rows = inRange.filter((l) => normalizeDept(l.department) === d);
+      return { department: d, color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length], rows };
+    })
+    .sort((a, b) => b.rows.length - a.rows.length);
+
+  const types = Array.from(new Set(inRange.map((l) => l.type)));
+  const byType = types
+    .map((t) => ({ type: t, rows: inRange.filter((l) => l.type === t) }))
+    .sort((a, b) => b.rows.length - a.rows.length);
+
+  function exportCsv() {
+    downloadCsv(
+      `leave-audit-${from}_to_${to}.csv`,
+      ["Student", "Index Number", "Department", "Leave Type", "From", "To", "Applied", "Status"],
+      inRange.map((l) => [
+        l.studentName,
+        l.indexNumber,
+        normalizeDept(l.department),
+        LEAVE_TYPE_LABELS[l.type],
+        csvDateTime(`${l.startDate} ${l.startTime}`),
+        csvDateTime(`${l.endDate} ${l.endTime}`),
+        l.appliedDate,
+        reportStatus(l),
+      ])
+    );
+  }
+
+  return (
+    <div>
+      <div className={styles.welcomeBanner}>
         <div>
-          <label className={styles.label}>End Date</label>
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)} 
-            className={styles.input} 
-          />
+          <h2 className="text-lg font-bold text-[var(--white)]">📊 Leave Audit Report</h2>
+          <p className="text-xs text-[var(--muted)]">
+            Pick a date range to see every leave active during it, broken down by department and status — for
+            audits, inspections, or reporting up the chain.
+          </p>
         </div>
       </div>
-      <Button variant="primary" onClick={handleExport}>
-        Export CSV with Intake
-      </Button>
-    </Card>
+
+      <Card className="mb-6 p-5 print:hidden">
+        <div className={styles.formGrid3}>
+          <div>
+            <label className={styles.label}>From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={styles.input} />
+          </div>
+          <div>
+            <label className={styles.label}>To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={styles.input} />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => window.print()} disabled={!inRange.length}>
+              🖨️ Print
+            </Button>
+            <Button type="button" variant="primary" onClick={exportCsv} disabled={!inRange.length}>
+              ⬇️ Export CSV
+            </Button>
+          </div>
+        </div>
+        {from && to && from > to && <p className="mt-3 text-xs text-[var(--err)]">&quot;From&quot; must be on or before &quot;To&quot;.</p>}
+      </Card>
+
+      {inRange.length === 0 ? (
+        <Card className="p-5">
+          <p className="text-xs text-[var(--muted)]">No leave records overlap this date range.</p>
+        </Card>
+      ) : (
+        <>
+          <div className={styles.statRow}>
+            <StatTile label="Leaves in Range" value={inRange.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Approved" value={approved.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Rejected" value={rejected.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Pending" value={pending.length} icon={<ClipboardList size={20} />} />
+            <StatTile label="Approval Rate" value={`${approvalRate}%`} icon={<ClipboardList size={20} />} />
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Status Breakdown</h2>
+              <StatusDonut approved={approved.length} rejected={rejected.length} pending={pending.length} />
+            </Card>
+            <Card className="p-5">
+              <h2 className="mb-4 text-sm font-bold text-[var(--white)]">By Department</h2>
+              <div className="space-y-2.5">
+                {byDept.map((d) => (
+                  <Breakdown
+                    key={d.department}
+                    label={d.department}
+                    value={d.rows.length}
+                    total={inRange.length}
+                    color={d.color}
+                    onClick={() => setDrilldown({ title: `${d.department} (${from} – ${to})`, leaves: d.rows })}
+                  />
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <Card className="mb-6 p-5">
+            <h2 className="mb-4 text-sm font-bold text-[var(--white)]">By Leave Type</h2>
+            <div className="space-y-2.5">
+              {byType.map((t) => (
+                <Breakdown
+                  key={t.type}
+                  label={LEAVE_TYPE_LABELS[t.type]}
+                  value={t.rows.length}
+                  total={inRange.length}
+                  color="#2563b0"
+                  onClick={() => setDrilldown({ title: `${LEAVE_TYPE_LABELS[t.type]} (${from} – ${to})`, leaves: t.rows })}
+                />
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Every Leave in Range</h2>
+            <div className="overflow-x-auto rounded-2xl border border-[var(--border)]">
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Type</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inRange
+                    .slice()
+                    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+                    .map((l) => (
+                      <tr key={l.id}>
+                        <td>
+                          {l.studentName}
+                          <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
+                        </td>
+                        <td>{normalizeDept(l.department)}</td>
+                        <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
+                        <td className="whitespace-nowrap">{l.startDate}</td>
+                        <td className="whitespace-nowrap">{l.endDate}</td>
+                        <td>
+                          <Badge tone={reportStatus(l) === "Approved" ? "green" : reportStatus(l) === "Rejected" ? "red" : "amber"}>
+                            {reportStatus(l)}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {drilldown && (
+        <LeaveListDrilldownModal title={drilldown.title} leaves={drilldown.leaves} onClose={() => setDrilldown(null)} />
+      )}
+    </div>
   );
 }

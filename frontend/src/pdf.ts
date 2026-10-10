@@ -339,9 +339,15 @@ export async function downloadLeavePassPdf(
   // Commander, no SDD) — identified by troopStatus permanently "N/A", same
   // marker used everywhere else in the app for this special routing.
   const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  // HOD-stage label names who actually approved it — the regular HOD or an
+  // Acting HOD (see backend/models/Leave.js hodApprover).
+  const approver = leave.hodApprover;
+  const isActingHod = approver?.role === "ACTING_HOD";
+  const hodStageLabel =
+    leave.hodStatus === "Approved" ? (isActingHod ? "4. Acting HOD Approved" : "4. HOD Approved") : "Head of Department";
   const rows = isCadetAcademicOnly
     ? [
-        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        [hodStageLabel, leave.hodStatus, leave.hodApprovedAt],
         ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],
       ]
     : isCadet
@@ -351,7 +357,7 @@ export async function downloadLeavePassPdf(
         ["Senior Deputy Dean", leave.sddStatus, leave.sddApprovedAt],
       ]
     : [
-        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        [hodStageLabel, leave.hodStatus, leave.hodApprovedAt],
         ["Troop Commander", leave.troopStatus, leave.troopApprovedAt],
       ];
   const tblX = 10,
@@ -396,6 +402,25 @@ export async function downloadLeavePassPdf(
     doc.text((r[2] as string) || "—", tblX + col1 + col2 + 3, y + 5.6);
     y += rh;
   });
+  // Actual HOD-stage approver: name, role, department and decision date.
+  const hodStageShown = !isCadet || isCadetAcademicOnly;
+  if (hodStageShown && approver?.name && (leave.hodStatus === "Approved" || leave.hodStatus === "Rejected")) {
+    y += 5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(`${leave.hodStatus === "Approved" ? "APPROVED" : "REJECTED"} BY (${isActingHod ? "ACTING HOD" : "HOD"})`, 10, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...DARK);
+    const roleText = isActingHod ? "Acting Head of Department" : "Head of Department";
+    doc.text(
+      `${approver.name}  |  ${roleText}  |  ${approver.department || leave.department || "—"}  |  ${approver.decidedAt || leave.hodApprovedAt || "—"}`,
+      10,
+      y + 5
+    );
+    y += 5;
+  }
   y += 10;
 
   // Digital signature panels are pulled live from the Movement log and only

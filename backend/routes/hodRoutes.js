@@ -53,7 +53,9 @@ router.get("/movements", hodMovements);
 // leave queue, so a 403 here would silently blank a covering Lecturer's
 // entire dashboard, not just hide the calendar. The Lecturer portal's own
 // nav simply has no Calendar tab to show it in.
-router.get("/events", listEvents);
+// An Acting HOD (LECTURER) gets an empty calendar — their permissions are
+// limited to the leave queue.
+router.get("/events", (req, res, next) => (req.user.role === "LECTURER" ? res.json([]) : listEvents(req, res, next)));
 router.post("/events/:id/reject-overlapping", requireRole("HOD"), rejectOverlapping);
 
 export default router;
