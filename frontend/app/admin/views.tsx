@@ -2292,7 +2292,172 @@ function longDate(value: string): string {
 function downloadCsv(filename: string, header: string[], rows: string[][]) {
   // BOM so Excel reads UTF-8 names correctly; CRLF rows for Excel on Windows.
   const csv = "﻿" + [header, ...rows].map((row) => row.map((v) => csvEscape(v ?? "")).join(",")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  downloadBlob(filename, new Blob([csv], { type: "text/csv;charset=utf-8" }));
+}
+
+// ── Excel (.xlsx) export ─────────────────────────────────────────────
+// A CSV can't carry column widths or alignment, so the audit report also
+// exports a real .xlsx: every column sized to its longest value, every cell
+// left-aligned, bold frozen header row with filters, and all values stored
+// as plain text (dates stay exactly as shown, no Excel reformatting). Built
+// by hand (a minimal uncompressed zip of the SpreadsheetML parts) so no
+// extra dependency is needed.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(data: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function zipStore(files: { name: string; data: string }[]): Uint8Array {
+  const enc = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const data = enc.encode(f.data);
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    chunks.push(new Uint8Array(local.buffer), name, data);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true);
+    cd.setUint16(4, 20, true);
+    cd.setUint16(6, 20, true);
+    cd.setUint32(16, crc, true);
+    cd.setUint32(20, data.length, true);
+    cd.setUint32(24, data.length, true);
+    cd.setUint16(28, name.length, true);
+    cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  const parts = [...chunks, ...central, new Uint8Array(end.buffer)];
+  const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+  let pos = 0;
+  for (const p of parts) {
+    out.set(p, pos);
+    pos += p.length;
+  }
+  return out;
+}
+
+function xmlEscape(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function columnLetter(index: number): string {
+  let s = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+}
+
+export function buildXlsx(sheetName: string, header: string[], rows: string[][]): Uint8Array {
+  const all = [header, ...rows];
+  const widths = header.map((_, c) => Math.min(60, Math.max(...all.map((r) => String(r[c] ?? "").length)) + 3));
+  const lastCell = `${columnLetter(header.length - 1)}${all.length}`;
+  const sheetRows = all
+    .map((r, ri) => {
+      const cells = r
+        .map((v, ci) => {
+          const ref = `${columnLetter(ci)}${ri + 1}`;
+          return `<c r="${ref}" t="inlineStr" s="${ri === 0 ? 2 : 1}"><is><t xml:space="preserve">${xmlEscape(String(v ?? ""))}</t></is></c>`;
+        })
+        .join("");
+      return `<row r="${ri + 1}">${cells}</row>`;
+    })
+    .join("");
+  const sheet =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` +
+    `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` +
+    `<sheetData>${sheetRows}</sheetData>` +
+    `<autoFilter ref="A1:${lastCell}"/>` +
+    `</worksheet>`;
+  const styles =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>` +
+    `<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>` +
+    `<fill><patternFill patternType="solid"><fgColor rgb="FFDCE6F1"/><bgColor indexed="64"/></patternFill></fill></fills>` +
+    `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>` +
+    `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+    `<cellXfs count="3">` +
+    `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
+    `<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>` +
+    `<xf numFmtId="49" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>` +
+    `</cellXfs>` +
+    `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
+    `</styleSheet>`;
+  const safeSheet = xmlEscape(sheetName.replace(/[\\/?*[\]:]/g, " ").slice(0, 31));
+  return zipStore([
+    {
+      name: "[Content_Types].xml",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+        `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+        `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+        `</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
+        `</Relationships>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<sheets><sheet name="${safeSheet}" sheetId="1" r:id="rId1"/></sheets>` +
+        `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${safeSheet}'!$A$1:$${columnLetter(header.length - 1)}$${all.length}</definedName></definedNames>` +
+        `</workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+        `</Relationships>`,
+    },
+    { name: "xl/worksheets/sheet1.xml", data: sheet },
+    { name: "xl/styles.xml", data: styles },
+  ]);
+}
+
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -2337,21 +2502,33 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
     .map((t) => ({ type: t, rows: inRange.filter((l) => l.type === t) }))
     .sort((a, b) => b.rows.length - a.rows.length);
 
-  function exportCsv() {
-    downloadCsv(
-      `leave-audit-${from}_to_${to}.csv`,
-      ["Student", "Index Number", "Intake", "Department", "Leave Type", "From", "To", "Applied", "Status"],
-      inRange.map((l) => [
+  const exportHeader = ["Student", "Index Number", "Intake", "Department", "Leave Type", "From", "To", "Applied", "Status"];
+  function exportRows(dateCell: (v: string) => string) {
+    return inRange
+      .slice()
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map((l) => [
         l.studentName,
         l.indexNumber,
         l.intake || "—",
         normalizeDept(l.department),
         LEAVE_TYPE_LABELS[l.type],
-        csvDateTime(`${l.startDate} ${l.startTime}`),
-        csvDateTime(`${l.endDate} ${l.endTime}`),
+        dateCell(`${l.startDate} ${l.startTime}`),
+        dateCell(`${l.endDate} ${l.endTime}`),
         l.appliedDate,
         reportStatus(l),
-      ])
+      ]);
+  }
+
+  function exportCsv() {
+    downloadCsv(`leave-audit-${from}_to_${to}.csv`, exportHeader, exportRows(csvDateTime));
+  }
+
+  function exportExcel() {
+    const bytes = buildXlsx(`Leaves ${from} to ${to}`, exportHeader, exportRows((v) => v));
+    downloadBlob(
+      `leave-audit-${from}_to_${to}.xlsx`,
+      new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     );
   }
 
@@ -2381,8 +2558,11 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             <Button type="button" variant="secondary" onClick={() => window.print()} disabled={!inRange.length}>
               🖨️ Print
             </Button>
-            <Button type="button" variant="primary" onClick={exportCsv} disabled={!inRange.length}>
-              ⬇️ Export CSV
+            <Button type="button" variant="primary" onClick={exportExcel} disabled={!inRange.length}>
+              ⬇️ Export Excel
+            </Button>
+            <Button type="button" variant="secondary" onClick={exportCsv} disabled={!inRange.length}>
+              CSV
             </Button>
           </div>
         </div>
