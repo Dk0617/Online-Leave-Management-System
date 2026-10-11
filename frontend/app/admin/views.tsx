@@ -1619,7 +1619,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [acctDepartment, setAcctDepartment] = useState("");
   const [acctUsername, setAcctUsername] = useState("");
   const [acctName, setAcctName] = useState("");
-  const [acctEmail, setAcctEmail] = useState("");
   const [acctPassword, setAcctPassword] = useState("");
   const [acctError, setAcctError] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
@@ -1629,7 +1628,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setAcctDepartment("");
     setAcctUsername("");
     setAcctName("");
-    setAcctEmail("");
     setAcctPassword("");
   }
 
@@ -1640,13 +1638,12 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setAcctDepartment(l.department);
     setAcctUsername(l.username);
     setAcctName(l.name);
-    setAcctEmail(l.email || "");
     setAcctPassword("");
   }
 
   async function handleSaveAccount() {
     if (!editingAccountId) {
-      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctEmail.trim() || !acctPassword.trim()) {
+      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctPassword.trim()) {
         setAcctError("All fields are required to create an account.");
         return;
       }
@@ -1664,7 +1661,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
         await editLecturer(editingAccountId, {
           username: acctUsername.trim(),
           name: acctName.trim(),
-          email: acctEmail.trim() || undefined,
           department: acctDepartment.trim() || undefined,
           password: acctPassword.trim() || undefined,
         });
@@ -1673,7 +1669,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
           department: acctDepartment.trim(),
           username: acctUsername.trim(),
           name: acctName.trim(),
-          email: acctEmail.trim(),
           password: acctPassword.trim(),
         });
       }
@@ -1754,12 +1749,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
           </div>
         </div>
         <div className={`${styles.formGrid3} mb-3.5`}>
-          <div>
-            <label className={styles.label}>
-              Email<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} className={styles.input} placeholder="name@kdu.ac.lk" />
-          </div>
           <div>
             <label className={styles.label}>
               Password {editingAccountId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}

@@ -472,8 +472,8 @@ export const deleteTroop = async (req, res) => {
 // for how HOD Cover uses this to pick who's active on a given day. ───────
 export const createLecturer = async (req, res) => {
   const { username, name, password, email, department } = req.body;
-  if (!username || !name || !email || !password || !department) {
-    return res.status(400).json({ message: "All fields are required to create an account" });
+  if (!username || !name || !password || !department) {
+    return res.status(400).json({ message: "Department, username, label and password are required" });
   }
   if (!isValidSimplePassword(password)) {
     return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
@@ -485,11 +485,11 @@ export const createLecturer = async (req, res) => {
   if (existingDept) {
     return res.status(409).json({ message: "That department already has a covering account" });
   }
-  if (await isEmailTaken(email)) {
+  if (email && (await isEmailTaken(email))) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
-  const created = await Lecturer.create({ username, name, password, email, department });
+  const created = await Lecturer.create({ username, name, password, email: email || undefined, department });
   await writeAudit("ADMIN", req.user.name, "account_created", `lecturer-cover ${username} (${department})`);
   const { password: _pw, ...safe } = created.toObject();
   res.status(201).json(safe);
