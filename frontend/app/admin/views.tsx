@@ -2290,14 +2290,24 @@ function longDate(value: string): string {
 }
 
 function downloadCsv(filename: string, header: string[], rows: string[][]) {
-  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  // BOM so Excel reads UTF-8 names correctly; CRLF rows for Excel on Windows.
+  const csv = "﻿" + [header, ...rows].map((row) => row.map((v) => csvEscape(v ?? "")).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  // Windows rejects some characters in file names (e.g. "/" from a date).
+  a.download = filename.replace(/[\\/:*?"<>|]/g, "-");
+  a.style.display = "none";
+  // The link must be in the page for some browsers, and the blob URL must
+  // stay alive until the download has started — revoking it right after
+  // click() is what made the browser report "can't download".
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
