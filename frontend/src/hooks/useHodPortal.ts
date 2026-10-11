@@ -11,7 +11,10 @@ import {
 } from "@/src/api";
 import { BlockLeaveRequest, EventDay, LeaveRequest, Movement } from "@/src/types";
 
-export function useHodPortal() {
+// historyMemberId: for a department's shared Acting HOD login, which roster
+// lecturer's own decisions the History tab shows (see leavecontrol.js
+// actingHodHistory). Ignored for a regular HOD.
+export function useHodPortal(historyMemberId?: string) {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
@@ -27,7 +30,9 @@ export function useHodPortal() {
     try {
       const [p, h, e, m, blp, blh] = await Promise.all([
         api.get<Record<string, unknown>[]>("/hod/leaves/pending"),
-        api.get<Record<string, unknown>[]>("/hod/leaves/history"),
+        api.get<Record<string, unknown>[]>(
+          historyMemberId ? `/hod/leaves/history?memberId=${encodeURIComponent(historyMemberId)}` : "/hod/leaves/history"
+        ),
         api.get<Record<string, unknown>[]>("/hod/events"),
         api.get<Record<string, unknown>[]>("/hod/movements"),
         api.get<Record<string, unknown>[]>("/hod/block-leave/pending"),
@@ -44,7 +49,7 @@ export function useHodPortal() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [historyMemberId]);
 
   useEffect(() => {
     refresh();

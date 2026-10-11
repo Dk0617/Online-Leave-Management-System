@@ -384,6 +384,8 @@ export interface LecturerCoverStatus {
   // Lecturers Admin assigned as Acting HOD for today (empty when the HOD is
   // handling it themselves).
   activeMembers: LecturerMember[];
+  // The department's whole roster (for choosing whose History to show).
+  roster: LecturerMember[];
   // This department's Acting HOD assignments for the next 30 days.
   assignments: { id: string; date: string; members: { name: string; tier: "SENIOR" | "JUNIOR" }[] }[];
 }
@@ -393,6 +395,7 @@ export interface HodApprover {
   role?: "HOD" | "ACTING_HOD";
   department?: string;
   decidedAt?: string;
+  memberId?: string;
 }
 
 // Admin's per-date Acting HOD pick — see

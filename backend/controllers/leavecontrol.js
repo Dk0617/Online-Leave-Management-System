@@ -268,7 +268,10 @@ export async function hodScopeFilter(req) {
     const lecturerAccount = await Lecturer.findById(req.user.id);
     const { hod, assignment } = await resolveActingHod(lecturerAccount);
     if (!hod || !assignment) return { hodId: { $in: [] } };
-    return { hodId: hod._id }; // department restriction: only their own department HOD queue
+    // Department restriction (their own HOD queue only) and Day Scholars
+    // only: Cadet leaves are never handled by an Acting HOD — they wait for
+    // the regular HOD.
+    return { hodId: hod._id, studentType: "DAY_SCHOLAR" };
   }
   return { hodId: req.user.id };
 }
@@ -293,7 +296,13 @@ async function resolveActor(req) {
     const tierLabel = member.tier === "SENIOR" ? "Senior Lecturer" : "Junior Lecturer";
     return {
       actorName: `${member.name} (Acting HOD, ${tierLabel}, ${lecturerAccount.department})`,
-      approver: { name: member.name, role: "ACTING_HOD", department: lecturerAccount.department, decidedAt },
+      approver: {
+        name: member.name,
+        role: "ACTING_HOD",
+        department: lecturerAccount.department,
+        decidedAt,
+        memberId: member.memberId,
+      },
     };
   }
   return { actorName: req.user.name, approver: null };
@@ -320,10 +329,37 @@ export const coverStatus = async (req, res) => {
     hodName: hod?.name,
     hodUnavailable: !!assignment,
     activeMembers: assignedMembers(assignment).map((m) => ({ id: m.memberId, name: m.name, tier: m.tier, rank: 0 })),
+    // Whole department roster, for picking "I am" on the History tab even
+    // on days this lecturer isn't assigned.
+    roster: [...lecturerAccount.members]
+      .sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
+      .map((m) => ({ id: String(m._id), name: m.name, tier: m.tier, rank: m.rank })),
     assignments: upcoming
       .map((a) => ({ id: String(a._id), date: a.date, members: assignedMembers(a).map((m) => ({ name: m.name, tier: m.tier })) }))
       .filter((a) => a.members.length),
   });
+};
+
+// History for the shared Acting HOD login: only the leaves the selected
+// roster lecturer (?memberId=) personally approved or rejected — never
+// another lecturer's decisions, even though they share the login.
+export const actingHodHistory = async (req, res) => {
+  const lecturerAccount = await Lecturer.findById(req.user.id);
+  const memberId = String(req.query.memberId || "");
+  const member = /^[a-f0-9]{24}$/i.test(memberId) ? lecturerAccount?.members.id(memberId) : null;
+  if (!member) return res.json([]);
+  const leaves = await Leave.find({
+    $and: [HIDE_AUTO_PERSONAL],
+    studentType: "DAY_SCHOLAR",
+    hodStatus: { $in: ["Approved", "Rejected"] },
+    "hodApprover.role": "ACTING_HOD",
+    // Older Acting HOD decisions saved only the name, not the lecturer id.
+    $or: [{ "hodApprover.memberId": member._id }, { "hodApprover.memberId": { $exists: false }, "hodApprover.name": member.name }],
+    "hodApprover.department": lecturerAccount.department,
+  })
+    .select("-attachmentData")
+    .sort({ createdAt: -1 });
+  res.json(leaves);
 };
 
 export const hod = buildRoleHandlers({

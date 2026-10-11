@@ -115,11 +115,9 @@ export function Dashboard({
       <div className={styles.infoBanner}>
         {asLecturer ? (
           <>
-            <strong>Your Role:</strong> You only see leaves here while you&apos;re actively covering an HOD who
-            is marked unavailable — you approve their <strong>Day Scholar</strong> leave applications at Stage
-            1 and their <strong>Officer Cadet Academic Leave</strong>, exactly as that HOD normally would. If
-            no HOD is currently unavailable (or someone more senior than you is covering instead), this list
-            will be empty.
+            <strong>Your Role:</strong> On days Admin assigns you as Acting HOD, you approve or reject your
+            department&apos;s <strong>Day Scholar</strong> leave applications at Stage 1, in place of the HOD.
+            Officer Cadet leaves always stay with the regular HOD. On any other day this list is empty.
           </>
         ) : (
           <>

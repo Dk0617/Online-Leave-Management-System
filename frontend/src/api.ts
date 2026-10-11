@@ -378,6 +378,7 @@ export function normalizeCoverStatus(raw: Raw): LecturerCoverStatus {
     hodName: raw.hodName as string | undefined,
     hodUnavailable: !!raw.hodUnavailable,
     activeMembers: ((raw.activeMembers as Raw[]) ?? []).map(normalizeLecturerMember),
+    roster: ((raw.roster as Raw[]) ?? []).map(normalizeLecturerMember),
     assignments: ((raw.assignments as Raw[]) ?? []).map((a) => ({
       id: String(a.id),
       date: a.date as string,

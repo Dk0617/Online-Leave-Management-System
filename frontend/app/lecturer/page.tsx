@@ -64,17 +64,7 @@ function tierLabel(tier: "SENIOR" | "JUNIOR") {
   return tier === "SENIOR" ? "Senior Lecturer" : "Junior Lecturer";
 }
 
-function CoverStatusBanner({
-  status,
-  error,
-  actingAs,
-  onActingAs,
-}: {
-  status: LecturerCoverStatus | null;
-  error: string | null;
-  actingAs: string;
-  onActingAs: (id: string) => void;
-}) {
+function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | null; error: string | null }) {
   if (error) {
     return (
       <div className="mb-4 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-xs text-[var(--err)]">
@@ -92,31 +82,10 @@ function CoverStatusBanner({
           {status.department}, so there&apos;s nothing to approve here today.
         </p>
       ) : (
-        <>
-          <p className="text-sm text-[var(--white)]">
-            🔔 <strong>{status.hodName || "The HOD"}</strong> is not available today. Acting HOD for{" "}
-            {status.department}: <strong>{status.activeMembers.map((m) => m.name).join(", ")}</strong>.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--white)]">
-            <label htmlFor="acting-as" className="font-bold">
-              I am:
-            </label>
-            <select
-              id="acting-as"
-              value={actingAs}
-              onChange={(e) => onActingAs(e.target.value)}
-              className="rounded-md border border-[var(--border)] bg-[var(--card2)] px-2 py-1 text-xs text-[var(--white)]"
-            >
-              <option value="">Select your name…</option>
-              {status.activeMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({tierLabel(m.tier)})
-                </option>
-              ))}
-            </select>
-            <span className="text-[var(--muted)]">Your name is recorded on every leave you approve or reject.</span>
-          </div>
-        </>
+        <p className="text-sm text-[var(--white)]">
+          🔔 <strong>{status.hodName || "The HOD"}</strong> is not available today. Acting HOD for {status.department}:{" "}
+          <strong>{status.activeMembers.map((m) => m.name).join(", ")}</strong>.
+        </p>
       )}
 
       <div className="mt-4">
@@ -139,18 +108,57 @@ function CoverStatusBanner({
   );
 }
 
+// "I am" picker for the department's shared login: decides whose History is
+// shown and whose name is recorded on every approval/rejection.
+function ActingAsPicker({
+  status,
+  value,
+  onChange,
+}: {
+  status: LecturerCoverStatus | null;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  if (!status || !status.roster.length) return null;
+  const activeIds = new Set(status.activeMembers.map((m) => m.id));
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-xs text-[var(--white)]">
+      <label htmlFor="acting-as" className="font-bold">
+        I am:
+      </label>
+      <select
+        id="acting-as"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-[var(--border)] bg-[var(--card2)] px-2 py-1 text-xs text-[var(--white)]"
+      >
+        <option value="">Select your name…</option>
+        {status.roster.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name} ({tierLabel(m.tier)}){activeIds.has(m.id) ? " — Acting HOD today" : ""}
+          </option>
+        ))}
+      </select>
+      <span className="text-[var(--muted)]">
+        History shows only your own decisions, and your name is recorded on every leave you approve or reject.
+      </span>
+    </div>
+  );
+}
+
 export default function LecturerPage() {
   const { user } = useAuth();
   const [view, setView] = useState("dashboard");
-  const basePortal = useHodPortal();
   const { status, error: coverError } = useCoverStatus();
-  // Which of today's assigned lecturers is using this shared login — sent
-  // with every decision so the leave and PDF record the actual approver.
+  // Which roster lecturer is using this shared login right now.
   const [actingMemberId, setActingMemberId] = useState("");
+  const rosterIds = (status?.roster ?? []).map((m) => m.id);
   const activeIds = (status?.activeMembers ?? []).map((m) => m.id);
-  const actingAs = activeIds.includes(actingMemberId) ? actingMemberId : activeIds.length === 1 ? activeIds[0] : "";
+  const actingAs = rosterIds.includes(actingMemberId) ? actingMemberId : activeIds.length === 1 ? activeIds[0] : "";
+  const basePortal = useHodPortal(actingAs || undefined);
   function requireActingAs() {
-    if (!actingAs) throw new Error("Select which lecturer you are (top of the page) before approving or rejecting.");
+    if (!actingAs) throw new Error("Select your name (\"I am\" at the top of the page) before approving or rejecting.");
+    if (!activeIds.includes(actingAs)) throw new Error("You aren't assigned as Acting HOD today, so you can't approve or reject.");
     return actingAs;
   }
   const portal = {
@@ -173,11 +181,23 @@ export default function LecturerPage() {
     >
       {activeView === "dashboard" && (
         <>
-          <CoverStatusBanner status={status} error={coverError} actingAs={actingAs} onActingAs={setActingMemberId} />
+          <CoverStatusBanner status={status} error={coverError} />
+          <ActingAsPicker status={status} value={actingAs} onChange={setActingMemberId} />
           <Dashboard portal={portal} asLecturer />
         </>
       )}
-      {activeView === "history" && <History portal={portal} />}
+      {activeView === "history" && (
+        <>
+          <ActingAsPicker status={status} value={actingAs} onChange={setActingMemberId} />
+          {actingAs ? (
+            <History portal={portal} />
+          ) : (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-6 text-center text-xs text-[var(--muted)]">
+              Select your name above to see the leaves you approved or rejected.
+            </div>
+          )}
+        </>
+      )}
       {activeView === "profile" && <MyProfile />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>

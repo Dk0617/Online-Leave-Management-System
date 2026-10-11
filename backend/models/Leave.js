@@ -61,6 +61,9 @@ const leaveSchema = new mongoose.Schema(
       role: { type: String, enum: ["HOD", "ACTING_HOD"] },
       department: String,
       decidedAt: String,
+      // Acting HOD only: which roster lecturer (Lecturer.members _id) used
+      // the department's shared login to decide — powers their own History.
+      memberId: mongoose.Schema.Types.ObjectId,
     },
 
     // Printed on the PDF pass. Gate staff type this into the Gate portal to
