@@ -2476,8 +2476,22 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { leaves, error, refresh } = portal;
+  const { leaves, students, hods, error, refresh } = portal;
   const today = new Date().toISOString().split("T")[0];
+
+  // Departments come only from the system's own HOD accounts (one HOD per
+  // department). A leave is counted under its student's CURRENT department
+  // (falling back to the department saved on the leave if the student record
+  // is gone); anything that doesn't match a real department is reported
+  // separately instead of appearing as a department of its own.
+  const realDepartments = Array.from(new Set(hods.map((h) => h.department).filter((d): d is string => !!d))).sort();
+  const studentDept = new Map(students.map((s) => [s.id, s.department]));
+  function leaveDepartment(l: LeaveRequest): string | null {
+    const dept = studentDept.get(l.studentId) ?? l.department;
+    const key = normalizeDept(dept).toLowerCase();
+    return realDepartments.find((d) => normalizeDept(d).toLowerCase() === key) ?? null;
+  }
+  const NO_DEPT = "Not in a current department";
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [from, setFrom] = useState(monthAgo);
   const [to, setTo] = useState(today);
@@ -2489,13 +2503,14 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   const pending = inRange.filter((l) => !isApproved(l) && !isRejected(l));
   const approvalRate = inRange.length ? Math.round((approved.length / inRange.length) * 100) : 0;
 
-  const departments = Array.from(new Set(inRange.map((l) => normalizeDept(l.department)))).sort();
-  const byDept = departments
-    .map((d, i) => {
-      const rows = inRange.filter((l) => normalizeDept(l.department) === d);
-      return { department: d, color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length], rows };
-    })
+  const byDept = realDepartments
+    .map((d, i) => ({
+      department: d,
+      color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length],
+      rows: inRange.filter((l) => leaveDepartment(l) === d),
+    }))
     .sort((a, b) => b.rows.length - a.rows.length);
+  const unmatched = inRange.filter((l) => !leaveDepartment(l));
 
   const types = Array.from(new Set(inRange.map((l) => l.type)));
   const byType = types
@@ -2511,7 +2526,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
         l.studentName,
         l.indexNumber,
         l.intake || "—",
-        normalizeDept(l.department),
+        leaveDepartment(l) ?? NO_DEPT,
         LEAVE_TYPE_LABELS[l.type],
         dateCell(`${l.startDate} ${l.startTime}`),
         dateCell(`${l.endDate} ${l.endTime}`),
@@ -2624,7 +2639,22 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                     onClick={() => setDrilldown({ title: `${d.department} (${from} – ${to})`, leaves: d.rows })}
                   />
                 ))}
+                {unmatched.length > 0 && (
+                  <Breakdown
+                    label={NO_DEPT}
+                    value={unmatched.length}
+                    total={inRange.length}
+                    color="#94a3b8"
+                    onClick={() => setDrilldown({ title: `${NO_DEPT} (${from} – ${to})`, leaves: unmatched })}
+                  />
+                )}
               </div>
+              {unmatched.length > 0 && (
+                <p className="mt-3 text-[11px] text-[var(--muted)]">
+                  {unmatched.length} leave{unmatched.length === 1 ? "" : "s"} belong to students whose department doesn&apos;t
+                  match any of your departments (for example a deleted or test student). Click the row to see them.
+                </p>
+              )}
             </Card>
           </div>
 
@@ -2670,7 +2700,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                           <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                         </td>
                         <td>{l.intake || "—"}</td>
-                        <td>{normalizeDept(l.department)}</td>
+                        <td>{leaveDepartment(l) ?? NO_DEPT}</td>
                         <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                         <td className="whitespace-nowrap">{l.startDate}</td>
                         <td className="whitespace-nowrap">{l.endDate}</td>
