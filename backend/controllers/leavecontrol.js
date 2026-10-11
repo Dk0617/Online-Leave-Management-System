@@ -3,7 +3,6 @@ import Troop from "../models/Troop.js";
 import Student from "../models/Student.js";
 import Hod from "../models/HOD.js";
 import Lecturer from "../models/Lecturer.js";
-import HodUnavailability from "../models/HodUnavailability.js";
 import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import { writeAudit } from "../utils/audit.js";
 import { isApproved } from "../utils/leaveStatus.js";
@@ -159,7 +158,8 @@ async function decide(req, res, { statusField, commentField, atField, role, deci
     return res.status(403).json({ message: "This leave is not pending your decision" });
   }
 
-  const { actorName, approver } = await resolveActor(req);
+  const { actorName, approver, error } = await resolveActor(req);
+  if (error) return res.status(400).json({ message: error });
   await applyDecision(leave, {
     statusField,
     commentField,
@@ -225,13 +225,12 @@ function buildRoleHandlers({
 }
 
 // ── HOD — Day Scholar leaves assigned to this HOD ───────────────────
-// Acting HOD routing: when Admin marks a department's HOD unavailable for a
-// date (HodUnavailability), that day's HOD-stage queue goes to whichever
-// named Senior/Junior lecturer Admin assigned as Acting HOD for that
-// department and date (ActingHodAssignment). The lecturer acts through
-// their department's covering login (models/Lecturer.js). If the HOD is
-// unavailable and nobody is assigned, the queue waits and Admin is alerted
-// (see substitutecontrol.js listActingHodGaps).
+// Acting HOD routing: when Admin assigns one or more lecturers as Acting HOD
+// for a department on a date (ActingHodAssignment), that assignment is the
+// record that the department's HOD is not available that day, and the
+// department's HOD-stage queue opens to its shared Acting HOD login
+// (models/Lecturer.js). Each decision made through that login records which
+// of the assigned lecturers made it (sent as actingMemberId).
 
 // Server-local calendar date, so "today" flips at local midnight rather
 // than UTC midnight.
@@ -240,21 +239,28 @@ export function localDateStr(d = new Date()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export async function isHodUnavailableOn(hodId, dateStr) {
-  return !!(await HodUnavailability.exists({ hodId, fromDate: { $lte: dateStr }, toDate: { $gte: dateStr } }));
+// Lecturers on an assignment — reads the first version's single-lecturer
+// fields as a one-member list.
+export function assignedMembers(assignment) {
+  if (!assignment) return [];
+  if (assignment.members?.length) {
+    return assignment.members.map((m) => ({ memberId: String(m.memberId), name: m.name, tier: m.tier }));
+  }
+  if (assignment.memberId) {
+    return [{ memberId: String(assignment.memberId), name: assignment.memberName, tier: assignment.memberTier }];
+  }
+  return [];
 }
 
-// Today's Acting HOD for a covering account, or null when this department's
-// HOD is available today or nobody has been assigned.
+// Today's Acting HOD assignment for a department's shared login, or null
+// when Admin hasn't assigned anyone (i.e. the HOD is handling it).
 async function resolveActingHod(lecturerAccount, dateStr = localDateStr()) {
-  if (!lecturerAccount) return { hod: null, hodUnavailable: false, assignment: null };
+  if (!lecturerAccount) return { hod: null, assignment: null };
   const hod = await Hod.findOne({ department: lecturerAccount.department });
-  if (!hod) return { hod: null, hodUnavailable: false, assignment: null };
-  const hodUnavailable = await isHodUnavailableOn(hod._id, dateStr);
-  const assignment = hodUnavailable
+  const assignment = hod
     ? await ActingHodAssignment.findOne({ department: lecturerAccount.department, date: dateStr })
     : null;
-  return { hod, hodUnavailable, assignment };
+  return { hod, assignment: assignedMembers(assignment).length ? assignment : null };
 }
 
 export async function hodScopeFilter(req) {
@@ -268,75 +274,55 @@ export async function hodScopeFilter(req) {
 }
 
 // Name for the audit log/emails, plus the approver snapshot stored on the
-// leave (Leave.hodApprover) for the PDF.
+// leave (Leave.hodApprover) for the PDF. For the shared Acting HOD login,
+// the deciding lecturer must be one of today's assigned lecturers.
 async function resolveActor(req) {
-  const today = new Date().toLocaleString();
+  const decidedAt = new Date().toLocaleString();
   if (req.user.role === "HOD") {
     const hod = await Hod.findById(req.user.id);
     return {
       actorName: req.user.name,
-      approver: { name: req.user.name, role: "HOD", department: hod?.department, decidedAt: today },
+      approver: { name: req.user.name, role: "HOD", department: hod?.department, decidedAt },
     };
   }
   if (req.user.role === "LECTURER") {
     const lecturerAccount = await Lecturer.findById(req.user.id);
     const { assignment } = await resolveActingHod(lecturerAccount);
-    if (!assignment) return { actorName: req.user.name, approver: null };
-    const tierLabel = assignment.memberTier === "SENIOR" ? "Senior Lecturer" : "Junior Lecturer";
+    const member = assignedMembers(assignment).find((m) => m.memberId === String(req.body.actingMemberId || ""));
+    if (!member) return { error: "Select which assigned lecturer you are before approving or rejecting." };
+    const tierLabel = member.tier === "SENIOR" ? "Senior Lecturer" : "Junior Lecturer";
     return {
-      actorName: `${assignment.memberName} (Acting HOD, ${tierLabel}, ${assignment.department})`,
-      approver: {
-        name: assignment.memberName,
-        role: "ACTING_HOD",
-        department: assignment.department,
-        decidedAt: today,
-      },
+      actorName: `${member.name} (Acting HOD, ${tierLabel}, ${lecturerAccount.department})`,
+      approver: { name: member.name, role: "ACTING_HOD", department: lecturerAccount.department, decidedAt },
     };
   }
   return { actorName: req.user.name, approver: null };
 }
 
-// Powers the Lecturer (Acting HOD) dashboard: whether the regular HOD is
-// available today, who is assigned as Acting HOD today, and the HOD's
-// availability plus Acting HOD assignments for the next 30 days.
+// Powers the Acting HOD dashboard: whether the HOD is out today (an Acting
+// HOD assignment exists), which lecturers are assigned today, and the
+// department's assignments for the next 30 days.
 export const coverStatus = async (req, res) => {
   const lecturerAccount = await Lecturer.findById(req.user.id);
   if (!lecturerAccount) return res.status(404).json({ message: "Account not found" });
 
   const today = localDateStr();
-  const { hod, hodUnavailable, assignment } = await resolveActingHod(lecturerAccount, today);
-
+  const { hod, assignment } = await resolveActingHod(lecturerAccount, today);
   const end = new Date();
   end.setDate(end.getDate() + 30);
-  const endStr = localDateStr(end);
-  const [unavailability, assignments] = await Promise.all([
-    hod
-      ? HodUnavailability.find({ hodId: hod._id, toDate: { $gte: today }, fromDate: { $lte: endStr } }).sort({ fromDate: 1 })
-      : [],
-    ActingHodAssignment.find({ department: lecturerAccount.department, date: { $gte: today, $lte: endStr } }).sort({
-      date: 1,
-    }),
-  ]);
+  const upcoming = await ActingHodAssignment.find({
+    department: lecturerAccount.department,
+    date: { $gte: today, $lte: localDateStr(end) },
+  }).sort({ date: 1 });
 
   res.json({
     department: lecturerAccount.department,
     hodName: hod?.name,
-    hodUnavailable,
-    activeMember: assignment
-      ? { id: String(assignment.memberId), name: assignment.memberName, tier: assignment.memberTier, rank: 0 }
-      : null,
-    unavailability: unavailability.map((u) => ({
-      id: String(u._id),
-      fromDate: u.fromDate,
-      toDate: u.toDate,
-      reason: u.reason,
-    })),
-    assignments: assignments.map((a) => ({
-      id: String(a._id),
-      date: a.date,
-      memberName: a.memberName,
-      memberTier: a.memberTier,
-    })),
+    hodUnavailable: !!assignment,
+    activeMembers: assignedMembers(assignment).map((m) => ({ id: m.memberId, name: m.name, tier: m.tier, rank: 0 })),
+    assignments: upcoming
+      .map((a) => ({ id: String(a._id), date: a.date, members: assignedMembers(a).map((m) => ({ name: m.name, tier: m.tier })) }))
+      .filter((a) => a.members.length),
   });
 };
 

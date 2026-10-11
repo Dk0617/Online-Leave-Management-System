@@ -4,9 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   api,
   normalizeActingHodAssignment,
-  normalizeActingHodGap,
   normalizeAudit,
-  normalizeHodUnavailability,
   normalizeEventDay,
   normalizeIntake,
   normalizeLeave,
@@ -19,9 +17,7 @@ import {
 } from "@/src/api";
 import {
   ActingHodAssignment,
-  ActingHodGap,
   AuditEntry,
-  HodUnavailability,
   EventDay,
   Intake,
   LeaveRequest,
@@ -93,9 +89,7 @@ export function useAdminPortal() {
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
-  const [hodUnavailability, setHodUnavailability] = useState<HodUnavailability[]>([]);
   const [actingAssignments, setActingAssignments] = useState<ActingHodAssignment[]>([]);
-  const [actingGaps, setActingGaps] = useState<ActingHodGap[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,9 +111,7 @@ export function useAdminPortal() {
         lecturersRaw,
         eventsRaw,
         photoRequestsRaw,
-        hodUnavailabilityRaw,
         actingRaw,
-        gapsRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
         api.get<Record<string, unknown>[]>("/admin/staff/hod"),
@@ -134,9 +126,7 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/events"),
         api.get<Record<string, unknown>[]>("/admin/photo-requests"),
-        api.get<Record<string, unknown>[]>("/admin/hod-unavailability"),
         api.get<Record<string, unknown>[]>("/admin/acting-hod"),
-        api.get<Record<string, unknown>[]>("/admin/acting-hod/gaps"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
       setHods(hodsRaw.map(normalizeStaff));
@@ -151,9 +141,7 @@ export function useAdminPortal() {
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setEvents(eventsRaw.map(normalizeEventDay));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
-      setHodUnavailability(hodUnavailabilityRaw.map(normalizeHodUnavailability));
       setActingAssignments(actingRaw.map(normalizeActingHodAssignment));
-      setActingGaps(gapsRaw.map(normalizeActingHodGap));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
     } finally {
@@ -262,21 +250,9 @@ export function useAdminPortal() {
     await refresh();
   }
 
-  // ── Acting HOD — HOD availability per date, and the per-date Acting HOD
-  // assignment (see backend/controllers/substitutecontrol.js). ─────────
-  async function markHodUnavailable(hodId: string, fromDate: string, toDate: string, reason?: string) {
-    await api.post("/admin/hod-unavailability", { hodId, fromDate, toDate, reason });
-    await refresh();
-  }
-  async function markHodAvailable(hodId: string, date: string) {
-    await api.post("/admin/hod-availability", { hodId, date });
-    await refresh();
-  }
-  async function removeHodUnavailability(id: string) {
-    await api.delete(`/admin/hod-unavailability/${id}`);
-    await refresh();
-  }
-  async function assignActingHod(input: { lecturerId: string; memberId: string; date: string; toDate?: string }) {
+  // ── Acting HOD — per-date assignment of one or more department lecturers
+  // (see backend/controllers/substitutecontrol.js assignActingHod). ───
+  async function assignActingHod(input: { lecturerId: string; memberIds: string[] | "ALL"; date: string; toDate?: string }) {
     await api.post("/admin/acting-hod", input);
     await refresh();
   }
@@ -322,9 +298,7 @@ export function useAdminPortal() {
     lecturers,
     events,
     photoRequests,
-    hodUnavailability,
     actingAssignments,
-    actingGaps,
     loading,
     error,
     refresh,
@@ -347,9 +321,6 @@ export function useAdminPortal() {
     addLecturerMember,
     editLecturerMember,
     removeLecturerMember,
-    markHodUnavailable,
-    markHodAvailable,
-    removeHodUnavailability,
     assignActingHod,
     removeActingHod,
     addEvent,

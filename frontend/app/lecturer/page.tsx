@@ -12,13 +12,11 @@ import { api, normalizeCoverStatus, POLL_INTERVAL_MS } from "@/src/api";
 import { LecturerCoverStatus } from "@/src/types";
 import { Dashboard, History } from "@/app/hod/views";
 
-// Reuses the HOD portal's Dashboard/History screens and useHodPortal hook —
-// the /hod/leaves/* endpoints already widen to whichever HOD this
-// department's shared login is currently covering (see leavecontrol.js
-// hodScopeFilter / resolveActiveMemberForDepartment), so logging in on a day
-// the HOD is available just shows an empty queue here, same shape as an HOD
-// portal with nothing pending. The Event Calendar stays HOD-only (see
-// hodRoutes.js), so it's deliberately left out of this portal's nav.
+// The department's shared Acting HOD profile. Reuses the HOD portal's
+// Dashboard/History screens and useHodPortal hook: the /hod/leaves/*
+// endpoints open this department's HOD queue only on dates Admin assigned
+// Acting HOD lecturers (see leavecontrol.js hodScopeFilter); on any other
+// day the queue is empty. The Event Calendar stays HOD-only.
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -66,11 +64,21 @@ function tierLabel(tier: "SENIOR" | "JUNIOR") {
   return tier === "SENIOR" ? "Senior Lecturer" : "Junior Lecturer";
 }
 
-function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | null; error: string | null }) {
+function CoverStatusBanner({
+  status,
+  error,
+  actingAs,
+  onActingAs,
+}: {
+  status: LecturerCoverStatus | null;
+  error: string | null;
+  actingAs: string;
+  onActingAs: (id: string) => void;
+}) {
   if (error) {
     return (
       <div className="mb-4 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-xs text-[var(--err)]">
-        Couldn&apos;t load cover status: {error}
+        Couldn&apos;t load Acting HOD status: {error}
       </div>
     );
   }
@@ -80,58 +88,52 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
     <div className="mb-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
       {!status.hodUnavailable ? (
         <p className="text-sm text-[var(--white)]">
-          ✅ <strong>{status.hodName || "Your HOD"}</strong> is available today — there&apos;s nothing for{" "}
-          {status.department} to cover right now.
-        </p>
-      ) : status.activeMember ? (
-        <p className="text-sm text-[var(--white)]">
-          🔔 <strong>{status.hodName || "The HOD"}</strong> is unavailable today. Acting HOD for {status.department}:{" "}
-          <strong>{status.activeMember.name}</strong> ({tierLabel(status.activeMember.tier)}). Their leave approvals
-          are in the queue below.
+          ✅ <strong>{status.hodName || "Your HOD"}</strong> is available today. No Acting HOD is assigned for{" "}
+          {status.department}, so there&apos;s nothing to approve here today.
         </p>
       ) : (
-        <p className="text-sm text-[var(--warn)]">
-          ⚠️ <strong>{status.hodName || "The HOD"}</strong> is unavailable today, but Admin hasn&apos;t assigned an
-          Acting HOD for {status.department} yet. Admin has been alerted; the queue opens here once someone is
-          assigned.
-        </p>
+        <>
+          <p className="text-sm text-[var(--white)]">
+            🔔 <strong>{status.hodName || "The HOD"}</strong> is not available today. Acting HOD for{" "}
+            {status.department}: <strong>{status.activeMembers.map((m) => m.name).join(", ")}</strong>.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--white)]">
+            <label htmlFor="acting-as" className="font-bold">
+              I am:
+            </label>
+            <select
+              id="acting-as"
+              value={actingAs}
+              onChange={(e) => onActingAs(e.target.value)}
+              className="rounded-md border border-[var(--border)] bg-[var(--card2)] px-2 py-1 text-xs text-[var(--white)]"
+            >
+              <option value="">Select your name…</option>
+              {status.activeMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({tierLabel(m.tier)})
+                </option>
+              ))}
+            </select>
+            <span className="text-[var(--muted)]">Your name is recorded on every leave you approve or reject.</span>
+          </div>
+        </>
       )}
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div>
-          <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-            HOD availability (next 30 days)
-          </h4>
-          {status.unavailability.length === 0 ? (
-            <p className="text-xs text-[var(--muted)]">Available on every day.</p>
-          ) : (
-            <ul className="space-y-1 text-xs text-[var(--white)]">
-              {status.unavailability.map((u) => (
-                <li key={u.id}>
-                  <Badge tone="red">Unavailable</Badge> {u.fromDate === u.toDate ? u.fromDate : `${u.fromDate} → ${u.toDate}`}
-                  {u.reason && <span className="text-[var(--muted)]"> · {u.reason}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div>
-          <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-            Acting HOD assignments
-          </h4>
-          {status.assignments.length === 0 ? (
-            <p className="text-xs text-[var(--muted)]">None assigned.</p>
-          ) : (
-            <ul className="space-y-1 text-xs text-[var(--white)]">
-              {status.assignments.map((a) => (
-                <li key={a.id}>
-                  {a.date}: <strong>{a.memberName}</strong>{" "}
-                  <Badge tone={a.memberTier === "SENIOR" ? "blue" : "gray"}>{tierLabel(a.memberTier)}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="mt-4">
+        <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          HOD not available / Acting HOD (next 30 days)
+        </h4>
+        {status.assignments.length === 0 ? (
+          <p className="text-xs text-[var(--muted)]">No Acting HOD days assigned. The HOD is available.</p>
+        ) : (
+          <ul className="space-y-1 text-xs text-[var(--white)]">
+            {status.assignments.map((a) => (
+              <li key={a.id}>
+                <Badge tone="red">HOD not available</Badge> {a.date}: {a.members.map((m) => m.name).join(", ")}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -140,8 +142,22 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
 export default function LecturerPage() {
   const { user } = useAuth();
   const [view, setView] = useState("dashboard");
-  const portal = useHodPortal();
+  const basePortal = useHodPortal();
   const { status, error: coverError } = useCoverStatus();
+  // Which of today's assigned lecturers is using this shared login — sent
+  // with every decision so the leave and PDF record the actual approver.
+  const [actingMemberId, setActingMemberId] = useState("");
+  const activeIds = (status?.activeMembers ?? []).map((m) => m.id);
+  const actingAs = activeIds.includes(actingMemberId) ? actingMemberId : activeIds.length === 1 ? activeIds[0] : "";
+  function requireActingAs() {
+    if (!actingAs) throw new Error("Select which lecturer you are (top of the page) before approving or rejecting.");
+    return actingAs;
+  }
+  const portal = {
+    ...basePortal,
+    approve: async (id: string, comment?: string) => basePortal.approve(id, comment, requireActingAs()),
+    reject: async (id: string, comment?: string) => basePortal.reject(id, comment, requireActingAs()),
+  };
 
   const forced = !!user?.mustChangePassword;
   const activeView = forced ? "changePass" : view;
@@ -157,7 +173,7 @@ export default function LecturerPage() {
     >
       {activeView === "dashboard" && (
         <>
-          <CoverStatusBanner status={status} error={coverError} />
+          <CoverStatusBanner status={status} error={coverError} actingAs={actingAs} onActingAs={setActingMemberId} />
           <Dashboard portal={portal} asLecturer />
         </>
       )}

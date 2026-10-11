@@ -58,12 +58,14 @@ export function useHodPortal() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  async function approve(id: string, comment?: string) {
-    await api.patch(`/hod/leaves/${id}/approve`, { comment });
+  // actingMemberId: which assigned lecturer is deciding, when this hook is
+  // used through a department's shared Acting HOD login (app/lecturer).
+  async function approve(id: string, comment?: string, actingMemberId?: string) {
+    await api.patch(`/hod/leaves/${id}/approve`, { comment, actingMemberId });
     await refresh();
   }
-  async function reject(id: string, comment?: string) {
-    await api.patch(`/hod/leaves/${id}/reject`, { comment });
+  async function reject(id: string, comment?: string, actingMemberId?: string) {
+    await api.patch(`/hod/leaves/${id}/reject`, { comment, actingMemberId });
     await refresh();
   }
   // Corrects a student's own date/time entry mistake on a leave still

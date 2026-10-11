@@ -17,7 +17,6 @@ import {
   LecturerCoverStatus,
   HodApprover,
   ActingHodAssignment,
-  ActingHodGap,
   LecturerMember,
   LecturerUnavailability,
   Movement,
@@ -378,18 +377,14 @@ export function normalizeCoverStatus(raw: Raw): LecturerCoverStatus {
     department: raw.department as string,
     hodName: raw.hodName as string | undefined,
     hodUnavailable: !!raw.hodUnavailable,
-    activeMember: raw.activeMember ? normalizeLecturerMember(raw.activeMember as Raw) : null,
-    unavailability: ((raw.unavailability as Raw[]) ?? []).map((u) => ({
-      id: String(u.id),
-      fromDate: u.fromDate as string,
-      toDate: u.toDate as string,
-      reason: u.reason as string | undefined,
-    })),
+    activeMembers: ((raw.activeMembers as Raw[]) ?? []).map(normalizeLecturerMember),
     assignments: ((raw.assignments as Raw[]) ?? []).map((a) => ({
       id: String(a.id),
       date: a.date as string,
-      memberName: a.memberName as string,
-      memberTier: a.memberTier as "SENIOR" | "JUNIOR",
+      members: ((a.members as Raw[]) ?? []).map((m) => ({
+        name: m.name as string,
+        tier: m.tier as "SENIOR" | "JUNIOR",
+      })),
     })),
   };
 }
@@ -399,21 +394,13 @@ export function normalizeActingHodAssignment(raw: Raw): ActingHodAssignment {
     id: String(raw._id ?? raw.id),
     lecturerId: String(raw.lecturerId),
     department: raw.department as string,
-    memberId: String(raw.memberId),
-    memberName: raw.memberName as string,
-    memberTier: raw.memberTier as "SENIOR" | "JUNIOR",
+    members: ((raw.members as Raw[]) ?? []).map((m) => ({
+      memberId: String(m.memberId),
+      name: m.name as string,
+      tier: m.tier as "SENIOR" | "JUNIOR",
+    })),
     date: raw.date as string,
     assignedBy: raw.assignedBy as string | undefined,
-  };
-}
-
-export function normalizeActingHodGap(raw: Raw): ActingHodGap {
-  return {
-    hodId: String(raw.hodId),
-    hodName: raw.hodName as string,
-    department: raw.department as string,
-    dates: (raw.dates as string[]) ?? [],
-    pendingCount: Number(raw.pendingCount ?? 0),
   };
 }
 

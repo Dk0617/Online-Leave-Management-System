@@ -38,11 +38,9 @@ import {
   createHodUnavailability,
   deleteHodUnavailability,
   endHodUnavailabilityNow,
-  markHodAvailable,
   listActingHodAssignments,
   assignActingHod,
   deleteActingHodAssignment,
-  listActingHodGaps,
   listLecturerUnavailability,
   createLecturerUnavailability,
   deleteLecturerUnavailability,
@@ -94,14 +92,12 @@ router.get("/hod-unavailability", listHodUnavailability);
 router.post("/hod-unavailability", createHodUnavailability);
 router.delete("/hod-unavailability/:id", deleteHodUnavailability);
 router.patch("/hod-unavailability/:id/end-now", endHodUnavailabilityNow);
-router.post("/hod-availability", markHodAvailable);
 
-// Acting HOD — per-date assignment of a department lecturer (see
-// substitutecontrol.js assignActingHod) and the missing-cover alert.
+// Acting HOD — per-date assignment of one or more department lecturers
+// (see substitutecontrol.js assignActingHod).
 router.get("/acting-hod", listActingHodAssignments);
 router.post("/acting-hod", assignActingHod);
 router.delete("/acting-hod/:id", deleteActingHodAssignment);
-router.get("/acting-hod/gaps", listActingHodGaps);
 
 router.get("/lecturer-unavailability", listLecturerUnavailability);
 router.post("/lecturer-unavailability", createLecturerUnavailability);

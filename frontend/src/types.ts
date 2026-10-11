@@ -381,13 +381,11 @@ export interface LecturerCoverStatus {
   department: string;
   hodName?: string;
   hodUnavailable: boolean;
-  // Today's assigned Acting HOD (null if the HOD is available or nobody is
-  // assigned).
-  activeMember: LecturerMember | null;
-  // The HOD's unavailable windows and the Acting HOD assignments for the
-  // next 30 days.
-  unavailability: { id: string; fromDate: string; toDate: string; reason?: string }[];
-  assignments: { id: string; date: string; memberName: string; memberTier: "SENIOR" | "JUNIOR" }[];
+  // Lecturers Admin assigned as Acting HOD for today (empty when the HOD is
+  // handling it themselves).
+  activeMembers: LecturerMember[];
+  // This department's Acting HOD assignments for the next 30 days.
+  assignments: { id: string; date: string; members: { name: string; tier: "SENIOR" | "JUNIOR" }[] }[];
 }
 
 export interface HodApprover {
@@ -399,23 +397,13 @@ export interface HodApprover {
 
 // Admin's per-date Acting HOD pick — see
 // backend/models/ActingHodAssignment.js.
+// The assignment itself marks that department's HOD as not available on
+// that date.
 export interface ActingHodAssignment {
   id: string;
   lecturerId: string;
   department: string;
-  memberId: string;
-  memberName: string;
-  memberTier: "SENIOR" | "JUNIOR";
+  members: { memberId: string; name: string; tier: "SENIOR" | "JUNIOR" }[];
   date: string; // "YYYY-MM-DD"
   assignedBy?: string;
-}
-
-// A department whose HOD is unavailable on these dates with no Acting HOD
-// assigned — see backend/controllers/substitutecontrol.js listActingHodGaps.
-export interface ActingHodGap {
-  hodId: string;
-  hodName: string;
-  department: string;
-  dates: string[];
-  pendingCount: number;
 }

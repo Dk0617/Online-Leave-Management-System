@@ -71,7 +71,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
   return (
     <div>
-      <ActingHodGapAlert portal={portal} />
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load admin data: {error}</span>
@@ -1433,180 +1432,40 @@ function LecturerRosterModal({
   );
 }
 
-// Admin alert for requirement "no Acting HOD assigned → notify Admin":
-// every upcoming date where an HOD is unavailable and nobody covers.
-export function ActingHodGapAlert({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  if (!portal.actingGaps.length) return null;
-  return (
-    <div className="mb-5 rounded-xl border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-xs text-[var(--err)]">
-      <strong>⚠️ Acting HOD needed:</strong>
-      <ul className="mt-1.5 space-y-1">
-        {portal.actingGaps.map((g) => (
-          <li key={g.hodId}>
-            {g.department}: {g.hodName} is unavailable on {g.dates.slice(0, 6).join(", ")}
-            {g.dates.length > 6 ? ` and ${g.dates.length - 6} more day(s)` : ""} with no Acting HOD assigned
-            {g.pendingCount ? ` (${g.pendingCount} leave${g.pendingCount === 1 ? "" : "s"} waiting)` : ""}.
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function HodAvailabilityCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { hods, hodUnavailability, markHodUnavailable, markHodAvailable, removeHodUnavailability } = portal;
-  const [hodId, setHodId] = useState("");
-  const [fromDate, setFromDate] = useState(todayStr());
-  const [toDate, setToDate] = useState(todayStr());
-  const [reason, setReason] = useState("");
-  const [status, setStatus] = useState<"UNAVAILABLE" | "AVAILABLE">("UNAVAILABLE");
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSave() {
-    if (!hodId || !fromDate) {
-      setError("Select an HOD and a date.");
-      return;
-    }
-    setError(null);
-    try {
-      if (status === "UNAVAILABLE") {
-        await markHodUnavailable(hodId, fromDate, toDate || fromDate, reason.trim() || undefined);
-      } else {
-        await markHodAvailable(hodId, fromDate);
-      }
-      setReason("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
-    }
-  }
-
-  async function handleRemove(id: string) {
-    if (!confirm("Remove this unavailability? The HOD becomes available on all of these dates.")) return;
-    try {
-      await removeHodUnavailability(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove");
-    }
-  }
-
-  const today = todayStr();
-  const upcoming = hodUnavailability.filter((u) => u.toDate >= today).sort((a, b) => a.fromDate.localeCompare(b.fromDate));
-
-  return (
-    <Card className="mb-5 p-5">
-      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">📅 HOD Availability</h2>
-      <div className={`${styles.formGrid3} mb-3.5`}>
-        <div>
-          <label className={styles.label}>HOD</label>
-          <select value={hodId} onChange={(e) => setHodId(e.target.value)} className={styles.input}>
-            <option value="">Select HOD…</option>
-            {hods.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.name}
-                {h.department ? ` — ${h.department}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={styles.label}>Status</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as "UNAVAILABLE" | "AVAILABLE")} className={styles.input}>
-            <option value="UNAVAILABLE">Unavailable</option>
-            <option value="AVAILABLE">Available</option>
-          </select>
-        </div>
-        <div>
-          <label className={styles.label}>{status === "UNAVAILABLE" ? "From date" : "Date"}</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={styles.input} />
-        </div>
-      </div>
-      {status === "UNAVAILABLE" && (
-        <div className={`${styles.formGrid3} mb-3.5`}>
-          <div>
-            <label className={styles.label}>To date</label>
-            <input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} className={styles.input} />
-          </div>
-          <div>
-            <label className={styles.label}>Reason (optional)</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className={styles.input} placeholder="e.g. Conference" />
-          </div>
-          <div />
-        </div>
-      )}
-      <Button variant="primary" onClick={handleSave}>
-        {status === "UNAVAILABLE" ? "Mark Unavailable" : "Mark Available"}
-      </Button>
-      {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
-
-      <div className="mt-5 overflow-x-auto">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>HOD</th>
-              <th>Department</th>
-              <th>Unavailable</th>
-              <th>Reason</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {upcoming.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
-                  Every HOD is available — nothing upcoming.
-                </td>
-              </tr>
-            ) : (
-              upcoming.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.hodName}</td>
-                  <td>{u.hodDepartment || "—"}</td>
-                  <td>
-                    <Badge tone="red">Unavailable</Badge> {u.fromDate === u.toDate ? u.fromDate : `${u.fromDate} → ${u.toDate}`}
-                  </td>
-                  <td className="text-[var(--muted)]">{u.reason || "—"}</td>
-                  <td>
-                    <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(u.id)}>
-                      Remove
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
+// Admin assigns Acting HOD for a department on a date (or date range): one
+// or more of that department's roster lecturers, or all of them. Making the
+// assignment is itself how Admin records that the HOD isn't available that
+// day; every assigned lecturer works through the department's one shared
+// Acting HOD profile.
 function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { lecturers, actingAssignments, hodUnavailability, hods, assignActingHod, removeActingHod } = portal;
+  const { lecturers, actingAssignments, assignActingHod, removeActingHod } = portal;
   const [lecturerId, setLecturerId] = useState("");
-  const [memberId, setMemberId] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
   const [date, setDate] = useState(todayStr());
   const [toDate, setToDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   const account = lecturers.find((l) => l.id === lecturerId);
   const members = account
     ? [...account.members].sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
     : [];
+  const allSelected = members.length > 0 && selected.length === members.length;
 
-  function hodAvailabilityOn(department: string, d: string): "Available" | "Unavailable" {
-    const hod = hods.find((h) => h.department === department);
-    if (!hod) return "Available";
-    return hodUnavailability.some((u) => u.hodId === hod.id && u.fromDate <= d && u.toDate >= d) ? "Unavailable" : "Available";
+  function toggle(id: string) {
+    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   }
 
   async function handleAssign() {
-    if (!lecturerId || !memberId || !date) {
-      setError("Select a department, a lecturer and a date.");
+    if (!lecturerId || !selected.length || !date) {
+      setError("Select a department, at least one lecturer and a date.");
       return;
     }
     setError(null);
+    setSaved(null);
     try {
-      await assignActingHod({ lecturerId, memberId, date, toDate: toDate || undefined });
+      await assignActingHod({ lecturerId, memberIds: allSelected ? "ALL" : selected, date, toDate: toDate || undefined });
+      setSaved(`Acting HOD assigned for ${account?.department} on ${date}${toDate && toDate !== date ? ` to ${toDate}` : ""}.`);
       setToDate("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -1614,7 +1473,7 @@ function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }
   }
 
   async function handleRemove(id: string) {
-    if (!confirm("Remove this Acting HOD assignment?")) return;
+    if (!confirm("Remove this Acting HOD assignment? That day's approvals go back to the HOD.")) return;
     try {
       await removeActingHod(id);
     } catch (err) {
@@ -1627,7 +1486,11 @@ function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }
 
   return (
     <Card className="mb-5 p-5">
-      <h2 className="mb-4 text-sm font-bold text-[var(--white)]">🧑‍🏫 Assign Acting HOD</h2>
+      <h2 className="mb-1 text-sm font-bold text-[var(--white)]">🧑‍🏫 Assign Acting HOD</h2>
+      <p className="mb-4 text-xs text-[var(--muted)]">
+        Use this on days a department&apos;s HOD isn&apos;t available. The lecturers you pick approve that
+        department&apos;s leaves for those dates, all through the department&apos;s one Acting HOD profile.
+      </p>
       <div className={`${styles.formGrid3} mb-3.5`}>
         <div>
           <label className={styles.label}>Department</label>
@@ -1635,7 +1498,7 @@ function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }
             value={lecturerId}
             onChange={(e) => {
               setLecturerId(e.target.value);
-              setMemberId("");
+              setSelected([]);
             }}
             className={styles.input}
           >
@@ -1648,39 +1511,52 @@ function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }
           </select>
         </div>
         <div>
-          <label className={styles.label}>Lecturer</label>
-          <select value={memberId} onChange={(e) => setMemberId(e.target.value)} className={styles.input} disabled={!account}>
-            <option value="">{account && !members.length ? "Roster is empty" : "Select lecturer…"}</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} — {TIER_LABELS[m.tier]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
           <label className={styles.label}>Date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={styles.input} />
         </div>
-      </div>
-      <div className={`${styles.formGrid3} mb-3.5`}>
         <div>
           <label className={styles.label}>Until (optional, for several days)</label>
           <input type="date" value={toDate} min={date} onChange={(e) => setToDate(e.target.value)} className={styles.input} />
         </div>
-        <div className="flex items-end text-xs text-[var(--muted)]">
-          {account && date && (
-            <span>
-              HOD on {date}: <strong>{hodAvailabilityOn(account.department, date)}</strong>
-            </span>
+      </div>
+
+      {account && (
+        <div className="mb-3.5 rounded-xl border border-[var(--border)] bg-[var(--card2)] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className={styles.label}>Lecturers ({selected.length} selected)</span>
+            {members.length > 0 && (
+              <button
+                type="button"
+                className="text-xs font-bold text-[var(--white)] underline"
+                onClick={() => setSelected(allSelected ? [] : members.map((m) => m.id))}
+              >
+                {allSelected ? "Clear all" : "Select all lecturers"}
+              </button>
+            )}
+          </div>
+          {members.length === 0 ? (
+            <p className="text-xs text-[var(--muted)]">
+              This department&apos;s roster is empty. Add its lecturers with Manage Roster below first.
+            </p>
+          ) : (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {members.map((m) => (
+                <label key={m.id} className="flex cursor-pointer items-center gap-2 text-sm text-[var(--white)]">
+                  <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} />
+                  {m.name}
+                  <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[m.tier]}</Badge>
+                </label>
+              ))}
+            </div>
           )}
         </div>
-        <div />
-      </div>
+      )}
+
       <Button variant="primary" onClick={handleAssign}>
         Assign Acting HOD
       </Button>
       {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+      {saved && <p className="mt-2 text-xs text-[var(--white)]">✅ {saved}</p>}
 
       <div className="mt-5 overflow-x-auto">
         <table className={styles.table}>
@@ -1688,40 +1564,36 @@ function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }
             <tr>
               <th>Date</th>
               <th>Department</th>
-              <th>Acting HOD</th>
-              <th>HOD status</th>
+              <th>Acting HOD lecturers</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {upcoming.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
-                  No upcoming Acting HOD assignments.
+                <td colSpan={4} className="py-6 text-center text-[var(--muted)]">
+                  No upcoming Acting HOD assignments. Every HOD is handling their own approvals.
                 </td>
               </tr>
             ) : (
-              upcoming.map((a) => {
-                const hodStatus = hodAvailabilityOn(a.department, a.date);
-                return (
-                  <tr key={a.id}>
-                    <td>{a.date}</td>
-                    <td>{a.department}</td>
-                    <td>
-                      {a.memberName}
-                      <div className="text-xs text-[var(--muted)]">{TIER_LABELS[a.memberTier]}</div>
-                    </td>
-                    <td>
-                      <Badge tone={hodStatus === "Available" ? "green" : "red"}>{hodStatus}</Badge>
-                    </td>
-                    <td>
-                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(a.id)}>
-                        Remove
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })
+              upcoming.map((a) => (
+                <tr key={a.id}>
+                  <td className="whitespace-nowrap">{a.date}</td>
+                  <td>{a.department}</td>
+                  <td>
+                    {a.members.map((m) => (
+                      <div key={m.memberId}>
+                        {m.name} <span className="text-xs text-[var(--muted)]">({TIER_LABELS[m.tier]})</span>
+                      </div>
+                    ))}
+                  </td>
+                  <td>
+                    <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(a.id)}>
+                      Remove
+                    </Button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -1828,15 +1700,12 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>Acting HOD:</strong> Each department has one Acting HOD login, shared by that department&apos;s
-        lecturers. Add the department&apos;s Senior and Junior lecturers to its roster, mark the HOD unavailable
-        for the dates they&apos;re away, then assign one lecturer as Acting HOD for each of those dates. While
-        the HOD is unavailable, that department&apos;s HOD-stage approvals go to the assigned Acting HOD; if
-        nobody is assigned, the leaves wait and you&apos;ll see an alert here.
+        <strong>Acting HOD:</strong> Each department has ONE Acting HOD profile (one login), shared by that
+        department&apos;s lecturers. Create the profile and add the department&apos;s Senior/Junior lecturers to its
+        roster below. On a day the HOD isn&apos;t available, assign one, several or all of those lecturers as Acting
+        HOD for that date. That department&apos;s leave approvals then go to the Acting HOD profile for that day.
       </div>
 
-      <ActingHodGapAlert portal={portal} />
-      <HodAvailabilityCard portal={portal} />
       <ActingHodCard portal={portal} />
 
       <Card className="mb-5 p-5">

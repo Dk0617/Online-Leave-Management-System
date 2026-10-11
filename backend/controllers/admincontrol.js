@@ -585,10 +585,18 @@ export const removeLecturerMember = async (req, res) => {
   if (!member) return res.status(404).json({ message: "Roster member not found" });
 
   await LecturerUnavailability.deleteMany({ lecturerId: lecturer._id, memberId: member._id });
-  // Upcoming Acting HOD days for a removed lecturer are dropped (Admin is
-  // then alerted to reassign); past ones stay as history.
+  // A removed lecturer is taken off upcoming Acting HOD days (a day left
+  // with nobody is removed); past assignments stay as history.
   const today = new Date().toISOString().split("T")[0];
-  await ActingHodAssignment.deleteMany({ department: lecturer.department, memberId: member._id, date: { $gte: today } });
+  await ActingHodAssignment.updateMany(
+    { department: lecturer.department, date: { $gte: today } },
+    { $pull: { members: { memberId: member._id } } }
+  );
+  await ActingHodAssignment.deleteMany({
+    department: lecturer.department,
+    date: { $gte: today },
+    $or: [{ memberId: member._id }, { members: { $size: 0 }, memberId: { $exists: false } }],
+  });
   member.deleteOne();
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);
