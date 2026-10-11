@@ -521,7 +521,15 @@ function HodHistoryTable({
   );
 }
 
-export function History({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
+export function History({
+  portal,
+  asLecturer,
+}: {
+  portal: ReturnType<typeof useHodPortal>;
+  // Acting HOD (Lecturer portal) never handles Officer Cadets, so it shows
+  // only the Day Scholar section.
+  asLecturer?: boolean;
+}) {
   const { history } = portal;
   const dayScholarSource = history.filter((l) => l.studentType === "DAY_SCHOLAR");
   const cadetSource = history.filter((l) => l.studentType === "CADET");
@@ -545,11 +553,15 @@ export function History({ portal }: { portal: ReturnType<typeof useHodPortal> })
       </div>
       <HodHistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." sort={dsSort} />
 
-      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
-        <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
-      </div>
-      <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
+      {!asLecturer && (
+        <>
+          <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
+            <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
+          </div>
+          <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
+        </>
+      )}
     </div>
   );
 }

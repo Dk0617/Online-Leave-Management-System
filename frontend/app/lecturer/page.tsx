@@ -190,7 +190,7 @@ export default function LecturerPage() {
         <>
           <ActingAsPicker status={status} value={actingAs} onChange={setActingMemberId} />
           {actingAs ? (
-            <History portal={portal} />
+            <History portal={portal} asLecturer />
           ) : (
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-6 text-center text-xs text-[var(--muted)]">
               Select your name above to see the leaves you approved or rejected.
