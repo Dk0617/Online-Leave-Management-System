@@ -2281,6 +2281,14 @@ function csvDateTime(value: string): string {
   return `'${value}`;
 }
 
+// Date inputs render in the browser's own locale (e.g. 05/09/2026 can mean
+// 9 May or 5 September), so the report spells the chosen range out in words.
+function longDate(value: string): string {
+  if (!value) return "—";
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
 function downloadCsv(filename: string, header: string[], rows: string[][]) {
   const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -2293,7 +2301,7 @@ function downloadCsv(filename: string, header: string[], rows: string[][]) {
 }
 
 export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { leaves } = portal;
+  const { leaves, error, refresh } = portal;
   const today = new Date().toISOString().split("T")[0];
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [from, setFrom] = useState(monthAgo);
@@ -2322,10 +2330,11 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   function exportCsv() {
     downloadCsv(
       `leave-audit-${from}_to_${to}.csv`,
-      ["Student", "Index Number", "Department", "Leave Type", "From", "To", "Applied", "Status"],
+      ["Student", "Index Number", "Intake", "Department", "Leave Type", "From", "To", "Applied", "Status"],
       inRange.map((l) => [
         l.studentName,
         l.indexNumber,
+        l.intake || "—",
         normalizeDept(l.department),
         LEAVE_TYPE_LABELS[l.type],
         csvDateTime(`${l.startDate} ${l.startTime}`),
@@ -2367,12 +2376,35 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             </Button>
           </div>
         </div>
+        {from && to && from <= to && (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Showing leaves from <strong className="text-[var(--white)]">{longDate(from)}</strong> to{" "}
+            <strong className="text-[var(--white)]">{longDate(to)}</strong>.
+          </p>
+        )}
         {from && to && from > to && <p className="mt-3 text-xs text-[var(--err)]">&quot;From&quot; must be on or before &quot;To&quot;.</p>}
       </Card>
 
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load leave records: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
+
       {inRange.length === 0 ? (
         <Card className="p-5">
-          <p className="text-xs text-[var(--muted)]">No leave records overlap this date range.</p>
+          <p className="text-xs text-[var(--muted)]">
+            No leave records overlap {longDate(from)} to {longDate(to)}.
+            {leaves.length > 0 &&
+              (() => {
+                const starts = leaves.map((l) => l.startDate).filter(Boolean).sort();
+                const ends = leaves.map((l) => l.endDate).filter(Boolean).sort();
+                return ` Leaves on record run from ${longDate(starts[0])} to ${longDate(ends[ends.length - 1])}.`;
+              })()}
+          </p>
         </Card>
       ) : (
         <>
@@ -2429,6 +2461,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                 <thead>
                   <tr>
                     <th>Student</th>
+                    <th>Intake</th>
                     <th>Department</th>
                     <th>Type</th>
                     <th>From</th>
@@ -2446,6 +2479,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                           {l.studentName}
                           <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                         </td>
+                        <td>{l.intake || "—"}</td>
                         <td>{normalizeDept(l.department)}</td>
                         <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                         <td className="whitespace-nowrap">{l.startDate}</td>
