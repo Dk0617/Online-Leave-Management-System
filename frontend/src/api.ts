@@ -94,7 +94,7 @@ async function request<T>(path: string, options: RequestInit = {}, attempt = 1):
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  } catch (err) {
+  } catch {
     // "Failed to fetch" — the request never reached the server at all
     // (dev server mid-restart, brief network blip, etc). This is a
     // TypeError, distinct from a normal 4xx/5xx response, and is safe to
@@ -103,7 +103,10 @@ async function request<T>(path: string, options: RequestInit = {}, attempt = 1):
       await sleep(attempt * 400);
       return request<T>(path, options, attempt + 1);
     }
-    throw err;
+    throw new ApiError(
+      `Can't reach the server at ${API_URL}. Make sure the backend is running (cd backend, then npm run dev).`,
+      0,
+    );
   }
 
   const isJson = res.headers.get("content-type")?.includes("application/json");

@@ -16,17 +16,24 @@ dotenv.config({ path: "./backend/.env" });
 
 const app = express();
 
-app.use(cors({
-  origin: 'http://localhost:3000',
+// Accept the frontend from any local dev origin (localhost or 127.0.0.1, any
+// port) — a strict 'http://localhost:3000' match made the browser block the
+// request ("Failed to fetch") whenever Next.js started on 3001 or the page
+// was opened via 127.0.0.1. FRONTEND_URL in .env can add a deployed origin.
+const corsOptions = {
+  origin: (origin, callback) => {
+    const allowed =
+      !origin ||
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+      origin === process.env.FRONTEND_URL;
+    callback(null, allowed);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-}));
+};
 
-app.options('/{*splat}', cors({
-  origin: 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
-}));
+app.use(cors(corsOptions));
+app.options('/{*splat}', cors(corsOptions));
 
 app.use(express.json());
 
