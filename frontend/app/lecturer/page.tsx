@@ -12,13 +12,11 @@ import { api, normalizeCoverStatus, POLL_INTERVAL_MS } from "@/src/api";
 import { LecturerCoverStatus } from "@/src/types";
 import { Dashboard, History } from "@/app/hod/views";
 
-// Reuses the HOD portal's Dashboard/History screens and useHodPortal hook —
-// the /hod/leaves/* endpoints already widen to whichever HOD this
-// department's shared login is currently covering (see leavecontrol.js
-// hodScopeFilter / resolveActiveMemberForDepartment), so logging in on a day
-// the HOD is available just shows an empty queue here, same shape as an HOD
-// portal with nothing pending. The Event Calendar stays HOD-only (see
-// hodRoutes.js), so it's deliberately left out of this portal's nav.
+// The department's shared Acting HOD profile. Reuses the HOD portal's
+// Dashboard/History screens and useHodPortal hook: the /hod/leaves/*
+// endpoints open this department's HOD queue only on dates Admin assigned
+// Acting HOD lecturers (see leavecontrol.js hodScopeFilter); on any other
+// day the queue is empty. The Event Calendar stays HOD-only.
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -70,7 +68,7 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
   if (error) {
     return (
       <div className="mb-4 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-xs text-[var(--err)]">
-        Couldn&apos;t load cover status: {error}
+        Couldn&apos;t load Acting HOD status: {error}
       </div>
     );
   }
@@ -80,56 +78,70 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
     <div className="mb-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
       {!status.hodUnavailable ? (
         <p className="text-sm text-[var(--white)]">
-          ✅ <strong>{status.hodName || "Your HOD"}</strong> is available today — there&apos;s nothing for{" "}
-          {status.department} to cover right now.
-        </p>
-      ) : status.activeMember ? (
-        <p className="text-sm text-[var(--white)]">
-          🔔 <strong>{status.hodName || "The HOD"}</strong> is unavailable today. Their queue is currently with{" "}
-          <strong>{status.activeMember.name}</strong> ({tierLabel(status.activeMember.tier)}, rank{" "}
-          {status.activeMember.rank}) — log in with this department&apos;s shared account to act on it.
+          ✅ <strong>{status.hodName || "Your HOD"}</strong> is available today. No Acting HOD is assigned for{" "}
+          {status.department}, so there&apos;s nothing to approve here today.
         </p>
       ) : (
-        <p className="text-sm text-[var(--warn)]">
-          ⚠️ <strong>{status.hodName || "The HOD"}</strong> is unavailable today, and every lecturer on{" "}
-          {status.department}&apos;s roster is also marked unavailable — nobody can act on this queue until
-          that changes.
+        <p className="text-sm text-[var(--white)]">
+          🔔 <strong>{status.hodName || "The HOD"}</strong> is not available today. Acting HOD for {status.department}:{" "}
+          <strong>{status.activeMembers.map((m) => m.name).join(", ")}</strong>.
         </p>
       )}
 
-      {status.roster.length > 0 && (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="text-left uppercase tracking-wide text-[var(--muted)]">
-                <th className="py-1.5 pr-4">Order</th>
-                <th className="py-1.5 pr-4">Name</th>
-                <th className="py-1.5 pr-4">Tier</th>
-                <th className="py-1.5">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {status.roster.map((m, i) => (
-                <tr key={m.id} className="border-t border-[rgba(255,255,255,0.05)]">
-                  <td className="py-1.5 pr-4 text-[var(--white)]">{i + 1}</td>
-                  <td className="py-1.5 pr-4 text-[var(--white)]">
-                    {m.name}
-                    {status.activeMember?.id === m.id && (
-                      <span className="ml-1.5">
-                        <Badge tone="green">Active Today</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-4">
-                    <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{tierLabel(m.tier)}</Badge>
-                  </td>
-                  <td className="py-1.5 text-[var(--white)]">{m.rank}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="mt-4">
+        <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          HOD not available / Acting HOD (next 30 days)
+        </h4>
+        {status.assignments.length === 0 ? (
+          <p className="text-xs text-[var(--muted)]">No Acting HOD days assigned. The HOD is available.</p>
+        ) : (
+          <ul className="space-y-1 text-xs text-[var(--white)]">
+            {status.assignments.map((a) => (
+              <li key={a.id}>
+                <Badge tone="red">HOD not available</Badge> {a.date}: {a.members.map((m) => m.name).join(", ")}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// "I am" picker for the department's shared login: decides whose History is
+// shown and whose name is recorded on every approval/rejection.
+function ActingAsPicker({
+  status,
+  value,
+  onChange,
+}: {
+  status: LecturerCoverStatus | null;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  if (!status || !status.roster.length) return null;
+  const activeIds = new Set(status.activeMembers.map((m) => m.id));
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-xs text-[var(--white)]">
+      <label htmlFor="acting-as" className="font-bold">
+        I am:
+      </label>
+      <select
+        id="acting-as"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-[var(--border)] bg-[var(--card2)] px-2 py-1 text-xs text-[var(--white)]"
+      >
+        <option value="">Select your name…</option>
+        {status.roster.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name} ({tierLabel(m.tier)}){activeIds.has(m.id) ? " — Acting HOD today" : ""}
+          </option>
+        ))}
+      </select>
+      <span className="text-[var(--muted)]">
+        History shows only your own decisions, and your name is recorded on every leave you approve or reject.
+      </span>
     </div>
   );
 }
@@ -137,8 +149,23 @@ function CoverStatusBanner({ status, error }: { status: LecturerCoverStatus | nu
 export default function LecturerPage() {
   const { user } = useAuth();
   const [view, setView] = useState("dashboard");
-  const portal = useHodPortal();
   const { status, error: coverError } = useCoverStatus();
+  // Which roster lecturer is using this shared login right now.
+  const [actingMemberId, setActingMemberId] = useState("");
+  const rosterIds = (status?.roster ?? []).map((m) => m.id);
+  const activeIds = (status?.activeMembers ?? []).map((m) => m.id);
+  const actingAs = rosterIds.includes(actingMemberId) ? actingMemberId : activeIds.length === 1 ? activeIds[0] : "";
+  const basePortal = useHodPortal(actingAs || undefined);
+  function requireActingAs() {
+    if (!actingAs) throw new Error("Select your name (\"I am\" at the top of the page) before approving or rejecting.");
+    if (!activeIds.includes(actingAs)) throw new Error("You aren't assigned as Acting HOD today, so you can't approve or reject.");
+    return actingAs;
+  }
+  const portal = {
+    ...basePortal,
+    approve: async (id: string, comment?: string) => basePortal.approve(id, comment, requireActingAs()),
+    reject: async (id: string, comment?: string) => basePortal.reject(id, comment, requireActingAs()),
+  };
 
   const forced = !!user?.mustChangePassword;
   const activeView = forced ? "changePass" : view;
@@ -155,10 +182,22 @@ export default function LecturerPage() {
       {activeView === "dashboard" && (
         <>
           <CoverStatusBanner status={status} error={coverError} />
+          <ActingAsPicker status={status} value={actingAs} onChange={setActingMemberId} />
           <Dashboard portal={portal} asLecturer />
         </>
       )}
-      {activeView === "history" && <History portal={portal} />}
+      {activeView === "history" && (
+        <>
+          <ActingAsPicker status={status} value={actingAs} onChange={setActingMemberId} />
+          {actingAs ? (
+            <History portal={portal} asLecturer />
+          ) : (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-6 text-center text-xs text-[var(--muted)]">
+              Select your name above to see the leaves you approved or rejected.
+            </div>
+          )}
+        </>
+      )}
       {activeView === "profile" && <MyProfile />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}
     </DashboardShell>

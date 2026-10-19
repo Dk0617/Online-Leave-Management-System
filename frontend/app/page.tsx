@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, ROLE_HOME } from "@/src/AuthContext";
+import { useAuth, ROLE_HOME, SESSION_EXPIRED_KEY } from "@/src/AuthContext";
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
@@ -13,6 +13,14 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+      window.sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      setExpired(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading && user) {
@@ -59,6 +67,11 @@ export default function LoginPage() {
             <h3 className="text-lg font-bold text-[#0d1b5e]">Sign in to your account</h3>
           </div>
 
+          {expired && !error && (
+            <div className="mb-3.5 rounded-lg border border-[rgba(217,119,6,0.25)] bg-[rgba(245,158,11,0.1)] px-3.5 py-2.5 text-xs text-[#92400e]">
+              Your session has expired. Please log in again.
+            </div>
+          )}
           {error && (
             <div className="mb-3.5 rounded-lg border border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.08)] px-3.5 py-2.5 text-xs text-[#991b1b]">
               {error}

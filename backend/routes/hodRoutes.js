@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
-import { hod, hodCorrectDateTime, coverStatus } from "../controllers/leavecontrol.js";
+import { hod, hodCorrectDateTime, coverStatus, actingHodHistory } from "../controllers/leavecontrol.js";
 import { listEvents, rejectOverlapping } from "../controllers/eventcontrol.js";
 import { hodMovements } from "../controllers/movementcontrol.js";
 import {
@@ -19,7 +19,10 @@ const router = express.Router();
 router.use(verifyToken, requireRole("HOD", "LECTURER"));
 
 router.get("/leaves/pending", hod.pending);
-router.get("/leaves/history", hod.history);
+// The shared Acting HOD login sees only the selected lecturer's own decisions.
+router.get("/leaves/history", (req, res, next) =>
+  req.user.role === "LECTURER" ? actingHodHistory(req, res, next) : hod.history(req, res, next)
+);
 router.patch("/leaves/:id/approve", hod.approve);
 router.patch("/leaves/:id/reject", hod.reject);
 router.patch("/leaves/:id/datetime", requireRole("HOD"), hodCorrectDateTime);
@@ -53,7 +56,9 @@ router.get("/movements", hodMovements);
 // leave queue, so a 403 here would silently blank a covering Lecturer's
 // entire dashboard, not just hide the calendar. The Lecturer portal's own
 // nav simply has no Calendar tab to show it in.
-router.get("/events", listEvents);
+// An Acting HOD (LECTURER) gets an empty calendar — their permissions are
+// limited to the leave queue.
+router.get("/events", (req, res, next) => (req.user.role === "LECTURER" ? res.json([]) : listEvents(req, res, next)));
 router.post("/events/:id/reject-overlapping", requireRole("HOD"), rejectOverlapping);
 
 export default router;

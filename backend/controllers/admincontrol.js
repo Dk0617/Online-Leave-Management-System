@@ -6,7 +6,9 @@ import Squadran from "../models/Squadran.js";
 import Sdd from "../models/Sdd.js";
 import Gate from "../models/Gate.js";
 import Lecturer from "../models/Lecturer.js";
+import { listDepartments as listAllDepartments, isKnownDepartment } from "../utils/departments.js";
 import LecturerUnavailability from "../models/LecturerUnavailability.js";
+import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
 import Notification from "../models/Notification.js";
@@ -43,14 +45,6 @@ async function isEmailTaken(email, excludeId) {
 }
 
 // ── Dashboard-wide views ────────────────────────────────────────
-export const listUsers = async (req, res) => {
-  const result = {};
-  for (const [role, Model] of Object.entries(ROLE_MODELS)) {
-    result[role] = await Model.find().select("-password");
-  }
-  res.json(result);
-};
-
 export const listAllLeaves = async (req, res) => {
   // Admin's dashboard only shows aggregate stats from this list, never the
   // attachment itself — excluding it avoids pulling every leave's base64
@@ -98,6 +92,9 @@ export const createStudent = async (req, res) => {
     password,
   } = req.body;
 
+  if (department && !(await isKnownDepartment(department))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (!indexNumber || !firstName || !lastName || !department || !email || !mobile || !intake || !password) {
     return res.status(400).json({ message: "All fields are required to create a student account" });
   }
@@ -280,6 +277,10 @@ function staffModelFor(req, res) {
   return { role, Model };
 }
 
+export const listDepartments = async (req, res) => {
+  res.json(await listAllDepartments());
+};
+
 export const createStaff = async (req, res) => {
   const resolved = staffModelFor(req, res);
   if (!resolved) return;
@@ -302,6 +303,9 @@ export const createStaff = async (req, res) => {
   }
 
   const doc = { username, name, password, email };
+  if (role === "HOD" && !(await isKnownDepartment(extra))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (extraField) doc[extraField] = extra;
 
   const created = await Model.create(doc);
@@ -336,6 +340,9 @@ export const updateStaff = async (req, res) => {
   }
   if (email !== undefined) staff.email = email;
   const extraField = STAFF_EXTRA_FIELD[role];
+  if (role === "HOD" && extra !== undefined && extra !== staff.department && !(await isKnownDepartment(extra))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (extraField && extra !== undefined) staff[extraField] = extra;
   if (password) {
     if (!isValidSimplePassword(password)) {
@@ -471,8 +478,8 @@ export const deleteTroop = async (req, res) => {
 // for how HOD Cover uses this to pick who's active on a given day. ───────
 export const createLecturer = async (req, res) => {
   const { username, name, password, email, department } = req.body;
-  if (!username || !name || !email || !password || !department) {
-    return res.status(400).json({ message: "All fields are required to create an account" });
+  if (!username || !name || !password || !department) {
+    return res.status(400).json({ message: "Department, username, label and password are required" });
   }
   if (!isValidSimplePassword(password)) {
     return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
@@ -480,15 +487,18 @@ export const createLecturer = async (req, res) => {
 
   const existing = await Lecturer.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
+  if (!(await isKnownDepartment(department))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   const existingDept = await Lecturer.findOne({ department });
   if (existingDept) {
     return res.status(409).json({ message: "That department already has a covering account" });
   }
-  if (await isEmailTaken(email)) {
+  if (email && (await isEmailTaken(email))) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
-  const created = await Lecturer.create({ username, name, password, email, department });
+  const created = await Lecturer.create({ username, name, password, email: email || undefined, department });
   await writeAudit("ADMIN", req.user.name, "account_created", `lecturer-cover ${username} (${department})`);
   const { password: _pw, ...safe } = created.toObject();
   res.status(201).json(safe);
@@ -514,6 +524,9 @@ export const updateLecturer = async (req, res) => {
   }
   if (email !== undefined) lecturer.email = email;
   if (department && department !== lecturer.department) {
+    if (!(await isKnownDepartment(department))) {
+      return res.status(400).json({ message: "Choose the department from the list" });
+    }
     const clash = await Lecturer.findOne({ department, _id: { $ne: lecturer._id } });
     if (clash) return res.status(409).json({ message: "That department already has a covering account" });
     lecturer.department = department;
@@ -584,6 +597,18 @@ export const removeLecturerMember = async (req, res) => {
   if (!member) return res.status(404).json({ message: "Roster member not found" });
 
   await LecturerUnavailability.deleteMany({ lecturerId: lecturer._id, memberId: member._id });
+  // A removed lecturer is taken off upcoming Acting HOD days (a day left
+  // with nobody is removed); past assignments stay as history.
+  const today = new Date().toISOString().split("T")[0];
+  await ActingHodAssignment.updateMany(
+    { department: lecturer.department, date: { $gte: today } },
+    { $pull: { members: { memberId: member._id } } }
+  );
+  await ActingHodAssignment.deleteMany({
+    department: lecturer.department,
+    date: { $gte: today },
+    $or: [{ memberId: member._id }, { members: { $size: 0 }, memberId: { $exists: false } }],
+  });
   member.deleteOne();
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);

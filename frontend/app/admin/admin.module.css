@@ -117,3 +117,18 @@
   cursor: pointer;
   color: var(--white);
 }
+
+/* Intro/help paragraph at the top of an admin screen (e.g. HOD Cover). */
+.infoBanner {
+  background: rgba(37, 99, 176, 0.08);
+  border: 1px solid rgba(74, 144, 217, 0.2);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.infoBanner strong {
+  color: var(--white);
+}

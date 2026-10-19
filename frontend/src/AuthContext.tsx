@@ -9,9 +9,12 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { AuthUser, Role } from "@/src/types";
-import { api, ApiError, setToken, getToken, normalizeAuthUser } from "@/src/api";
+import { api, ApiError, setToken, getToken, normalizeAuthUser, isTokenExpired } from "@/src/api";
 
 const USER_KEY = "ols_session_user";
+// Set when a login expires, so the login page can say why the user is back
+// there (see app/page.tsx).
+export const SESSION_EXPIRED_KEY = "ols_session_expired";
 
 export const ROLE_HOME: Record<Role, string> = {
   ADMIN: "/admin",
@@ -45,7 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getToken();
     const raw = window.localStorage.getItem(USER_KEY);
-    if (token && raw) {
+    if (token && raw && isTokenExpired(token)) {
+      setToken(null);
+      window.localStorage.removeItem(USER_KEY);
+      window.sessionStorage.setItem(SESSION_EXPIRED_KEY, "1");
+    } else if (token && raw) {
       try {
         setUser(JSON.parse(raw) as AuthUser);
       } catch {
@@ -80,16 +87,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/");
   }
 
+  // Any 401 from the API (expired or invalid login), or the token's own
+  // expiry passing while a dashboard is open, ends the session in every
+  // portal: clear it and go back to the login page with a short note. A
+  // full page load (not a client-side route change) so no dashboard is left
+  // on screen showing empty data and errors.
   useEffect(() => {
+    let redirecting = false;
     function handleUnauthorized() {
+      if (redirecting) return;
+      redirecting = true;
       setUser(null);
       setToken(null);
       window.localStorage.removeItem(USER_KEY);
-      router.push("/");
+      window.sessionStorage.setItem(SESSION_EXPIRED_KEY, "1");
+      if (window.location.pathname !== "/") window.location.replace("/");
     }
     window.addEventListener("auth:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
-  }, [router]);
+    const id = setInterval(() => {
+      const token = getToken();
+      if (token && isTokenExpired(token)) handleUnauthorized();
+    }, 60_000);
+    return () => {
+      window.removeEventListener("auth:unauthorized", handleUnauthorized);
+      clearInterval(id);
+    };
+  }, []);
 
   async function changePassword(currentPassword: string, newPassword: string) {
     await api.post("/auth/change-password", { currentPassword, newPassword });

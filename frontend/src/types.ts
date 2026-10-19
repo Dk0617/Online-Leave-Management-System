@@ -185,6 +185,9 @@ export interface LeaveRequest {
   troopApprovedAt?: string;
   sqnApprovedAt?: string;
   sddApprovedAt?: string;
+  // Who actually made the HOD-stage decision — regular HOD or Acting HOD.
+  // See backend/models/Leave.js hodApprover.
+  hodApprover?: HodApprover;
 }
 
 // ── Block Leave — one shared 24-hour window a department's Day Scholars
@@ -378,6 +381,32 @@ export interface LecturerCoverStatus {
   department: string;
   hodName?: string;
   hodUnavailable: boolean;
-  activeMember: LecturerMember | null;
+  // Lecturers Admin assigned as Acting HOD for today (empty when the HOD is
+  // handling it themselves).
+  activeMembers: LecturerMember[];
+  // The department's whole roster (for choosing whose History to show).
   roster: LecturerMember[];
+  // This department's Acting HOD assignments for the next 30 days.
+  assignments: { id: string; date: string; members: { name: string; tier: "SENIOR" | "JUNIOR" }[] }[];
+}
+
+export interface HodApprover {
+  name?: string;
+  role?: "HOD" | "ACTING_HOD";
+  department?: string;
+  decidedAt?: string;
+  memberId?: string;
+}
+
+// Admin's per-date Acting HOD pick — see
+// backend/models/ActingHodAssignment.js.
+// The assignment itself marks that department's HOD as not available on
+// that date.
+export interface ActingHodAssignment {
+  id: string;
+  lecturerId: string;
+  department: string;
+  members: { memberId: string; name: string; tier: "SENIOR" | "JUNIOR" }[];
+  date: string; // "YYYY-MM-DD"
+  assignedBy?: string;
 }

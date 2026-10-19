@@ -1,6 +1,11 @@
 import dotenv from "dotenv";
 dotenv.config();
 import mongoose from "mongoose";
+import dns from "dns";
+
+// Some Windows/router DNS setups refuse the SRV lookup a mongodb+srv:// URI
+// needs (querySrv ECONNREFUSED), so ask public DNS servers directly instead.
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 export const connectDB = async () => {
   try {

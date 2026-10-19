@@ -145,8 +145,10 @@ export const rejectOverlapping = async (req, res) => {
     return leaveStart < eventEnd && leaveEnd > eventStart;
   });
 
+  const hod = await Hod.findById(req.user.id);
   for (const leave of leaves) {
     await applyDecision(leave, {
+      approver: { name: req.user.name, role: "HOD", department: hod?.department, decidedAt: new Date().toLocaleString() },
       statusField: "hodStatus",
       commentField: "hodComment",
       atField: "hodApprovedAt",

@@ -339,9 +339,15 @@ export async function downloadLeavePassPdf(
   // Commander, no SDD) — identified by troopStatus permanently "N/A", same
   // marker used everywhere else in the app for this special routing.
   const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  // HOD-stage label names who actually approved it — the regular HOD or an
+  // Acting HOD (see backend/models/Leave.js hodApprover).
+  const approver = leave.hodApprover;
+  const isActingHod = approver?.role === "ACTING_HOD";
+  const hodStageLabel =
+    leave.hodStatus === "Approved" ? (isActingHod ? "Acting HOD Approved" : "HOD Approved") : "Head of Department";
   const rows = isCadetAcademicOnly
     ? [
-        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        [hodStageLabel, leave.hodStatus, leave.hodApprovedAt],
         ["Squadron Commander", leave.sqnStatus, leave.sqnApprovedAt],
       ]
     : isCadet
@@ -351,7 +357,7 @@ export async function downloadLeavePassPdf(
         ["Senior Deputy Dean", leave.sddStatus, leave.sddApprovedAt],
       ]
     : [
-        ["Head of Department", leave.hodStatus, leave.hodApprovedAt],
+        [hodStageLabel, leave.hodStatus, leave.hodApprovedAt],
         ["Troop Commander", leave.troopStatus, leave.troopApprovedAt],
       ];
   const tblX = 10,
@@ -367,8 +373,18 @@ export async function downloadLeavePassPdf(
   doc.text("STATUS", tblX + col1 + 3, y + 4.8);
   doc.text("DATE / TIME", tblX + col1 + col2 + 3, y + 4.8);
   y += 7;
+  // The actual HOD-stage approver (name, role, department) is printed as a
+  // second line inside the HOD row, so the pass keeps its one-page layout.
+  const hodStageShown = !isCadet || isCadetAcademicOnly;
+  const approverLine =
+    hodStageShown && approver?.name && (leave.hodStatus === "Approved" || leave.hodStatus === "Rejected")
+      ? `By ${approver.name}, ${isActingHod ? "Acting Head of Department" : "Head of Department"}, ${approver.department || leave.department || "—"}`
+      : null;
+  doc.setFontSize(6.8);
+  const approverLines: string[] = approverLine ? doc.splitTextToSize(approverLine, col1 - 5).slice(0, 2) : [];
   rows.forEach((r, i) => {
-    const rh = 8.5;
+    const withApprover = i === 0 && !!approverLine;
+    const rh = withApprover ? 9 + approverLines.length * 3.2 : 8.5;
     doc.setFillColor(...(i % 2 === 0 ? ([255, 255, 255] as [number, number, number]) : LIGHT));
     doc.rect(tblX, y, tblW, rh, "F");
     doc.setDrawColor(...BORDER);
@@ -378,6 +394,11 @@ export async function downloadLeavePassPdf(
     doc.setFontSize(9);
     doc.setTextColor(...DARK);
     doc.text(r[0] as string, tblX + 3, y + 5.6);
+    if (withApprover) {
+      doc.setFontSize(6.8);
+      doc.setTextColor(...MUTED);
+      doc.text(approverLines, tblX + 3, y + 9.6);
+    }
     const pc = pillColor((r[1] as string) || "Pending");
     const pillW = 26;
     doc.setFillColor(...pc.bg);
@@ -396,7 +417,7 @@ export async function downloadLeavePassPdf(
     doc.text((r[2] as string) || "—", tblX + col1 + col2 + 3, y + 5.6);
     y += rh;
   });
-  y += 10;
+  y += 8;
 
   // Digital signature panels are pulled live from the Movement log and only
   // appear once Exit has actually been verified at the gate — before that,
@@ -408,9 +429,23 @@ export async function downloadLeavePassPdf(
   const hasEntry = !!verification?.entry;
 
   if (hasExit) {
+    const panelH = 32;
+    // Never let the signature panels run into the footer disclaimer — a
+    // the approval record already fills page 1, so they go on page 2.
+    if (y + panelH > pageH - 27) {
+      drawWatermarkAndFooter();
+      doc.addPage();
+      doc.setDrawColor(...NAVY);
+      doc.setLineWidth(1);
+      doc.rect(6, 6, pageW - 12, pageH - 12);
+      doc.setDrawColor(...ORANGE);
+      doc.setLineWidth(0.4);
+      doc.rect(8, 8, pageW - 16, pageH - 16);
+      y = 14;
+      sectionHeader(`GATE VERIFICATION RECORD  —  REF: LV-${leave.id}`, NAVY);
+    }
     const panelY = y;
     const panelW = 90;
-    const panelH = 32;
     const leftX = 10;
     const rightX = 110;
     const sigLineY = panelY + panelH - 4.5;
@@ -480,37 +515,42 @@ export async function downloadLeavePassPdf(
     y += panelH + 8;
   }
 
-  try {
-    doc.saveGraphicsState();
-    doc.setGState(new (doc as unknown as { GState: new (opts: object) => unknown }).GState({ opacity: 0.08 }) as never);
-    doc.setTextColor(34, 197, 94);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(58);
-    doc.text("APPROVED", 105, 180, { align: "center", angle: 32 });
-    doc.restoreGraphicsState();
-  } catch {
-    /* ignore */
+  // Watermark + disclaimer footer, drawn on every page of the pass.
+  function drawWatermarkAndFooter() {
+    try {
+      doc.saveGraphicsState();
+      doc.setGState(new (doc as unknown as { GState: new (opts: object) => unknown }).GState({ opacity: 0.08 }) as never);
+      doc.setTextColor(34, 197, 94);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(58);
+      doc.text("APPROVED", 105, 180, { align: "center", angle: 32 });
+      doc.restoreGraphicsState();
+    } catch {
+      /* ignore */
+    }
+
+    const footY = pageH - 24;
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(10, footY, 200, footY);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    const note = isAcademicType
+      ? "This is a computer-generated record copy issued via the Student Leave Management System, KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
+      : "This is a computer-generated official document issued via the Student Leave Management System, KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
+    doc.text(doc.splitTextToSize(note, 190), 10, footY + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text(
+      `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   Student Leave Management System © KDU Southern Campus`,
+      105,
+      pageH - 9,
+      { align: "center" }
+    );
   }
 
-  const footY = pageH - 24;
-  doc.setDrawColor(...BORDER);
-  doc.setLineWidth(0.2);
-  doc.line(10, footY, 200, footY);
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...MUTED);
-  const note = isAcademicType
-    ? "This is a computer-generated record copy issued via the Student Leave Management System, KDU Southern Campus, for the student's own records. It is not a gate pass and cannot be used for campus exit/entry."
-    : "This is a computer-generated official document issued via the Student Leave Management System, KDU Southern Campus. It must be presented to Gate Staff for verification before exit and upon re-entry, and is valid strictly within the stated leave period.";
-  doc.text(doc.splitTextToSize(note, 190), 10, footY + 5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(
-    `Generated ${new Date().toLocaleString()}   |   Ref: LV-${leave.id}   |   Student Leave Management System © KDU Southern Campus`,
-    105,
-    pageH - 9,
-    { align: "center" }
-  );
+  drawWatermarkAndFooter();
 
   const fileTypeTag = leave.type.replace(/\s+/g, "");
   doc.save(`LeavePass_${leave.indexNumber}_${fileTypeTag}_${leave.startDate}.pdf`);

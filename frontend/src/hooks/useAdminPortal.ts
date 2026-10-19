@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  normalizeActingHodAssignment,
   normalizeAudit,
   normalizeEventDay,
   normalizeIntake,
@@ -15,6 +16,7 @@ import {
   POLL_INTERVAL_MS,
 } from "@/src/api";
 import {
+  ActingHodAssignment,
   AuditEntry,
   EventDay,
   Intake,
@@ -87,6 +89,8 @@ export function useAdminPortal() {
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [actingAssignments, setActingAssignments] = useState<ActingHodAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +112,8 @@ export function useAdminPortal() {
         lecturersRaw,
         eventsRaw,
         photoRequestsRaw,
+        departmentsRaw,
+        actingRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
         api.get<Record<string, unknown>[]>("/admin/staff/hod"),
@@ -122,6 +128,8 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/events"),
         api.get<Record<string, unknown>[]>("/admin/photo-requests"),
+        api.get<string[]>("/admin/departments"),
+        api.get<Record<string, unknown>[]>("/admin/acting-hod"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
       setHods(hodsRaw.map(normalizeStaff));
@@ -136,6 +144,8 @@ export function useAdminPortal() {
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setEvents(eventsRaw.map(normalizeEventDay));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
+      setDepartments(departmentsRaw);
+      setActingAssignments(actingRaw.map(normalizeActingHodAssignment));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
     } finally {
@@ -244,6 +254,17 @@ export function useAdminPortal() {
     await refresh();
   }
 
+  // ── Acting HOD — per-date assignment of one or more department lecturers
+  // (see backend/controllers/substitutecontrol.js assignActingHod). ───
+  async function assignActingHod(input: { lecturerId: string; memberIds: string[] | "ALL"; date: string; toDate?: string }) {
+    await api.post("/admin/acting-hod", input);
+    await refresh();
+  }
+  async function removeActingHod(id: string) {
+    await api.delete(`/admin/acting-hod/${id}`);
+    await refresh();
+  }
+
   // ── Event Calendar — this admin's own department's Workshop days (see
   // backend/controllers/eventcontrol.js adminCreateEvent/adminDeleteEvent,
   // which resolve the department from the logged-in admin account). ────
@@ -281,6 +302,8 @@ export function useAdminPortal() {
     lecturers,
     events,
     photoRequests,
+    departments,
+    actingAssignments,
     loading,
     error,
     refresh,
@@ -303,6 +326,8 @@ export function useAdminPortal() {
     addLecturerMember,
     editLecturerMember,
     removeLecturerMember,
+    assignActingHod,
+    removeActingHod,
     addEvent,
     removeEvent,
     approvePhotoRequest,

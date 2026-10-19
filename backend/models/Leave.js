@@ -53,6 +53,19 @@ const leaveSchema = new mongoose.Schema(
     sqnApprovedAt: String,
     sddApprovedAt: String,
 
+    // Who actually made the HOD-stage decision — the regular HOD or an
+    // Acting HOD (see models/ActingHodAssignment.js). Snapshotted at decision
+    // time so later availability/assignment changes never rewrite history.
+    hodApprover: {
+      name: String,
+      role: { type: String, enum: ["HOD", "ACTING_HOD"] },
+      department: String,
+      decidedAt: String,
+      // Acting HOD only: which roster lecturer (Lecturer.members _id) used
+      // the department's shared login to decide — powers their own History.
+      memberId: mongoose.Schema.Types.ObjectId,
+    },
+
     // Printed on the PDF pass. Gate staff type this into the Gate portal to
     // pull the student's photo live from the database (not from the PDF)
     // so a copied/borrowed PDF can't be used to impersonate another student.

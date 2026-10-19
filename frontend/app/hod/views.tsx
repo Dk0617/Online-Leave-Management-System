@@ -115,11 +115,9 @@ export function Dashboard({
       <div className={styles.infoBanner}>
         {asLecturer ? (
           <>
-            <strong>Your Role:</strong> You only see leaves here while you&apos;re actively covering an HOD who
-            is marked unavailable — you approve their <strong>Day Scholar</strong> leave applications at Stage
-            1 and their <strong>Officer Cadet Academic Leave</strong>, exactly as that HOD normally would. If
-            no HOD is currently unavailable (or someone more senior than you is covering instead), this list
-            will be empty.
+            <strong>Your Role:</strong> On days Admin assigns you as Acting HOD, you approve or reject your
+            department&apos;s <strong>Day Scholar</strong> leave applications at Stage 1, in place of the HOD.
+            Officer Cadet leaves always stay with the regular HOD. On any other day this list is empty.
           </>
         ) : (
           <>
@@ -523,7 +521,15 @@ function HodHistoryTable({
   );
 }
 
-export function History({ portal }: { portal: ReturnType<typeof useHodPortal> }) {
+export function History({
+  portal,
+  asLecturer,
+}: {
+  portal: ReturnType<typeof useHodPortal>;
+  // Acting HOD (Lecturer portal) never handles Officer Cadets, so it shows
+  // only the Day Scholar section.
+  asLecturer?: boolean;
+}) {
   const { history } = portal;
   const dayScholarSource = history.filter((l) => l.studentType === "DAY_SCHOLAR");
   const cadetSource = history.filter((l) => l.studentType === "CADET");
@@ -547,11 +553,15 @@ export function History({ portal }: { portal: ReturnType<typeof useHodPortal> })
       </div>
       <HodHistoryTable rows={dayScholarHistory} emptyMessage="No Day Scholar history." sort={dsSort} />
 
-      <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
-        <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
-      </div>
-      <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
+      {!asLecturer && (
+        <>
+          <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-[var(--white)]">Officer Cadet History</h2>
+            <SearchInput value={cdQuery} onChange={setCdQuery} placeholder="Search by name or index number…" className="w-64" />
+          </div>
+          <HodHistoryTable rows={cadetHistory} emptyMessage="No Officer Cadet history." sort={cdSort} />
+        </>
+      )}
     </div>
   );
 }
