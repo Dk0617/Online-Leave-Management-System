@@ -45,10 +45,22 @@ async function isEmailTaken(email, excludeId) {
 }
 
 // ── Dashboard-wide views ────────────────────────────────────────
+// Every account that can log in, by role — for the admin's "Export
+// accounts" list. Only identifying fields: never the password hash (it
+// can't be turned back into a password anyway) and never photos.
 export const listUsers = async (req, res) => {
   const result = {};
   for (const [role, Model] of Object.entries(ROLE_MODELS)) {
-    result[role] = await Model.find().select("-password");
+    const rows = await Model.find()
+      .select("username name firstName lastName indexNumber department intake title post")
+      .sort({ username: 1 })
+      .lean();
+    result[role] = rows.map((u) => ({
+      username: u.username,
+      name: u.name || [u.firstName, u.lastName].filter(Boolean).join(" "),
+      department: u.department || u.title || u.post || "",
+      intake: u.intake || "",
+    }));
   }
   res.json(result);
 };

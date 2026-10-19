@@ -8,7 +8,7 @@ import { LeaveDetailModal } from "@/src/components/leave";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { useAdminPortal, StaffRole as StaffRoleKey } from "@/src/hooks/useAdminPortal";
 import { EventCalendarView } from "@/src/components/eventCalendar";
-import { isApproved, isRejected, isToday } from "@/src/api";
+import { api, isApproved, isRejected, isToday } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS, LecturerAccount } from "@/src/types";
 import styles from "./admin.module.css";
 
@@ -69,8 +69,45 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
 
   const recentStudents = students.slice(-5).reverse();
 
+  // Every login account in the system, as an Excel sheet (no passwords —
+  // they're stored one-way hashed and can't be read back by anyone).
+  const [accountsMsg, setAccountsMsg] = useState<string | null>(null);
+  async function exportAccounts() {
+    setAccountsMsg(null);
+    try {
+      const byRole = await api.get<Record<string, { username: string; name: string; department: string; intake: string }[]>>(
+        "/admin/users"
+      );
+      const rows: string[][] = [];
+      const counts: string[] = [];
+      for (const [role, list] of Object.entries(byRole)) {
+        const label = role === "LECTURER" ? "Acting HOD (department profile)" : ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
+        counts.push(`${label}: ${list.length}`);
+        for (const u of list) rows.push([label, u.name || "—", u.username, u.department || "—", u.intake || "—"]);
+      }
+      const bytes = buildXlsx(`Accounts (${rows.length})`, ["Role", "Name", "Username", "Department / Post", "Intake"], rows);
+      downloadBlob(
+        `accounts-${new Date().toISOString().split("T")[0]}.xlsx`,
+        new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      );
+      setAccountsMsg(`${rows.length} accounts can log in — ${counts.join(" · ")}`);
+    } catch (err) {
+      setAccountsMsg(err instanceof Error ? err.message : "Failed to export accounts");
+    }
+  }
+
   return (
     <div>
+      <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="text-xs text-[var(--muted)]">
+          <strong className="text-[var(--white)]">All login accounts</strong> — download every user&apos;s role, name and
+          username as Excel. Passwords are never shown (they can&apos;t be read back); reset one with Edit on that account.
+          {accountsMsg && <div className="mt-1.5 text-[var(--white)]">{accountsMsg}</div>}
+        </div>
+        <Button variant="secondary" onClick={exportAccounts}>
+          ⬇️ Export accounts
+        </Button>
+      </Card>
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load admin data: {error}</span>
