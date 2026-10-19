@@ -89,6 +89,7 @@ export function useAdminPortal() {
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
   const [photoRequests, setPhotoRequests] = useState<PhotoChangeRequest[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [actingAssignments, setActingAssignments] = useState<ActingHodAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function useAdminPortal() {
         lecturersRaw,
         eventsRaw,
         photoRequestsRaw,
+        departmentsRaw,
         actingRaw,
       ] = await Promise.all([
         api.get<Record<string, unknown>[]>("/admin/students"),
@@ -126,6 +128,7 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/events"),
         api.get<Record<string, unknown>[]>("/admin/photo-requests"),
+        api.get<string[]>("/admin/departments"),
         api.get<Record<string, unknown>[]>("/admin/acting-hod"),
       ]);
       setStudents(studentsRaw.map(normalizeStudent));
@@ -141,6 +144,7 @@ export function useAdminPortal() {
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setEvents(eventsRaw.map(normalizeEventDay));
       setPhotoRequests(photoRequestsRaw.map(normalizePhotoChangeRequest));
+      setDepartments(departmentsRaw);
       setActingAssignments(actingRaw.map(normalizeActingHodAssignment));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin data");
@@ -298,6 +302,7 @@ export function useAdminPortal() {
     lecturers,
     events,
     photoRequests,
+    departments,
     actingAssignments,
     loading,
     error,

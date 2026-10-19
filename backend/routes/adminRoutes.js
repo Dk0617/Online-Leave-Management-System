@@ -26,6 +26,7 @@ import {
   updateLecturerMember,
   removeLecturerMember,
   listNotifications,
+  listDepartments,
   markNotificationRead,
   listAudit,
   clearAudit,
@@ -82,6 +83,7 @@ router.post("/staff/:role", createStaff);
 router.patch("/staff/:role/:id", updateStaff);
 router.delete("/staff/:role/:id", deleteStaff);
 
+router.get("/departments", listDepartments);
 router.get("/notifications", listNotifications);
 router.patch("/notifications/:id/read", markNotificationRead);
 

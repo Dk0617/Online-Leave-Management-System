@@ -281,6 +281,25 @@ function staffModelFor(req, res) {
   return { role, Model };
 }
 
+// Departments already used anywhere in the system — the HOD form picks
+// from these instead of free text (see listDepartments).
+async function knownDepartments() {
+  const [hodDepts, studentDepts, lecturerDepts] = await Promise.all([
+    Hod.distinct("department"),
+    Student.distinct("department"),
+    Lecturer.distinct("department"),
+  ]);
+  return [...new Set([...hodDepts, ...studentDepts, ...lecturerDepts].filter(Boolean).map((d) => d.trim()))].sort();
+}
+
+async function isKnownDepartment(department) {
+  return !!department && (await knownDepartments()).includes(department.trim());
+}
+
+export const listDepartments = async (req, res) => {
+  res.json(await knownDepartments());
+};
+
 export const createStaff = async (req, res) => {
   const resolved = staffModelFor(req, res);
   if (!resolved) return;
@@ -303,6 +322,9 @@ export const createStaff = async (req, res) => {
   }
 
   const doc = { username, name, password, email };
+  if (role === "HOD" && !(await isKnownDepartment(extra))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (extraField) doc[extraField] = extra;
 
   const created = await Model.create(doc);
@@ -337,6 +359,9 @@ export const updateStaff = async (req, res) => {
   }
   if (email !== undefined) staff.email = email;
   const extraField = STAFF_EXTRA_FIELD[role];
+  if (role === "HOD" && extra !== undefined && extra !== staff.department && !(await isKnownDepartment(extra))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (extraField && extra !== undefined) staff[extraField] = extra;
   if (password) {
     if (!isValidSimplePassword(password)) {

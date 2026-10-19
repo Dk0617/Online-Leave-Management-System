@@ -62,6 +62,19 @@ export function setToken(token: string | null) {
   else window.localStorage.removeItem(TOKEN_KEY);
 }
 
+// A JWT's own "exp" (seconds since epoch) — lets the app notice an expired
+// login (tokens last 1 day, see backend logauthcontrol.js signToken) before
+// it ever reaches the API, instead of loading a dashboard full of errors.
+export function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" && payload.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -73,6 +86,10 @@ async function request<T>(path: string, options: RequestInit = {}, attempt = 1):
     ...(options.headers as Record<string, string> | undefined),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && isTokenExpired(token) && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("auth:unauthorized"));
+    throw new ApiError("Your session has expired. Please log in again.", 401);
+  }
 
   let res: Response;
   try {

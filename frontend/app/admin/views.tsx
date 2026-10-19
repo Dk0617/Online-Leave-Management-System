@@ -798,12 +798,25 @@ export function StaffRole({
                 {extraLabel}
                 <span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input
-                value={extra}
-                onChange={(e) => setExtra(e.target.value)}
-                placeholder={extraPlaceholder}
-                className={styles.input}
-              />
+              {role === "HOD" ? (
+                <select value={extra} onChange={(e) => setExtra(e.target.value)} className={styles.input}>
+                  <option value="">Select department…</option>
+                  {Array.from(new Set([...portal.departments, ...(extra ? [extra] : [])]))
+                    .sort()
+                    .map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  value={extra}
+                  onChange={(e) => setExtra(e.target.value)}
+                  placeholder={extraPlaceholder}
+                  className={styles.input}
+                />
+              )}
             </div>
           )}
         </div>
