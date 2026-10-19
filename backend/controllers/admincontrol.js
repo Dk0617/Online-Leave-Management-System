@@ -6,6 +6,7 @@ import Squadran from "../models/Squadran.js";
 import Sdd from "../models/Sdd.js";
 import Gate from "../models/Gate.js";
 import Lecturer from "../models/Lecturer.js";
+import { listDepartments as listAllDepartments, isKnownDepartment } from "../utils/departments.js";
 import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import Intake from "../models/Intake.js";
@@ -99,6 +100,9 @@ export const createStudent = async (req, res) => {
     password,
   } = req.body;
 
+  if (department && !(await isKnownDepartment(department))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   if (!indexNumber || !firstName || !lastName || !department || !email || !mobile || !intake || !password) {
     return res.status(400).json({ message: "All fields are required to create a student account" });
   }
@@ -281,23 +285,8 @@ function staffModelFor(req, res) {
   return { role, Model };
 }
 
-// Departments already used anywhere in the system — the HOD form picks
-// from these instead of free text (see listDepartments).
-async function knownDepartments() {
-  const [hodDepts, studentDepts, lecturerDepts] = await Promise.all([
-    Hod.distinct("department"),
-    Student.distinct("department"),
-    Lecturer.distinct("department"),
-  ]);
-  return [...new Set([...hodDepts, ...studentDepts, ...lecturerDepts].filter(Boolean).map((d) => d.trim()))].sort();
-}
-
-async function isKnownDepartment(department) {
-  return !!department && (await knownDepartments()).includes(department.trim());
-}
-
 export const listDepartments = async (req, res) => {
-  res.json(await knownDepartments());
+  res.json(await listAllDepartments());
 };
 
 export const createStaff = async (req, res) => {
@@ -506,6 +495,9 @@ export const createLecturer = async (req, res) => {
 
   const existing = await Lecturer.findOne({ username });
   if (existing) return res.status(409).json({ message: "That username is already taken" });
+  if (!(await isKnownDepartment(department))) {
+    return res.status(400).json({ message: "Choose the department from the list" });
+  }
   const existingDept = await Lecturer.findOne({ department });
   if (existingDept) {
     return res.status(409).json({ message: "That department already has a covering account" });
@@ -540,6 +532,9 @@ export const updateLecturer = async (req, res) => {
   }
   if (email !== undefined) lecturer.email = email;
   if (department && department !== lecturer.department) {
+    if (!(await isKnownDepartment(department))) {
+      return res.status(400).json({ message: "Choose the department from the list" });
+    }
     const clash = await Lecturer.findOne({ department, _id: { $ne: lecturer._id } });
     if (clash) return res.status(409).json({ message: "That department already has a covering account" });
     lecturer.department = department;

@@ -312,9 +312,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const departmentOptions = Array.from(
-    new Set(hods.map((h) => h.department).filter((d): d is string => !!d))
-  ).sort();
+  const departmentOptions = portal.departments;
 
   // HOD and Troop Commander(s) are never picked directly — each Day
   // Scholar's HOD is already fully determined by their Department (every
@@ -491,7 +489,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
               className={styles.input}
               style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
             >
-              <option value="">{departmentOptions.length ? "Select department…" : "No departments — add an HOD first"}</option>
+              <option value="">Select department…</option>
               {departmentOptions.map((d) => (
                 <option key={d} value={d}>
                   {d}
@@ -1732,10 +1730,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
               disabled={!!editingAccountId}
             >
               <option value="">Select department…</option>
-              {hods
-                .map((h) => h.department)
-                .filter((d, i, arr): d is string => !!d && arr.indexOf(d) === i)
-                .map((d) => (
+              {portal.departments.map((d) => (
                   <option key={d} value={d} disabled={existingDepartments.has(d)}>
                     {d}
                     {existingDepartments.has(d) ? " (already has an account)" : ""}
@@ -2355,7 +2350,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   // (falling back to the department saved on the leave if the student record
   // is gone); anything that doesn't match a real department is reported
   // separately instead of appearing as a department of its own.
-  const realDepartments = Array.from(new Set(hods.map((h) => h.department).filter((d): d is string => !!d))).sort();
+  const realDepartments = portal.departments;
   const studentDept = new Map(students.map((s) => [s.id, s.department]));
   function leaveDepartment(l: LeaveRequest): string | null {
     const dept = studentDept.get(l.studentId) ?? l.department;
