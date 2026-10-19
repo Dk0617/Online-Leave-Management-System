@@ -138,7 +138,9 @@ export function DashboardShell({
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/");
+      // Full page load to the login screen (e.g. after a login expires) —
+      // never leave a dashboard stuck on "Loading…".
+      window.location.replace("/");
       return;
     }
     if (user.role !== role) {

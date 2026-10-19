@@ -1,7 +1,6 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
 import {
-  listUsers,
   listAllLeaves,
   createIntake,
   listIntakes,
@@ -26,6 +25,7 @@ import {
   updateLecturerMember,
   removeLecturerMember,
   listNotifications,
+  listDepartments,
   markNotificationRead,
   listAudit,
   clearAudit,
@@ -38,6 +38,9 @@ import {
   createHodUnavailability,
   deleteHodUnavailability,
   endHodUnavailabilityNow,
+  listActingHodAssignments,
+  assignActingHod,
+  deleteActingHodAssignment,
   listLecturerUnavailability,
   createLecturerUnavailability,
   deleteLecturerUnavailability,
@@ -48,7 +51,6 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole("ADMIN"));
 
-router.get("/users", listUsers);
 router.get("/leaves", listAllLeaves);
 
 router.get("/intakes", listIntakes);
@@ -79,6 +81,7 @@ router.post("/staff/:role", createStaff);
 router.patch("/staff/:role/:id", updateStaff);
 router.delete("/staff/:role/:id", deleteStaff);
 
+router.get("/departments", listDepartments);
 router.get("/notifications", listNotifications);
 router.patch("/notifications/:id/read", markNotificationRead);
 
@@ -89,6 +92,12 @@ router.get("/hod-unavailability", listHodUnavailability);
 router.post("/hod-unavailability", createHodUnavailability);
 router.delete("/hod-unavailability/:id", deleteHodUnavailability);
 router.patch("/hod-unavailability/:id/end-now", endHodUnavailabilityNow);
+
+// Acting HOD — per-date assignment of one or more department lecturers
+// (see substitutecontrol.js assignActingHod).
+router.get("/acting-hod", listActingHodAssignments);
+router.post("/acting-hod", assignActingHod);
+router.delete("/acting-hod/:id", deleteActingHodAssignment);
 
 router.get("/lecturer-unavailability", listLecturerUnavailability);
 router.post("/lecturer-unavailability", createLecturerUnavailability);

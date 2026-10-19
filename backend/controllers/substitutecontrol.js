@@ -2,6 +2,8 @@ import HodUnavailability from "../models/HodUnavailability.js";
 import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import Hod from "../models/HOD.js";
 import Lecturer from "../models/Lecturer.js";
+import ActingHodAssignment from "../models/ActingHodAssignment.js";
+import { localDateStr, assignedMembers } from "./leavecontrol.js";
 import { writeAudit } from "../utils/audit.js";
 
 // Admin-only management of the two inputs that feed the HOD seniority-chain
@@ -49,7 +51,7 @@ export const deleteHodUnavailability = async (req, res) => {
 export const endHodUnavailabilityNow = async (req, res) => {
   const row = await HodUnavailability.findById(req.params.id).populate("hodId", "name department");
   if (!row) return res.status(404).json({ message: "Not found" });
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateStr();
   if (today > row.toDate) {
     return res.status(400).json({ message: "This cover has already ended." });
   }
@@ -59,7 +61,7 @@ export const endHodUnavailabilityNow = async (req, res) => {
     await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover cancelled before taking effect`);
     return res.json({ ok: true, removed: true });
   }
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const yesterday = localDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000));
   row.toDate = yesterday;
   await row.save();
   await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover switched back as of ${today}`);
@@ -117,5 +119,80 @@ export const createLecturerUnavailability = async (req, res) => {
 export const deleteLecturerUnavailability = async (req, res) => {
   const row = await LecturerUnavailability.findByIdAndDelete(req.params.id);
   if (!row) return res.status(404).json({ message: "Not found" });
+  res.json({ message: "Deleted" });
+};
+
+// ── Acting HOD assignments ────────────────────────────────────────────
+function shiftDate(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return localDateStr(d);
+}
+
+export const listActingHodAssignments = async (req, res) => {
+  const rows = await ActingHodAssignment.find().sort({ date: -1 });
+  res.json(
+    rows.map((a) => ({
+      id: String(a._id),
+      lecturerId: String(a.lecturerId),
+      department: a.department,
+      date: a.date,
+      assignedBy: a.assignedBy,
+      members: assignedMembers(a),
+    }))
+  );
+};
+
+// Assigns one or more roster lecturers (memberIds, or "ALL" for the whole
+// roster) as Acting HOD for a department on a date — or every date in
+// [date, toDate]. This is also what marks the department's HOD as not
+// available on those dates. Re-assigning a date replaces its lecturer list.
+export const assignActingHod = async (req, res) => {
+  const { lecturerId, memberIds, date, toDate } = req.body;
+  if (!lecturerId || !date || !(memberIds === "ALL" || (Array.isArray(memberIds) && memberIds.length))) {
+    return res.status(400).json({ message: "Department, at least one lecturer and a date are required" });
+  }
+  const lastDate = toDate || date;
+  if (lastDate < date) return res.status(400).json({ message: "End date can't be before start date" });
+
+  const lecturer = await Lecturer.findById(lecturerId);
+  if (!lecturer) return res.status(404).json({ message: "Department Acting HOD profile not found" });
+  const chosen =
+    memberIds === "ALL" ? [...lecturer.members] : memberIds.map((id) => lecturer.members.id(id)).filter(Boolean);
+  if (!chosen.length || (memberIds !== "ALL" && chosen.length !== memberIds.length)) {
+    return res.status(400).json({ message: "Pick lecturers from this department's roster" });
+  }
+  const members = chosen.map((m) => ({ memberId: m._id, name: m.name, tier: m.tier }));
+
+  const dates = [];
+  for (let d = date; d <= lastDate && dates.length <= 366; d = shiftDate(d, 1)) dates.push(d);
+  for (const d of dates) {
+    await ActingHodAssignment.findOneAndUpdate(
+      { department: lecturer.department, date: d },
+      {
+        $set: { lecturerId: lecturer._id, department: lecturer.department, members, date: d, assignedBy: req.user.name },
+        $unset: { memberId: 1, memberName: 1, memberTier: 1 },
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+  }
+  await writeAudit(
+    "ADMIN",
+    req.user.name,
+    "acting_hod_assigned",
+    `${members.map((m) => m.name).join(", ")} (${lecturer.department}) on ${date}${lastDate !== date ? ` to ${lastDate}` : ""}`
+  );
+  res.status(201).json({ ok: true, count: dates.length });
+};
+
+export const deleteActingHodAssignment = async (req, res) => {
+  const row = await ActingHodAssignment.findByIdAndDelete(req.params.id);
+  if (!row) return res.status(404).json({ message: "Not found" });
+  await writeAudit(
+    "ADMIN",
+    req.user.name,
+    "acting_hod_unassigned",
+    `${assignedMembers(row).map((m) => m.name).join(", ")} (${row.department}) on ${row.date}`
+  );
   res.json({ message: "Deleted" });
 };

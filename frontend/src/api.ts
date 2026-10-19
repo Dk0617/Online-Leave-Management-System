@@ -15,6 +15,8 @@ import {
   LeaveRequest,
   LecturerAccount,
   LecturerCoverStatus,
+  HodApprover,
+  ActingHodAssignment,
   LecturerMember,
   LecturerUnavailability,
   Movement,
@@ -60,6 +62,19 @@ export function setToken(token: string | null) {
   else window.localStorage.removeItem(TOKEN_KEY);
 }
 
+// A JWT's own "exp" (seconds since epoch) — lets the app notice an expired
+// login (tokens last 1 day, see backend logauthcontrol.js signToken) before
+// it ever reaches the API, instead of loading a dashboard full of errors.
+export function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" && payload.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -71,11 +86,15 @@ async function request<T>(path: string, options: RequestInit = {}, attempt = 1):
     ...(options.headers as Record<string, string> | undefined),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && isTokenExpired(token) && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("auth:unauthorized"));
+    throw new ApiError("Your session has expired. Please log in again.", 401);
+  }
 
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  } catch (err) {
+  } catch {
     // "Failed to fetch" — the request never reached the server at all
     // (dev server mid-restart, brief network blip, etc). This is a
     // TypeError, distinct from a normal 4xx/5xx response, and is safe to
@@ -84,7 +103,10 @@ async function request<T>(path: string, options: RequestInit = {}, attempt = 1):
       await sleep(attempt * 400);
       return request<T>(path, options, attempt + 1);
     }
-    throw err;
+    throw new ApiError(
+      `Can't reach the server at ${API_URL}. Make sure the backend is running (cd backend, then npm run dev).`,
+      0,
+    );
   }
 
   const isJson = res.headers.get("content-type")?.includes("application/json");
@@ -267,6 +289,7 @@ export function normalizeLeave(raw: Raw): LeaveRequest {
     troopApprovedAt: raw.troopApprovedAt as string | undefined,
     sqnApprovedAt: raw.sqnApprovedAt as string | undefined,
     sddApprovedAt: raw.sddApprovedAt as string | undefined,
+    hodApprover: (raw.hodApprover as HodApprover | undefined) ?? undefined,
   };
 }
 
@@ -374,8 +397,31 @@ export function normalizeCoverStatus(raw: Raw): LecturerCoverStatus {
     department: raw.department as string,
     hodName: raw.hodName as string | undefined,
     hodUnavailable: !!raw.hodUnavailable,
-    activeMember: raw.activeMember ? normalizeLecturerMember(raw.activeMember as Raw) : null,
+    activeMembers: ((raw.activeMembers as Raw[]) ?? []).map(normalizeLecturerMember),
     roster: ((raw.roster as Raw[]) ?? []).map(normalizeLecturerMember),
+    assignments: ((raw.assignments as Raw[]) ?? []).map((a) => ({
+      id: String(a.id),
+      date: a.date as string,
+      members: ((a.members as Raw[]) ?? []).map((m) => ({
+        name: m.name as string,
+        tier: m.tier as "SENIOR" | "JUNIOR",
+      })),
+    })),
+  };
+}
+
+export function normalizeActingHodAssignment(raw: Raw): ActingHodAssignment {
+  return {
+    id: String(raw._id ?? raw.id),
+    lecturerId: String(raw.lecturerId),
+    department: raw.department as string,
+    members: ((raw.members as Raw[]) ?? []).map((m) => ({
+      memberId: String(m.memberId),
+      name: m.name as string,
+      tier: m.tier as "SENIOR" | "JUNIOR",
+    })),
+    date: raw.date as string,
+    assignedBy: raw.assignedBy as string | undefined,
   };
 }
 

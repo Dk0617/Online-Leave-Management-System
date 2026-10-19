@@ -12,23 +12,16 @@ import { isApproved, isRejected, isToday } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS, LecturerAccount } from "@/src/types";
 import styles from "./admin.module.css";
 
-// A leave has no single "decided at" field system-wide — whichever stage
-// most recently acted is whatever's populated. Used only to scope the
-// admin dashboard's "today" breakdown to leaves that actually had a
-// decision made on them today, across any stage.
-function decidedToday(l: LeaveRequest): boolean {
-  return isToday(l.hodApprovedAt) || isToday(l.troopApprovedAt) || isToday(l.sqnApprovedAt) || isToday(l.sddApprovedAt);
-}
-
-// Every account an admin creates by hand — student or staff — gets a
-// password that's just a sanity-check minimum length, no complexity
-// required: it's handed to the person on paper/verbally for their first
-// login. The real security bar is the stronger policy the account holder
-// sets for themselves on first login (see ChangePasswordForm.tsx) — see
-// backend/controllers/admincontrol.js isValidSimplePassword.
-const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
-function isValidSimplePassword(password: string): boolean {
-  return password.length >= 4;
+const PASSWORD_POLICY_MESSAGE =
+  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+function isValidPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
 }
 
 function Breakdown({
@@ -67,12 +60,9 @@ function Breakdown({
 export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const { students, hods, troops, squadrans, sdds, gates, leaves, intakes, error, refresh } = portal;
 
-  const approvedLeaves = leaves.filter(isApproved);
-  const rejectedLeaves = leaves.filter(isRejected);
-  const pendingLeaves = leaves.filter((l) => !isApproved(l) && !isRejected(l));
-  const approvedTodayLeaves = approvedLeaves.filter(decidedToday);
-  const rejectedTodayLeaves = rejectedLeaves.filter(decidedToday);
-  const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
+  const approvedCount = leaves.filter(isApproved).length;
+  const rejectedCount = leaves.filter(isRejected).length;
+  const pendingCount = leaves.length - approvedCount - rejectedCount;
 
   const dayScholarCount = students.filter((s) => s.studentType === "DAY_SCHOLAR").length;
   const cadetCount = students.filter((s) => s.studentType === "CADET").length;
@@ -93,7 +83,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
         <div>
           <h2 className="text-lg font-bold text-[var(--white)]">Welcome back 👋</h2>
           <p className="text-xs text-[var(--muted)]">
-            Here&apos;s what&apos;s happening across the system today.
+            Here&apos;s what&apos;s happening across OLMS today.
           </p>
         </div>
         <div className="rounded-lg border border-[rgba(224,123,32,0.25)] bg-[rgba(224,123,32,0.1)] px-3.5 py-1.5 font-mono text-xs text-[var(--orange2)]">
@@ -107,13 +97,13 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
       </div>
 
       <div className={styles.statRow}>
-        <StatTile label="Students" value={students.length} icon={<GraduationCap size={20} />} />
-        <StatTile label="HODs" value={hods.length} icon={<Landmark size={20} />} />
-        <StatTile label="Troop Cdrs" value={troops.length} icon={<Medal size={20} />} />
-        <StatTile label="Squadron Cdrs" value={squadrans.length} icon={<Swords size={20} />} />
-        <StatTile label="Senior Deputy Deans" value={sdds.length} icon={<Star size={20} />} />
-        <StatTile label="Gate Staff" value={gates.length} icon={<Construction size={20} />} />
-        <StatTile label="Leave Records" value={leaves.length} icon={<ClipboardList size={20} />} />
+        <StatTile label="Students" value={students.length} />
+        <StatTile label="HODs" value={hods.length} />
+        <StatTile label="Troop Cdrs" value={troops.length} />
+        <StatTile label="Squadron Cdrs" value={squadrans.length} />
+        <StatTile label="Senior Deputy Deans" value={sdds.length} />
+        <StatTile label="Gate Staff" value={gates.length} />
+        <StatTile label="Leave Records" value={leaves.length} />
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -123,27 +113,9 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
             <p className="text-xs text-[var(--muted)]">No leave records yet.</p>
           ) : (
             <div className="space-y-2.5">
-              <Breakdown
-                label="Pending"
-                value={pendingLeaves.length}
-                total={leaves.length}
-                color="#f59332"
-                onClick={() => setLeaveDrilldown({ title: "Pending", leaves: pendingLeaves })}
-              />
-              <Breakdown
-                label="Approved Today"
-                value={approvedTodayLeaves.length}
-                total={leaves.length}
-                color="#22c55e"
-                onClick={() => setLeaveDrilldown({ title: "Approved Today", leaves: approvedTodayLeaves })}
-              />
-              <Breakdown
-                label="Rejected Today"
-                value={rejectedTodayLeaves.length}
-                total={leaves.length}
-                color="#ef4444"
-                onClick={() => setLeaveDrilldown({ title: "Rejected Today", leaves: rejectedTodayLeaves })}
-              />
+              <Breakdown label="Pending" value={pendingCount} total={leaves.length} color="#f59332" />
+              <Breakdown label="Approved" value={approvedCount} total={leaves.length} color="#22c55e" />
+              <Breakdown label="Rejected" value={rejectedCount} total={leaves.length} color="#ef4444" />
             </div>
           )}
         </Card>
@@ -205,127 +177,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useAdminPortal
           )}
         </Card>
       </div>
-
-      {leaveDrilldown && (
-        <LeaveListDrilldownModal
-          title={leaveDrilldown.title}
-          leaves={leaveDrilldown.leaves}
-          onClose={() => setLeaveDrilldown(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-type LeaveOverallStatus = "Pending" | "Approved" | "Rejected";
-
-// Unlike each stage's own hodStatus/troopStatus/etc, there's no single
-// stored field for "where does this leave stand overall" — isApproved/
-// isRejected already encode that per studentType/route, this just names
-// the third (not yet decided either way) case for display.
-function overallStatus(l: LeaveRequest): LeaveOverallStatus {
-  if (isApproved(l)) return "Approved";
-  if (isRejected(l)) return "Rejected";
-  return "Pending";
-}
-
-function overallStatusTone(status: LeaveOverallStatus) {
-  return status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
-}
-
-const LEAVE_RECORD_STATUS_FILTERS: Array<"All" | LeaveOverallStatus> = ["All", "Pending", "Approved", "Rejected"];
-
-// Full browsable history of every leave ever submitted — the Dashboard's
-// breakdown card only surfaces Pending / Approved Today / Rejected Today,
-// so anything decided on an earlier day was previously invisible even
-// though it's kept in the database. This is the "see everything" view.
-export function LeaveRecords({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { leaves } = portal;
-  const [statusFilter, setStatusFilter] = useState<"All" | LeaveOverallStatus>("All");
-  const [selected, setSelected] = useState<LeaveRequest | null>(null);
-
-  const statusFiltered =
-    statusFilter === "All" ? leaves : leaves.filter((l) => overallStatus(l) === statusFilter);
-  const { query, setQuery, filtered } = useSearchFilter(statusFiltered, (l) => [l.studentName, l.indexNumber]);
-  const sort = useSort("applied", "desc");
-
-  const sorted = sortRows(filtered, sort.sortKey, sort.sortDir, {
-    student: (l) => l.studentName,
-    type: (l) => l.type,
-    applied: (l) => l.appliedDate ?? "",
-    from: (l) => l.startDate,
-    status: (l) => overallStatus(l),
-  });
-
-  return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {LEAVE_RECORD_STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              className={`rounded-full border px-3 py-1 text-xs font-bold transition-colors ${
-                statusFilter === s
-                  ? "border-[var(--sky)] bg-[rgba(74,144,217,0.15)] text-[var(--white)]"
-                  : "border-[var(--border)] text-[var(--muted)] hover:text-[var(--white)]"
-              }`}
-            >
-              {s === "All" ? `All (${leaves.length})` : `${s} (${leaves.filter((l) => overallStatus(l) === s).length})`}
-            </button>
-          ))}
-        </div>
-        <SearchInput value={query} onChange={setQuery} placeholder="Search by name or index number…" className="w-64" />
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
-              <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
-              <SortableTh label="Applied" sortKey="applied" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
-              <SortableTh label="From" sortKey="from" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
-              <SortableTh label="Status" sortKey="status" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
-              <th>Stages</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
-                  No leave records match.
-                </td>
-              </tr>
-            ) : (
-              sorted.map((l) => (
-                <tr key={l.id} onClick={() => setSelected(l)} className="cursor-pointer">
-                  <td>
-                    {l.studentName}
-                    <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
-                  </td>
-                  <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
-                  <td className="text-xs text-[var(--muted)]">{l.appliedDate || "—"}</td>
-                  <td>{l.startDate}</td>
-                  <td>
-                    <Badge tone={overallStatusTone(overallStatus(l))}>{overallStatus(l)}</Badge>
-                  </td>
-                  <td className="text-xs text-[var(--muted)]">
-                    {l.studentType === "CADET" && l.troopStatus === "N/A"
-                      ? `HOD ${l.hodStatus} · Sqn ${l.sqnStatus}`
-                      : l.studentType === "CADET"
-                      ? `Troop ${l.troopStatus} · Sqn ${l.sqnStatus} · SDD ${l.sddStatus}`
-                      : `HOD ${l.hodStatus} · Troop ${l.troopStatus}`}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {selected && <LeaveDetailModal leave={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
@@ -334,21 +185,6 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   const { intakes, students, troops, addIntake, removeIntake } = portal;
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  // Computed once per intake before sorting, since "Students" and "Troop
-  // Officers Assigned" are both derived counts, not raw fields — sorting
-  // needs the count itself as the comparable value, not `intakes` directly.
-  const intakeRows = intakes.map((i) => ({
-    intake: i,
-    count: students.filter((s) => s.intake === i.code).length,
-    officers: troops.filter((t) => (t.intakes ?? []).includes(i.code)),
-  }));
-  const { sortKey, sortDir, toggleSort } = useSort();
-  const sortedIntakeRows = sortRows(intakeRows, sortKey, sortDir, {
-    code: (r) => r.intake.code,
-    students: (r) => r.count,
-    officers: (r) => r.officers.length,
-  });
 
   async function handleAdd() {
     if (!code.trim()) {
@@ -376,7 +212,7 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   return (
     <div>
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">➕ Add Intake</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Create Intake</h2>
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <label className={styles.label}>Intake Number / Code</label>
@@ -389,7 +225,7 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             />
           </div>
           <Button variant="primary" onClick={handleAdd}>
-            Add Intake
+            Create Intake
           </Button>
         </div>
         {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
@@ -401,48 +237,46 @@ export function Intakes({ portal }: { portal: ReturnType<typeof useAdminPortal> 
           <table className={styles.table}>
             <thead>
               <tr>
-                <SortableTh label="Intake" sortKey="code" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Students" sortKey="students" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh
-                  label="Troop Officers Assigned"
-                  sortKey="officers"
-                  activeSortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
+                <th>Intake</th>
+                <th>Students</th>
+                <th>Troop Officers Assigned</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedIntakeRows.length === 0 ? (
+              {intakes.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-6 text-center text-[var(--muted)]">
                     No intakes yet. Add one above.
                   </td>
                 </tr>
               ) : (
-                sortedIntakeRows.map(({ intake: i, count, officers }) => (
-                  <tr key={i.id}>
-                    <td>
-                      <span className="rounded bg-[rgba(37,99,176,0.15)] px-2 py-0.5 text-[10px] font-bold text-[var(--light)]">
-                        Intake {i.code}
-                      </span>
-                    </td>
-                    <td>{count}</td>
-                    <td>
-                      {officers.length ? (
-                        officers.map((o) => o.name).join(", ")
-                      ) : (
-                        <span className="text-[var(--muted)]">None assigned</span>
-                      )}
-                    </td>
-                    <td>
-                      <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(i.code)}>
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
-                ))
+                intakes.map((i) => {
+                  const count = students.filter((s) => s.intake === i.code).length;
+                  const officers = troops.filter((t) => (t.intakes ?? []).includes(i.code));
+                  return (
+                    <tr key={i.id}>
+                      <td>
+                        <span className="rounded bg-[rgba(37,99,176,0.15)] px-2 py-0.5 text-[10px] font-bold text-[var(--light)]">
+                          Intake {i.code}
+                        </span>
+                      </td>
+                      <td>{count}</td>
+                      <td>
+                        {officers.length ? (
+                          officers.map((o) => o.name).join(", ")
+                        ) : (
+                          <span className="text-[var(--muted)]">None assigned</span>
+                        )}
+                      </td>
+                      <td>
+                        <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleDelete(i.code)}>
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -478,24 +312,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const departmentOptions = Array.from(
-    new Set(hods.map((h) => h.department).filter((d): d is string => !!d))
-  ).sort();
-
-  const { query, setQuery, filtered: searchedStudents } = useSearchFilter(students, (s) => [
-    s.indexNumber,
-    s.firstName,
-    s.lastName,
-    s.department,
-  ]);
-  const { sortKey, sortDir, toggleSort } = useSort();
-  const sortedStudents = sortRows(searchedStudents, sortKey, sortDir, {
-    index: (s) => s.indexNumber,
-    name: (s) => `${s.firstName} ${s.lastName}`,
-    type: (s) => s.studentType,
-    intake: (s) => s.intake ?? "",
-    dept: (s) => s.department ?? "",
-  });
+  const departmentOptions = portal.departments;
 
   // HOD and Troop Commander(s) are never picked directly — each Day
   // Scholar's HOD is already fully determined by their Department (every
@@ -583,8 +400,8 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       setError("Mobile number must be exactly 10 digits, numbers only.");
       return;
     }
-    if (password.trim() && !isValidSimplePassword(password.trim())) {
-      setError(SIMPLE_PASSWORD_MESSAGE);
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -672,7 +489,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
               className={styles.input}
               style={editingId ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
             >
-              <option value="">{departmentOptions.length ? "Select department…" : "No departments — add an HOD first"}</option>
+              <option value="">Select department…</option>
               {departmentOptions.map((d) => (
                 <option key={d} value={d}>
                   {d}
@@ -787,8 +604,7 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={styles.input} />
           </div>
           <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 4 characters — no need for capitals or symbols. The student sets their own stronger
-            password on first login.
+            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
           </p>
         </div>
 
@@ -806,33 +622,30 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       </Card>
 
       <Card className="p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-[var(--white)]">All Students</h2>
-          <SearchInput value={query} onChange={setQuery} placeholder="Search by name, index, or department…" className="w-full sm:w-72" />
-        </div>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">All Students</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
               <tr>
-                <SortableTh label="Index No." sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Name" sortKey="name" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Intake" sortKey="intake" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <SortableTh label="Dept" sortKey="dept" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <th>Index No.</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Intake</th>
+                <th>Dept</th>
                 <th>Troop</th>
                 <th>HOD/Sqn</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedStudents.length === 0 ? (
+              {students.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-6 text-center text-[var(--muted)]">
-                    {students.length === 0 ? "No students yet." : "No students match your search."}
+                    No students yet.
                   </td>
                 </tr>
               ) : (
-                sortedStudents.map((s) => (
+                students.map((s) => (
                   <tr key={s.id}>
                     <td>{s.indexNumber}</td>
                     <td>
@@ -920,8 +733,8 @@ export function StaffRole({
       setError("Please fill in all fields.");
       return;
     }
-    if (password.trim() && !isValidSimplePassword(password.trim())) {
-      setError(SIMPLE_PASSWORD_MESSAGE);
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -983,12 +796,25 @@ export function StaffRole({
                 {extraLabel}
                 <span className="ml-0.5 text-[var(--err)]">*</span>
               </label>
-              <input
-                value={extra}
-                onChange={(e) => setExtra(e.target.value)}
-                placeholder={extraPlaceholder}
-                className={styles.input}
-              />
+              {role === "HOD" ? (
+                <select value={extra} onChange={(e) => setExtra(e.target.value)} className={styles.input}>
+                  <option value="">Select department…</option>
+                  {Array.from(new Set([...portal.departments, ...(extra ? [extra] : [])]))
+                    .sort()
+                    .map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  value={extra}
+                  onChange={(e) => setExtra(e.target.value)}
+                  placeholder={extraPlaceholder}
+                  className={styles.input}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1010,8 +836,7 @@ export function StaffRole({
           </label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
           <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 4 characters — no need for capitals or symbols. They set their own stronger password on
-            first login.
+            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
           </p>
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
@@ -1122,8 +947,8 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
       setError("Assign at least one intake to this troop officer.");
       return;
     }
-    if (password.trim() && !isValidSimplePassword(password.trim())) {
-      setError(SIMPLE_PASSWORD_MESSAGE);
+    if (password.trim() && !isValidPassword(password.trim())) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setError(null);
@@ -1185,8 +1010,7 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
             </label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
             <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-              Min 4 characters — no need for capitals or symbols. They set their own stronger password on
-            first login.
+              Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
             </p>
           </div>
         </div>
@@ -1360,12 +1184,6 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [error, setError] = useState<string | null>(null);
 
   const filtered = roleFilter ? audit.filter((a) => a.role === roleFilter) : audit;
-  const { sortKey, sortDir, toggleSort } = useSort();
-  const sorted = sortRows(filtered, sortKey, sortDir, {
-    time: (a) => a.time,
-    role: (a) => a.role,
-    user: (a) => a.user,
-  });
 
   async function handleClear() {
     if (!confirm("Clear the entire audit log? This cannot be undone.")) return;
@@ -1400,22 +1218,22 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
         <table className={styles.table}>
           <thead>
             <tr>
-              <SortableTh label="Date/Time" sortKey="time" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableTh label="Role" sortKey="role" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableTh label="Username" sortKey="user" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th>Date/Time</th>
+              <th>Role</th>
+              <th>Username</th>
               <th>Action</th>
               <th>Details</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 ? (
+            {filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-6 text-center text-[var(--muted)]">
                   No audit events recorded yet.
                 </td>
               </tr>
             ) : (
-              sorted.slice(0, 500).map((a) => (
+              filtered.slice(0, 500).map((a) => (
                 <tr key={a.id}>
                   <td>{new Date(a.time).toLocaleString()}</td>
                   <td>{ROLE_LABELS[a.role as keyof typeof ROLE_LABELS] ?? a.role}</td>
@@ -1436,6 +1254,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
     </Card>
   );
 }
+
 
 // ==================================================================
 // HOD Cover — each department has exactly one shared "covering" login
@@ -1624,6 +1443,176 @@ function LecturerRosterModal({
   );
 }
 
+// Admin assigns Acting HOD for a department on a date (or date range): one
+// or more of that department's roster lecturers, or all of them. Making the
+// assignment is itself how Admin records that the HOD isn't available that
+// day; every assigned lecturer works through the department's one shared
+// Acting HOD profile.
+function ActingHodCard({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
+  const { lecturers, actingAssignments, assignActingHod, removeActingHod } = portal;
+  const [lecturerId, setLecturerId] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [date, setDate] = useState(todayStr());
+  const [toDate, setToDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const account = lecturers.find((l) => l.id === lecturerId);
+  const members = account
+    ? [...account.members].sort((a, b) => (a.tier === b.tier ? a.rank - b.rank : a.tier === "SENIOR" ? -1 : 1))
+    : [];
+  const allSelected = members.length > 0 && selected.length === members.length;
+
+  function toggle(id: string) {
+    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
+
+  async function handleAssign() {
+    if (!lecturerId || !selected.length || !date) {
+      setError("Select a department, at least one lecturer and a date.");
+      return;
+    }
+    setError(null);
+    setSaved(null);
+    try {
+      await assignActingHod({ lecturerId, memberIds: allSelected ? "ALL" : selected, date, toDate: toDate || undefined });
+      setSaved(`Acting HOD assigned for ${account?.department} on ${date}${toDate && toDate !== date ? ` to ${toDate}` : ""}.`);
+      setToDate("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign");
+    }
+  }
+
+  async function handleRemove(id: string) {
+    if (!confirm("Remove this Acting HOD assignment? That day's approvals go back to the HOD.")) return;
+    try {
+      await removeActingHod(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove");
+    }
+  }
+
+  const today = todayStr();
+  const upcoming = actingAssignments.filter((a) => a.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+
+  return (
+    <Card className="mb-5 p-5">
+      <h2 className="mb-1 text-sm font-bold text-[var(--white)]">🧑‍🏫 Assign Acting HOD</h2>
+      <p className="mb-4 text-xs text-[var(--muted)]">
+        Use this on days a department&apos;s HOD isn&apos;t available. The lecturers you pick approve that
+        department&apos;s leaves for those dates, all through the department&apos;s one Acting HOD profile.
+      </p>
+      <div className={`${styles.formGrid3} mb-3.5`}>
+        <div>
+          <label className={styles.label}>Department</label>
+          <select
+            value={lecturerId}
+            onChange={(e) => {
+              setLecturerId(e.target.value);
+              setSelected([]);
+            }}
+            className={styles.input}
+          >
+            <option value="">Select department…</option>
+            {lecturers.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.department}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={styles.label}>Date</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={styles.input} />
+        </div>
+        <div>
+          <label className={styles.label}>Until (optional, for several days)</label>
+          <input type="date" value={toDate} min={date} onChange={(e) => setToDate(e.target.value)} className={styles.input} />
+        </div>
+      </div>
+
+      {account && (
+        <div className="mb-3.5 rounded-xl border border-[var(--border)] bg-[var(--card2)] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className={styles.label}>Lecturers ({selected.length} selected)</span>
+            {members.length > 0 && (
+              <button
+                type="button"
+                className="text-xs font-bold text-[var(--white)] underline"
+                onClick={() => setSelected(allSelected ? [] : members.map((m) => m.id))}
+              >
+                {allSelected ? "Clear all" : "Select all lecturers"}
+              </button>
+            )}
+          </div>
+          {members.length === 0 ? (
+            <p className="text-xs text-[var(--muted)]">
+              This department&apos;s roster is empty. Add its lecturers with Manage Roster below first.
+            </p>
+          ) : (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {members.map((m) => (
+                <label key={m.id} className="flex cursor-pointer items-center gap-2 text-sm text-[var(--white)]">
+                  <input type="checkbox" checked={selected.includes(m.id)} onChange={() => toggle(m.id)} />
+                  {m.name}
+                  <Badge tone={m.tier === "SENIOR" ? "blue" : "gray"}>{TIER_LABELS[m.tier]}</Badge>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Button variant="primary" onClick={handleAssign}>
+        Assign Acting HOD
+      </Button>
+      {error && <p className="mt-2 text-xs text-[var(--err)]">{error}</p>}
+      {saved && <p className="mt-2 text-xs text-[var(--white)]">✅ {saved}</p>}
+
+      <div className="mt-5 overflow-x-auto">
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Department</th>
+              <th>Acting HOD lecturers</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {upcoming.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-[var(--muted)]">
+                  No upcoming Acting HOD assignments. Every HOD is handling their own approvals.
+                </td>
+              </tr>
+            ) : (
+              upcoming.map((a) => (
+                <tr key={a.id}>
+                  <td className="whitespace-nowrap">{a.date}</td>
+                  <td>{a.department}</td>
+                  <td>
+                    {a.members.map((m) => (
+                      <div key={m.memberId}>
+                        {m.name} <span className="text-xs text-[var(--muted)]">({TIER_LABELS[m.tier]})</span>
+                      </div>
+                    ))}
+                  </td>
+                  <td>
+                    <Button variant="danger" className="!px-2.5 !py-1 !text-[11px]" onClick={() => handleRemove(a.id)}>
+                      Remove
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const {
     hods,
@@ -1641,7 +1630,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   const [acctDepartment, setAcctDepartment] = useState("");
   const [acctUsername, setAcctUsername] = useState("");
   const [acctName, setAcctName] = useState("");
-  const [acctEmail, setAcctEmail] = useState("");
   const [acctPassword, setAcctPassword] = useState("");
   const [acctError, setAcctError] = useState<string | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
@@ -1651,7 +1639,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setAcctDepartment("");
     setAcctUsername("");
     setAcctName("");
-    setAcctEmail("");
     setAcctPassword("");
   }
 
@@ -1662,13 +1649,12 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
     setAcctDepartment(l.department);
     setAcctUsername(l.username);
     setAcctName(l.name);
-    setAcctEmail(l.email || "");
     setAcctPassword("");
   }
 
   async function handleSaveAccount() {
     if (!editingAccountId) {
-      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctEmail.trim() || !acctPassword.trim()) {
+      if (!acctDepartment.trim() || !acctUsername.trim() || !acctName.trim() || !acctPassword.trim()) {
         setAcctError("All fields are required to create an account.");
         return;
       }
@@ -1676,8 +1662,8 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
       setAcctError("Please fill in username and name.");
       return;
     }
-    if (acctPassword.trim() && !isValidSimplePassword(acctPassword.trim())) {
-      setAcctError(SIMPLE_PASSWORD_MESSAGE);
+    if (acctPassword.trim() && !isValidPassword(acctPassword.trim())) {
+      setAcctError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     setAcctError(null);
@@ -1686,7 +1672,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
         await editLecturer(editingAccountId, {
           username: acctUsername.trim(),
           name: acctName.trim(),
-          email: acctEmail.trim() || undefined,
           department: acctDepartment.trim() || undefined,
           password: acctPassword.trim() || undefined,
         });
@@ -1695,7 +1680,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
           department: acctDepartment.trim(),
           username: acctUsername.trim(),
           name: acctName.trim(),
-          email: acctEmail.trim(),
           password: acctPassword.trim(),
         });
       }
@@ -1722,17 +1706,17 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   return (
     <div>
       <div className={styles.infoBanner}>
-        <strong>HOD Cover:</strong> Each department has exactly one shared login used by all of its lecturers
-        to cover for the HOD. Create that account below, add its lecturers to the roster (Senior/Junior tier +
-        rank), then mark the HOD unavailable when they can&apos;t act on leaves — no need to pick who covers.
-        The system automatically hands their Day Scholar and Officer Cadet Academic Leave queue to the
-        highest-ranked available lecturer in that department&apos;s own roster. If that lecturer is also
-        unavailable on a given day, mark them below so they&apos;re skipped over too.
+        <strong>Acting HOD:</strong> Each department has ONE Acting HOD profile (one login), shared by that
+        department&apos;s lecturers. Create the profile and add the department&apos;s Senior/Junior lecturers to its
+        roster below. On a day the HOD isn&apos;t available, assign one, several or all of those lecturers as Acting
+        HOD for that date. That department&apos;s leave approvals then go to the Acting HOD profile for that day.
       </div>
+
+      <ActingHodCard portal={portal} />
 
       <Card className="mb-5 p-5">
         <h2 className="mb-4 text-sm font-bold text-[var(--white)]">
-          {editingAccountId ? "✏️ Edit Department Covering Account" : "➕ Create Department Covering Account"}
+          {editingAccountId ? "✏️ Edit Department Acting HOD Account" : "➕ Create Department Acting HOD Account"}
         </h2>
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
@@ -1746,10 +1730,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
               disabled={!!editingAccountId}
             >
               <option value="">Select department…</option>
-              {hods
-                .map((h) => h.department)
-                .filter((d, i, arr): d is string => !!d && arr.indexOf(d) === i)
-                .map((d) => (
+              {portal.departments.map((d) => (
                   <option key={d} value={d} disabled={existingDepartments.has(d)}>
                     {d}
                     {existingDepartments.has(d) ? " (already has an account)" : ""}
@@ -1778,12 +1759,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
         <div className={`${styles.formGrid3} mb-3.5`}>
           <div>
             <label className={styles.label}>
-              Email<span className="ml-0.5 text-[var(--err)]">*</span>
-            </label>
-            <input value={acctEmail} onChange={(e) => setAcctEmail(e.target.value)} className={styles.input} placeholder="name@kdu.ac.lk" />
-          </div>
-          <div>
-            <label className={styles.label}>
               Password {editingAccountId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
             </label>
             <input value={acctPassword} onChange={(e) => setAcctPassword(e.target.value)} className={styles.input} />
@@ -1808,7 +1783,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
       </Card>
 
       <Card className="mb-5 p-5">
-        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Department Covering Accounts</h2>
+        <h2 className="mb-4 text-sm font-bold text-[var(--white)]">Department Acting HOD Accounts</h2>
         <div className="overflow-x-auto">
           <table className={styles.table}>
             <thead>
@@ -2071,7 +2046,7 @@ export function Calendar({ portal }: { portal: ReturnType<typeof useAdminPortal>
 const REPORT_STATUS_COLORS = { Approved: "#22c55e", Pending: "#f59332", Rejected: "#ef4444" } as const;
 
 // Fixed order, never cycled per the department actually present — a
-// department keeps the same color across the donut/bars/CSV even as the
+// department keeps the same color across the donut/bars/Excel even as the
 // date range changes which ones show up. Avoids the reserved status hues
 // above (green/amber/red) so a department bar is never mistaken for a
 // status.
@@ -2157,35 +2132,210 @@ function normalizeDept(department: string | undefined): string {
   return (department || "—").replace(/^Department of\s+/i, "").trim();
 }
 
-function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+// Date inputs render in the browser's own locale (e.g. 05/09/2026 can mean
+// 9 May or 5 September), so the report spells the chosen range out in words.
+function longDate(value: string): string {
+  if (!value) return "—";
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// A "2026-08-16 09:00"-shaped string opened in Excel gets auto-detected as
-// a date/time and reformatted to a wider display format than the column's
-// default width — showing as "########" until the column is manually
-// widened, not because the data is missing. A leading apostrophe is
-// Excel's own signal (honored on CSVs it opens, not just manual entry) to
-// keep a cell as literal text instead, so the value is always immediately
-// readable on open.
-function csvDateTime(value: string): string {
-  return `'${value}`;
+// ── Excel (.xlsx) export ─────────────────────────────────────────────
+// The audit report exports a real .xlsx: every column sized to its longest value, every cell
+// left-aligned, bold frozen header row with filters, and all values stored
+// as plain text (dates stay exactly as shown, no Excel reformatting). Built
+// by hand (a minimal uncompressed zip of the SpreadsheetML parts) so no
+// extra dependency is needed.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(data: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
 }
 
-function downloadCsv(filename: string, header: string[], rows: string[][]) {
-  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+function zipStore(files: { name: string; data: string }[]): Uint8Array {
+  const enc = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name);
+    const data = enc.encode(f.data);
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    chunks.push(new Uint8Array(local.buffer), name, data);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true);
+    cd.setUint16(4, 20, true);
+    cd.setUint16(6, 20, true);
+    cd.setUint32(16, crc, true);
+    cd.setUint32(20, data.length, true);
+    cd.setUint32(24, data.length, true);
+    cd.setUint16(28, name.length, true);
+    cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  const parts = [...chunks, ...central, new Uint8Array(end.buffer)];
+  const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+  let pos = 0;
+  for (const p of parts) {
+    out.set(p, pos);
+    pos += p.length;
+  }
+  return out;
+}
+
+function xmlEscape(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function columnLetter(index: number): string {
+  let s = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+}
+
+export function buildXlsx(sheetName: string, header: string[], rows: string[][]): Uint8Array {
+  const all = [header, ...rows];
+  const widths = header.map((_, c) => Math.min(60, Math.max(...all.map((r) => String(r[c] ?? "").length)) + 3));
+  const lastCell = `${columnLetter(header.length - 1)}${all.length}`;
+  const sheetRows = all
+    .map((r, ri) => {
+      const cells = r
+        .map((v, ci) => {
+          const ref = `${columnLetter(ci)}${ri + 1}`;
+          return `<c r="${ref}" t="inlineStr" s="${ri === 0 ? 2 : 1}"><is><t xml:space="preserve">${xmlEscape(String(v ?? ""))}</t></is></c>`;
+        })
+        .join("");
+      return `<row r="${ri + 1}">${cells}</row>`;
+    })
+    .join("");
+  const sheet =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` +
+    `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` +
+    `<sheetData>${sheetRows}</sheetData>` +
+    `<autoFilter ref="A1:${lastCell}"/>` +
+    `</worksheet>`;
+  const styles =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>` +
+    `<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>` +
+    `<fill><patternFill patternType="solid"><fgColor rgb="FFDCE6F1"/><bgColor indexed="64"/></patternFill></fill></fills>` +
+    `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>` +
+    `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+    `<cellXfs count="3">` +
+    `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
+    `<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>` +
+    `<xf numFmtId="49" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>` +
+    `</cellXfs>` +
+    `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
+    `</styleSheet>`;
+  const safeSheet = xmlEscape(sheetName.replace(/[\\/?*[\]:]/g, " ").slice(0, 31));
+  return zipStore([
+    {
+      name: "[Content_Types].xml",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+        `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+        `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+        `</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
+        `</Relationships>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<sheets><sheet name="${safeSheet}" sheetId="1" r:id="rId1"/></sheets>` +
+        `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${safeSheet}'!$A$1:$${columnLetter(header.length - 1)}$${all.length}</definedName></definedNames>` +
+        `</workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      data:
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
+        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+        `</Relationships>`,
+    },
+    { name: "xl/worksheets/sheet1.xml", data: sheet },
+    { name: "xl/styles.xml", data: styles },
+  ]);
+}
+
+function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  // Windows rejects some characters in file names (e.g. "/" from a date).
+  a.download = filename.replace(/[\\/:*?"<>|]/g, "-");
+  a.style.display = "none";
+  // The link must be in the page for some browsers, and the blob URL must
+  // stay alive until the download has started — revoking it right after
+  // click() is what made the browser report "can't download".
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { leaves } = portal;
+  const { leaves, students, hods, error, refresh } = portal;
   const today = new Date().toISOString().split("T")[0];
+
+  // Departments come only from the system's own HOD accounts (one HOD per
+  // department). A leave is counted under its student's CURRENT department
+  // (falling back to the department saved on the leave if the student record
+  // is gone); anything that doesn't match a real department is reported
+  // separately instead of appearing as a department of its own.
+  const realDepartments = portal.departments;
+  const studentDept = new Map(students.map((s) => [s.id, s.department]));
+  function leaveDepartment(l: LeaveRequest): string | null {
+    const dept = studentDept.get(l.studentId) ?? l.department;
+    const key = normalizeDept(dept).toLowerCase();
+    return realDepartments.find((d) => normalizeDept(d).toLowerCase() === key) ?? null;
+  }
+  const NO_DEPT = "Not in a current department";
   const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const [from, setFrom] = useState(monthAgo);
   const [to, setTo] = useState(today);
@@ -2197,33 +2347,43 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
   const pending = inRange.filter((l) => !isApproved(l) && !isRejected(l));
   const approvalRate = inRange.length ? Math.round((approved.length / inRange.length) * 100) : 0;
 
-  const departments = Array.from(new Set(inRange.map((l) => normalizeDept(l.department)))).sort();
-  const byDept = departments
-    .map((d, i) => {
-      const rows = inRange.filter((l) => normalizeDept(l.department) === d);
-      return { department: d, color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length], rows };
-    })
+  const byDept = realDepartments
+    .map((d, i) => ({
+      department: d,
+      color: REPORT_DEPT_COLORS[i % REPORT_DEPT_COLORS.length],
+      rows: inRange.filter((l) => leaveDepartment(l) === d),
+    }))
     .sort((a, b) => b.rows.length - a.rows.length);
+  const unmatched = inRange.filter((l) => !leaveDepartment(l));
 
   const types = Array.from(new Set(inRange.map((l) => l.type)));
   const byType = types
     .map((t) => ({ type: t, rows: inRange.filter((l) => l.type === t) }))
     .sort((a, b) => b.rows.length - a.rows.length);
 
-  function exportCsv() {
-    downloadCsv(
-      `leave-audit-${from}_to_${to}.csv`,
-      ["Student", "Index Number", "Department", "Leave Type", "From", "To", "Applied", "Status"],
-      inRange.map((l) => [
+  const exportHeader = ["Student", "Index Number", "Intake", "Department", "Leave Type", "From", "To", "Applied", "Status"];
+  function exportRows() {
+    return inRange
+      .slice()
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map((l) => [
         l.studentName,
         l.indexNumber,
-        normalizeDept(l.department),
+        l.intake || "—",
+        leaveDepartment(l) ?? NO_DEPT,
         LEAVE_TYPE_LABELS[l.type],
-        csvDateTime(`${l.startDate} ${l.startTime}`),
-        csvDateTime(`${l.endDate} ${l.endTime}`),
+        `${l.startDate} ${l.startTime}`,
+        `${l.endDate} ${l.endTime}`,
         l.appliedDate,
         reportStatus(l),
-      ])
+      ]);
+  }
+
+  function exportExcel() {
+    const bytes = buildXlsx(`Leaves ${from} to ${to}`, exportHeader, exportRows());
+    downloadBlob(
+      `leave-audit-${from}_to_${to}.xlsx`,
+      new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
     );
   }
 
@@ -2253,17 +2413,40 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             <Button type="button" variant="secondary" onClick={() => window.print()} disabled={!inRange.length}>
               🖨️ Print
             </Button>
-            <Button type="button" variant="primary" onClick={exportCsv} disabled={!inRange.length}>
-              ⬇️ Export CSV
+            <Button type="button" variant="primary" onClick={exportExcel} disabled={!inRange.length}>
+              ⬇️ Export Excel
             </Button>
           </div>
         </div>
+        {from && to && from <= to && (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Showing leaves from <strong className="text-[var(--white)]">{longDate(from)}</strong> to{" "}
+            <strong className="text-[var(--white)]">{longDate(to)}</strong>.
+          </p>
+        )}
         {from && to && from > to && <p className="mt-3 text-xs text-[var(--err)]">&quot;From&quot; must be on or before &quot;To&quot;.</p>}
       </Card>
 
+      {error && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
+          <span>Couldn&apos;t load leave records: {error}</span>
+          <button onClick={() => refresh()} className="whitespace-nowrap font-bold underline">
+            Retry
+          </button>
+        </div>
+      )}
+
       {inRange.length === 0 ? (
         <Card className="p-5">
-          <p className="text-xs text-[var(--muted)]">No leave records overlap this date range.</p>
+          <p className="text-xs text-[var(--muted)]">
+            No leave records overlap {longDate(from)} to {longDate(to)}.
+            {leaves.length > 0 &&
+              (() => {
+                const starts = leaves.map((l) => l.startDate).filter(Boolean).sort();
+                const ends = leaves.map((l) => l.endDate).filter(Boolean).sort();
+                return ` Leaves on record run from ${longDate(starts[0])} to ${longDate(ends[ends.length - 1])}.`;
+              })()}
+          </p>
         </Card>
       ) : (
         <>
@@ -2293,7 +2476,22 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                     onClick={() => setDrilldown({ title: `${d.department} (${from} – ${to})`, leaves: d.rows })}
                   />
                 ))}
+                {unmatched.length > 0 && (
+                  <Breakdown
+                    label={NO_DEPT}
+                    value={unmatched.length}
+                    total={inRange.length}
+                    color="#94a3b8"
+                    onClick={() => setDrilldown({ title: `${NO_DEPT} (${from} – ${to})`, leaves: unmatched })}
+                  />
+                )}
               </div>
+              {unmatched.length > 0 && (
+                <p className="mt-3 text-[11px] text-[var(--muted)]">
+                  {unmatched.length} leave{unmatched.length === 1 ? "" : "s"} belong to students whose department doesn&apos;t
+                  match any of your departments (for example a deleted or test student). Click the row to see them.
+                </p>
+              )}
             </Card>
           </div>
 
@@ -2320,6 +2518,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                 <thead>
                   <tr>
                     <th>Student</th>
+                    <th>Intake</th>
                     <th>Department</th>
                     <th>Type</th>
                     <th>From</th>
@@ -2337,7 +2536,8 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
                           {l.studentName}
                           <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
                         </td>
-                        <td>{normalizeDept(l.department)}</td>
+                        <td>{l.intake || "—"}</td>
+                        <td>{leaveDepartment(l) ?? NO_DEPT}</td>
                         <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
                         <td className="whitespace-nowrap">{l.startDate}</td>
                         <td className="whitespace-nowrap">{l.endDate}</td>
