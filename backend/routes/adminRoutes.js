@@ -1,7 +1,6 @@
 import express from "express";
 import { verifyToken, requireRole } from "../middleware.js";
 import {
-  listUsers,
   listAllLeaves,
   createIntake,
   listIntakes,
@@ -52,7 +51,6 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole("ADMIN"));
 
-router.get("/users", listUsers);
 router.get("/leaves", listAllLeaves);
 
 router.get("/intakes", listIntakes);
