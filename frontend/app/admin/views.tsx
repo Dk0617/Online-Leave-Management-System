@@ -2046,7 +2046,7 @@ export function Calendar({ portal }: { portal: ReturnType<typeof useAdminPortal>
 const REPORT_STATUS_COLORS = { Approved: "#22c55e", Pending: "#f59332", Rejected: "#ef4444" } as const;
 
 // Fixed order, never cycled per the department actually present — a
-// department keeps the same color across the donut/bars/CSV even as the
+// department keeps the same color across the donut/bars/Excel even as the
 // date range changes which ones show up. Avoids the reserved status hues
 // above (green/amber/red) so a department bar is never mistaken for a
 // status.
@@ -2132,21 +2132,6 @@ function normalizeDept(department: string | undefined): string {
   return (department || "—").replace(/^Department of\s+/i, "").trim();
 }
 
-function csvEscape(value: string): string {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-// A "2026-08-16 09:00"-shaped string opened in Excel gets auto-detected as
-// a date/time and reformatted to a wider display format than the column's
-// default width — showing as "########" until the column is manually
-// widened, not because the data is missing. A leading apostrophe is
-// Excel's own signal (honored on CSVs it opens, not just manual entry) to
-// keep a cell as literal text instead, so the value is always immediately
-// readable on open.
-function csvDateTime(value: string): string {
-  return `'${value}`;
-}
-
 // Date inputs render in the browser's own locale (e.g. 05/09/2026 can mean
 // 9 May or 5 September), so the report spells the chosen range out in words.
 function longDate(value: string): string {
@@ -2155,15 +2140,8 @@ function longDate(value: string): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function downloadCsv(filename: string, header: string[], rows: string[][]) {
-  // BOM so Excel reads UTF-8 names correctly; CRLF rows for Excel on Windows.
-  const csv = "﻿" + [header, ...rows].map((row) => row.map((v) => csvEscape(v ?? "")).join(",")).join("\r\n");
-  downloadBlob(filename, new Blob([csv], { type: "text/csv;charset=utf-8" }));
-}
-
 // ── Excel (.xlsx) export ─────────────────────────────────────────────
-// A CSV can't carry column widths or alignment, so the audit report also
-// exports a real .xlsx: every column sized to its longest value, every cell
+// The audit report exports a real .xlsx: every column sized to its longest value, every cell
 // left-aligned, bold frozen header row with filters, and all values stored
 // as plain text (dates stay exactly as shown, no Excel reformatting). Built
 // by hand (a minimal uncompressed zip of the SpreadsheetML parts) so no
@@ -2384,7 +2362,7 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
     .sort((a, b) => b.rows.length - a.rows.length);
 
   const exportHeader = ["Student", "Index Number", "Intake", "Department", "Leave Type", "From", "To", "Applied", "Status"];
-  function exportRows(dateCell: (v: string) => string) {
+  function exportRows() {
     return inRange
       .slice()
       .sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -2394,19 +2372,15 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
         l.intake || "—",
         leaveDepartment(l) ?? NO_DEPT,
         LEAVE_TYPE_LABELS[l.type],
-        dateCell(`${l.startDate} ${l.startTime}`),
-        dateCell(`${l.endDate} ${l.endTime}`),
+        `${l.startDate} ${l.startTime}`,
+        `${l.endDate} ${l.endTime}`,
         l.appliedDate,
         reportStatus(l),
       ]);
   }
 
-  function exportCsv() {
-    downloadCsv(`leave-audit-${from}_to_${to}.csv`, exportHeader, exportRows(csvDateTime));
-  }
-
   function exportExcel() {
-    const bytes = buildXlsx(`Leaves ${from} to ${to}`, exportHeader, exportRows((v) => v));
+    const bytes = buildXlsx(`Leaves ${from} to ${to}`, exportHeader, exportRows());
     downloadBlob(
       `leave-audit-${from}_to_${to}.xlsx`,
       new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
@@ -2441,9 +2415,6 @@ export function Reports({ portal }: { portal: ReturnType<typeof useAdminPortal> 
             </Button>
             <Button type="button" variant="primary" onClick={exportExcel} disabled={!inRange.length}>
               ⬇️ Export Excel
-            </Button>
-            <Button type="button" variant="secondary" onClick={exportCsv} disabled={!inRange.length}>
-              CSV
             </Button>
           </div>
         </div>
