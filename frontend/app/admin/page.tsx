@@ -8,7 +8,6 @@ import {
   Construction,
   GraduationCap,
   Image as ImageIcon,
-  KeyRound,
   Landmark,
   LayoutDashboard,
   Medal,
@@ -28,7 +27,6 @@ import {
   Students,
   StaffRole,
   Troop,
-  PasswordChanges,
   AuditLog,
   HodCover,
   PhotoRequests,
@@ -50,7 +48,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: "calendar", label: "Event Calendar", icon: CalendarDays },
   { key: "photoRequests", label: "Photo Requests", icon: ImageIcon },
   { key: "profile", label: "My Profile", icon: User },
-  { key: "passwords", label: "Password Changes", icon: KeyRound },
   { key: "audit", label: "Audit Log", icon: ShieldCheck },
 ];
 
@@ -68,7 +65,6 @@ const TITLES: Record<string, string> = {
   calendar: "Event Calendar",
   photoRequests: "Photo Requests",
   profile: "My Profile",
-  passwords: "Password Changes",
   audit: "Audit Log",
 };
 
@@ -101,7 +97,6 @@ export default function AdminPage() {
       {view === "calendar" && <Calendar portal={portal} />}
       {view === "photoRequests" && <PhotoRequests portal={portal} />}
       {view === "profile" && <MyProfile />}
-      {view === "passwords" && <PasswordChanges portal={portal} />}
       {view === "audit" && <AuditLog portal={portal} />}
     </DashboardShell>
   );

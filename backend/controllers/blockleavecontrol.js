@@ -476,6 +476,11 @@ export const respondToBlockLeaveInvite = async (req, res) => {
   const { accept } = req.body;
   if (!accept) {
     block.students = block.students.filter((s) => String(s.studentId) !== student._id.toString());
+    // Close the gap the declined seat leaves — otherwise the next join
+    // (numbered students.length + 1) would reuse an existing number.
+    block.students.forEach((s, i) => {
+      s.no = i + 1;
+    });
     await block.save();
     await writeAudit("STUDENT", student.username, "block_leave_invite_declined", `id=${block._id}`);
     return res.json({ ok: true });

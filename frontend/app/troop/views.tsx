@@ -11,7 +11,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
-import { isToday } from "@/src/api";
+import { hodStageRole, isToday } from "@/src/api";
 import { BlockLeaveRequest, LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -351,7 +351,7 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
-                    <Badge tone="green">HOD Approved</Badge>
+                    <Badge tone="green">{hodStageRole(l)} Approved</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
                     <ApprovalActions

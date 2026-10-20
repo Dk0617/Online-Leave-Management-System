@@ -381,10 +381,9 @@ export function ApplyLeave({
   ).slice(0, 6);
   const docRequired = type ? requiresAttachment(type, isCadet ? "CADET" : "DAY_SCHOLAR") : false;
   // The linked Personal Leave that always accompanies an Academic Leave
-  // follows the same document rule as a standalone Personal Leave —
-  // required for Cadets, optional for Day Scholars. Mirrors the backend
+  // needs its own document for both student types. Mirrors the backend
   // check in studentcontrol.js applyLeave.
-  const personalDocRequired = isAcademic && isCadet;
+  const personalDocRequired = isAcademic;
   const today = new Date().toISOString().split("T")[0];
   // Medical Leave alone may be backdated (sickness is often only reported
   // after the fact), and only up to 7 days back — mirrors the backend check
@@ -703,6 +702,7 @@ export function ApplyLeave({
               <div className="mt-2 flex items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
                   📎 Upload Document (Academic Leave)
+                  {docRequired && <span className="ml-0.5 text-[var(--err)]">*</span>}
                   <input
                     type="file"
                     accept=".pdf,.jpg,.png,.doc,.docx"
@@ -711,7 +711,7 @@ export function ApplyLeave({
                   />
                 </label>
                 <span className="truncate text-xs text-[var(--muted)]">{file ? file.name : "No file chosen"}</span>
-                <Badge tone="gray">Optional</Badge>
+                <Badge tone={docRequired ? "red" : "gray"}>{docRequired ? "Required" : "Optional"}</Badge>
               </div>
 
               <div className="my-4 border-t border-[rgba(74,144,217,0.2)]" />
@@ -722,6 +722,7 @@ export function ApplyLeave({
               <div className="flex items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[rgba(74,144,217,0.35)] bg-[rgba(74,144,217,0.08)] px-4 py-2 text-xs font-bold text-[var(--sky)]">
                   📎 Upload Document (Personal Leave)
+                  {personalDocRequired && <span className="ml-0.5 text-[var(--err)]">*</span>}
                   <input
                     type="file"
                     accept=".pdf,.jpg,.png,.doc,.docx"
@@ -818,6 +819,7 @@ export function ApplyLeave({
               <div className="mb-1.5 flex items-center gap-2">
                 <label className={styles.label} style={{ marginBottom: 0 }}>
                   Supporting Document
+                  {docRequired && <span className="ml-0.5 text-[var(--err)]">*</span>}
                 </label>
                 <Badge tone={docRequired ? "red" : "gray"}>{docRequired ? "Required" : "Optional"}</Badge>
               </div>
@@ -1194,9 +1196,9 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
                 </tr>
               </thead>
               <tbody>
-                {openBlockLeave.students.map((s) => (
+                {openBlockLeave.students.map((s, i) => (
                   <tr key={s.studentId} className={s.studentId === user?.id ? "bg-[rgba(74,144,217,0.08)]" : ""}>
-                    <td>{s.no}</td>
+                    <td>{i + 1}</td>
                     <td>{s.indexNumber}</td>
                     <td>
                       {s.name}
@@ -1277,7 +1279,7 @@ export function BlockLeave({ portal }: { portal: ReturnType<typeof useStudentPor
               </p>
             ) : (
               <>
-                <p className="text-xs text-[var(--muted)]">You&apos;re No. {myEntry!.no} on this roster.</p>
+                <p className="text-xs text-[var(--muted)]">You&apos;re No. {openBlockLeave.students.indexOf(myEntry!) + 1} on this roster.</p>
                 <Button variant="primary" onClick={handleSubmitForApproval} disabled={submitting || !canSubmit}>
                   {submitting ? "Submitting…" : `Submit for Approval (${joinedCount})`}
                 </Button>

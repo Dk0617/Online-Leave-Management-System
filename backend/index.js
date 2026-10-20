@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { connectDB } from "./db.js";
+import { migratePasswordNotifications } from "./utils/migratePasswordNotifications.js";
 
 import loginRoutes from "./routes/loginRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
@@ -76,6 +77,7 @@ app.use((err, req, res, next) => {
 // Start Server
 const startServer = async () => {
   await connectDB();
+  await migratePasswordNotifications();
 
   const PORT = process.env.PORT || 5000;
 

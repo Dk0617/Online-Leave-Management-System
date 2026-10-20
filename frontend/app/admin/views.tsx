@@ -1113,77 +1113,24 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
   );
 }
 
-export function PasswordChanges({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
-  const { notifications, markNotificationRead } = portal;
-
-  return (
-    <Card className="p-5">
-      <h2 className="mb-2 text-sm font-bold text-[var(--white)]">🔑 Password Change Notifications</h2>
-      <p className="mb-4 text-xs text-[var(--muted)]">
-        Automatic log of password changes made by users across all portals.
-      </p>
-      <div className="overflow-x-auto">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Date/Time</th>
-              <th>Role</th>
-              <th>Username</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {notifications.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-[var(--muted)]">
-                  No password changes yet.
-                </td>
-              </tr>
-            ) : (
-              notifications.map((n) => (
-                <tr key={n.id}>
-                  <td>{new Date(n.time).toLocaleString()}</td>
-                  <td>{ROLE_LABELS[n.role] ?? n.role}</td>
-                  <td>{n.username}</td>
-                  <td>{n.name || "—"}</td>
-                  <td>
-                    {n.read ? (
-                      <span className="text-[var(--muted)]">Read</span>
-                    ) : (
-                      <Badge tone="amber">New</Badge>
-                    )}
-                  </td>
-                  <td>
-                    {!n.read && (
-                      <Button
-                        variant="secondary"
-                        className="!px-2.5 !py-1 !text-[11px]"
-                        onClick={() => markNotificationRead(n.id).catch(() => {})}
-                      >
-                        Mark read
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
 const ROLE_OPTIONS = ["", "STUDENT", "HOD", "TROOP", "SQUADRAN", "SDD", "GATE", "ADMIN"] as const;
+
+// Readable labels for password events — everything else shows its raw
+// action key. Only the fact of a change is ever logged, never the password.
+const PASSWORD_ACTIONS: Record<string, string> = {
+  password_changed: "🔑 Password changed",
+  password_reset: "🔑 Password reset by admin",
+};
 
 export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal> }) {
   const { audit, clearAuditLog } = portal;
   const [roleFilter, setRoleFilter] = useState("");
+  const [passwordsOnly, setPasswordsOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const filtered = roleFilter ? audit.filter((a) => a.role === roleFilter) : audit;
+  const filtered = audit.filter(
+    (a) => (!roleFilter || a.role === roleFilter) && (!passwordsOnly || a.action in PASSWORD_ACTIONS),
+  );
 
   async function handleClear() {
     if (!confirm("Clear the entire audit log? This cannot be undone.")) return;
@@ -1198,7 +1145,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
     <Card className="p-5">
       <h2 className="mb-2 text-sm font-bold text-[var(--white)]">🛡️ System Audit Log</h2>
       <p className="mb-4 text-xs text-[var(--muted)]">
-        Every login, leave submission, approval, rejection, and password change across all portals — most recent first.
+        Every login, leave submission, approval, rejection, password change and admin password reset across all portals — most recent first.
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className={styles.input} style={{ width: "auto" }}>
@@ -1208,6 +1155,15 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
               {ROLE_LABELS[r as keyof typeof ROLE_LABELS] ?? r}
             </option>
           ))}
+        </select>
+        <select
+          value={passwordsOnly ? "passwords" : ""}
+          onChange={(e) => setPasswordsOnly(e.target.value === "passwords")}
+          className={styles.input}
+          style={{ width: "auto" }}
+        >
+          <option value="">All actions</option>
+          <option value="passwords">Password changes only</option>
         </select>
         <Button variant="secondary" onClick={handleClear}>
           Clear Log
@@ -1239,7 +1195,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
                   <td>{ROLE_LABELS[a.role as keyof typeof ROLE_LABELS] ?? a.role}</td>
                   <td>{a.user}</td>
                   <td>
-                    {a.action}
+                    {PASSWORD_ACTIONS[a.action] ?? a.action}
                     {a.action === "leave_submitted" && (a.details || "").includes("EMERGENCY") && (
                       <span className="ml-1 font-bold text-[var(--err)]">🚨</span>
                     )}

@@ -11,7 +11,6 @@ import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
-import Notification from "../models/Notification.js";
 import AuditEntry from "../models/AuditEntry.js";
 import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import { writeAudit } from "../utils/audit.js";
@@ -202,7 +201,12 @@ export const updateStudent = async (req, res) => {
   }
 
   await student.save();
-  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber} (intake ${student.intake})`);  res.json(safe);
+  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber} (intake ${student.intake})`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `student ${student.indexNumber} (intake ${student.intake})`);
+  }
+  const { password: _pw, ...safe } = student.toObject();
+  res.json(safe);
 };
 
 export const deleteStudent = async (req, res) => {
@@ -354,6 +358,9 @@ export const updateStaff = async (req, res) => {
 
   await staff.save();
   await writeAudit("ADMIN", req.user.name, "account_updated", `${role.toLowerCase()} ${staff.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `${role.toLowerCase()} ${staff.username}`);
+  }
   const { password: _pw, ...safe } = staff.toObject();
   res.json(safe);
 };
@@ -454,6 +461,9 @@ export const updateTroop = async (req, res) => {
   }
   await troop.save();
   await writeAudit("ADMIN", req.user.name, "account_updated", `troop ${troop.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `troop ${troop.username}`);
+  }
   const { password: _pw, ...safe } = troop.toObject();
   res.json(safe);
 };
@@ -535,6 +545,9 @@ export const updateLecturer = async (req, res) => {
 
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "account_updated", `acting-hod ${lecturer.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `acting-hod ${lecturer.username}`);
+  }
   const { password: _pw, ...safe } = lecturer.toObject();
   res.json(safe);
 };
@@ -607,16 +620,6 @@ export const removeLecturerMember = async (req, res) => {
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);
   res.json(lecturer);
-};
-
-// ── Password-change notifications ──────────────────────────────────
-export const listNotifications = async (req, res) => {
-  res.json(await Notification.find().sort({ createdAt: -1 }));
-};
-
-export const markNotificationRead = async (req, res) => {
-  await Notification.findByIdAndUpdate(req.params.id, { read: true });
-  res.json({ message: "Marked read" });
 };
 
 // ── Audit log ───────────────────────────────────────────────────────
