@@ -1,6 +1,5 @@
 import jwt from "jsonwebtoken";
 import { ROLE_MODELS } from "../utils/roleModels.js";
-import Notification from "../models/Notification.js";
 import { writeAudit } from "../utils/audit.js";
 
 // A self-chosen password (via Change Password, typically the forced change
@@ -69,7 +68,8 @@ export const changePassword = async (req, res) => {
       .status(400)
       .json({ message: "Current and new password are required" });
   }
-  if (!isValidSelfSetPassword(newPassword)) {
+  // Acting HOD (department cover) accounts keep a simple shared password.
+  if (req.user.role !== "LECTURER" && !isValidSelfSetPassword(newPassword)) {
     return res.status(400).json({ message: SELF_SET_PASSWORD_MESSAGE });
   }
   if (newPassword === currentPassword) {
@@ -87,16 +87,20 @@ export const changePassword = async (req, res) => {
     return res.status(401).json({ message: "Current password is incorrect" });
   }
 
+  // Captured before it's cleared below, so the audit log can tell a forced
+  // first-login change apart from a voluntary one. Only the fact of the
+  // change is logged, never the password itself.
+  const wasForced = !!user.mustChangePassword;
   user.password = newPassword;
   user.mustChangePassword = false;
   await user.save();
 
-  await Notification.create({
-    role: req.user.role,
-    username: user.username,
-    name: user.name,
-  });
-  await writeAudit(req.user.role, user.username, "password_changed", "");
+  await writeAudit(
+    req.user.role,
+    user.username,
+    "password_changed",
+    `${wasForced ? "First-login change" : "Self-service change"} by ${user.name || user.username}`
+  );
 
   res.json({ message: "Password updated" });
 };

@@ -53,18 +53,18 @@ export const endHodUnavailabilityNow = async (req, res) => {
   if (!row) return res.status(404).json({ message: "Not found" });
   const today = localDateStr();
   if (today > row.toDate) {
-    return res.status(400).json({ message: "This cover has already ended." });
+    return res.status(400).json({ message: "This Acting HOD assignment has already ended." });
   }
   const hodName = row.hodId?.name || "HOD";
   if (row.fromDate >= today) {
     await row.deleteOne();
-    await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover cancelled before taking effect`);
+    await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — Acting HOD cancelled before taking effect`);
     return res.json({ ok: true, removed: true });
   }
   const yesterday = localDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000));
   row.toDate = yesterday;
   await row.save();
-  await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — cover switched back as of ${today}`);
+  await writeAudit("ADMIN", req.user.name, "hod_unavailability_ended_early", `${hodName} — Acting HOD ended, switched back to HOD as of ${today}`);
   res.json(row);
 };
 

@@ -11,7 +11,7 @@ import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
-import { isToday } from "@/src/api";
+import { hodStageRole, isToday } from "@/src/api";
 import { BlockLeaveRequest, LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -284,14 +284,14 @@ function TroopPendingTable({
                   {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
                 </td>
                 <td className="space-x-1.5 whitespace-nowrap">
-                  <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
-                    View
-                  </Button>
                   <ApprovalActions
                     onApprove={() => onApprove(l.id)}
                     onReject={(remarks) => onReject(l.id, remarks)}
                     onSuccess={(decision) => notify(l, decision)}
                   />
+                  <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                    View
+                  </Button>
                 </td>
               </tr>
             ))
@@ -351,17 +351,17 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
-                    <Badge tone="green">HOD Approved</Badge>
+                    <Badge tone="green">{hodStageRole(l)} Approved</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approve(l.id)}
                       onReject={(remarks) => reject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -422,14 +422,14 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approve(l.id)}
                       onReject={(remarks) => reject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -743,14 +743,14 @@ export function BlockLeaveQueue({ portal }: { portal: ReturnType<typeof useTroop
                   <td>{b.students.length}</td>
                   <td className="max-w-[220px] text-xs text-[var(--muted)]">{b.reason}</td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
-                      View Roster
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approveBlockLeave(b.id)}
                       onReject={(remarks) => rejectBlockLeave(b.id, remarks)}
                       onSuccess={(decision) => notify(b, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
                   </td>
                 </tr>
               ))

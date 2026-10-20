@@ -8,7 +8,6 @@ import {
   Construction,
   GraduationCap,
   Image as ImageIcon,
-  KeyRound,
   Landmark,
   LayoutDashboard,
   Medal,
@@ -28,7 +27,6 @@ import {
   Students,
   StaffRole,
   Troop,
-  PasswordChanges,
   AuditLog,
   HodCover,
   PhotoRequests,
@@ -42,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "intakes", label: "Intakes", icon: CalendarRange },
   { key: "students", label: "Students", icon: GraduationCap },
   { key: "hod", label: "HODs", icon: Landmark },
-  { key: "hodCover", label: "HOD Cover", icon: RefreshCw },
+  { key: "hodCover", label: "Acting HOD", icon: RefreshCw },
   { key: "troop", label: "Troop Commanders", icon: Medal },
   { key: "squadran", label: "Squadron Commander", icon: Swords },
   { key: "sdd", label: "Senior Deputy Dean", icon: Star },
@@ -50,7 +48,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: "calendar", label: "Event Calendar", icon: CalendarDays },
   { key: "photoRequests", label: "Photo Requests", icon: ImageIcon },
   { key: "profile", label: "My Profile", icon: User },
-  { key: "passwords", label: "Password Changes", icon: KeyRound },
   { key: "audit", label: "Audit Log", icon: ShieldCheck },
 ];
 
@@ -60,7 +57,7 @@ const TITLES: Record<string, string> = {
   intakes: "Intakes",
   students: "Students",
   hod: "HODs",
-  hodCover: "HOD Cover",
+  hodCover: "Acting HOD",
   troop: "Troop Commanders",
   squadran: "Squadron Commander",
   sdd: "Senior Deputy Dean",
@@ -68,7 +65,6 @@ const TITLES: Record<string, string> = {
   calendar: "Event Calendar",
   photoRequests: "Photo Requests",
   profile: "My Profile",
-  passwords: "Password Changes",
   audit: "Audit Log",
 };
 
@@ -101,7 +97,6 @@ export default function AdminPage() {
       {view === "calendar" && <Calendar portal={portal} />}
       {view === "photoRequests" && <PhotoRequests portal={portal} />}
       {view === "profile" && <MyProfile />}
-      {view === "passwords" && <PasswordChanges portal={portal} />}
       {view === "audit" && <AuditLog portal={portal} />}
     </DashboardShell>
   );

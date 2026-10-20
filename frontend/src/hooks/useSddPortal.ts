@@ -7,7 +7,6 @@ import { LeaveRequest, Movement } from "@/src/types";
 export function useSddPortal() {
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [history, setHistory] = useState<LeaveRequest[]>([]);
-  const [overview, setOverview] = useState<LeaveRequest[]>([]);
   const [pipeline, setPipeline] = useState<LeaveRequest[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,16 +16,14 @@ export function useSddPortal() {
     setLoading(true);
     setError(null);
     try {
-      const [p, h, o, pl, m] = await Promise.all([
+      const [p, h, pl, m] = await Promise.all([
         api.get<Record<string, unknown>[]>("/sdd/leaves/pending"),
         api.get<Record<string, unknown>[]>("/sdd/leaves/history"),
-        api.get<Record<string, unknown>[]>("/sdd/leaves/overview"),
         api.get<Record<string, unknown>[]>("/sdd/leaves/pipeline"),
         api.get<Record<string, unknown>[]>("/sdd/movements"),
       ]);
       setPending(p.map(normalizeLeave));
       setHistory(h.map(normalizeLeave));
-      setOverview(o.map(normalizeLeave));
       setPipeline(pl.map(normalizeLeave));
       setMovements(m.map(normalizeMovement));
     } catch (err) {
@@ -57,5 +54,5 @@ export function useSddPortal() {
     await refresh();
   }
 
-  return { pending, history, overview, pipeline, movements, loading, error, refresh, approve, reject };
+  return { pending, history, pipeline, movements, loading, error, refresh, approve, reject };
 }

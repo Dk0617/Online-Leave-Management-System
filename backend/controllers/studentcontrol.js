@@ -10,10 +10,10 @@ import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
  
-// Academic Leave never requires a supporting document, for either student
-// type — it's an academic excuse, not a campus-exit reason. Day Scholars
-// otherwise require Medical; Cadets require Medical + Personal.
-const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave"];
+// Day Scholars must attach a supporting document for Medical, Personal and
+// Academic Leave. Cadets require Medical + Personal (their Academic Leave
+// document stays optional).
+const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Personal Leave", "Academic Leave"];
 const DOC_REQUIRED_TYPES_CADET = ["Medical Leave", "Personal Leave"];
 function requiresAttachment(type, studentType) {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES_DAY_SCHOLAR).includes(type);
@@ -125,11 +125,10 @@ export const applyLeave = async (req, res) => {
   }
   // Academic Leave always applies together with a linked Personal Leave —
   // two separate leave records, but sharing the one reason the student typed
-  // above (no need to type it twice). Its own document stays optional for
-  // both student types, but the linked Personal Leave's document follows
-  // the same rule as a standalone Personal Leave — required for Cadets,
-  // optional for Day Scholars.
-  if (isAcademicRequest && student.studentType === "CADET" && !personalAttachmentData) {
+  // above (no need to type it twice). Its own document follows
+  // requiresAttachment above (required for Day Scholars, optional for
+  // Cadets); the linked Personal Leave's document is required for both.
+  if (isAcademicRequest && !personalAttachmentData) {
     missing.push("Personal Leave Supporting Document");
   }
   if (missing.length) {

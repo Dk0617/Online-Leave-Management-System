@@ -758,7 +758,7 @@ export async function downloadBlockLeavePassPdf(block: BlockLeaveRequest) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8.5);
       doc.setTextColor(...DARK);
-      doc.text(String(s.no), rosterColX.no + 2, y + 5.1);
+      doc.text(String(i + 1), rosterColX.no + 2, y + 5.1);
       doc.text(s.indexNumber, rosterColX.index, y + 5.1);
       doc.text(s.name, rosterColX.name, y + 5.1);
       doc.setFont("helvetica", "bold");

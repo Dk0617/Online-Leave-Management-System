@@ -20,7 +20,6 @@ import {
   LecturerMember,
   LecturerUnavailability,
   Movement,
-  NotificationEntry,
   PhotoChangeRequest,
   PhotoChangeRequestStatus,
   RefName,
@@ -310,17 +309,6 @@ export function normalizeMovement(raw: Raw): Movement {
   };
 }
 
-export function normalizeNotification(raw: Raw): NotificationEntry {
-  return {
-    id: String(raw._id ?? raw.id),
-    role: raw.role as Role,
-    username: raw.username as string,
-    name: raw.name as string | undefined,
-    read: !!raw.read,
-    time: raw.createdAt as string,
-  };
-}
-
 export function normalizeAudit(raw: Raw): AuditEntry {
   return {
     id: String(raw._id ?? raw.id),
@@ -468,6 +456,13 @@ export function isRejected(leave: LeaveRequest): boolean {
 // earlier stage's status, so downstream approvers never see it). Callers
 // use this to avoid displaying a misleading "Pending" badge for a stage
 // that is never coming.
+// Who decided the HOD stage — "Acting HOD" when the department's Acting
+// HOD approved/rejected it on a day the HOD was unavailable (see
+// backend/models/Leave.js hodApprover), otherwise "HOD".
+export function hodStageRole(leave: Pick<LeaveRequest, "hodApprover">): string {
+  return leave.hodApprover?.role === "ACTING_HOD" ? "Acting HOD" : "HOD";
+}
+
 export function isStageMoot(
   leave: LeaveRequest,
   field: "hodStatus" | "troopStatus" | "sqnStatus" | "sddStatus"
@@ -497,7 +492,7 @@ export function isGateEligible(leave: LeaveRequest): boolean {
   return isApproved(leave) && leave.type !== "Academic Leave";
 }
 
-// Day Scholar rule is unchanged; Cadets follow a different rule (see
+// Day Scholars and Cadets follow different rules (see
 // backend/controllers/studentcontrol.js requiresAttachment — keep in sync).
 export function requiresAttachment(type: LeaveRequest["type"], studentType: LeaveRequest["studentType"]): boolean {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES).includes(type);

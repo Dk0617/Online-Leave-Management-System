@@ -24,9 +24,7 @@ import {
   addLecturerMember,
   updateLecturerMember,
   removeLecturerMember,
-  listNotifications,
   listDepartments,
-  markNotificationRead,
   listAudit,
   clearAudit,
   listPhotoRequests,
@@ -82,8 +80,6 @@ router.patch("/staff/:role/:id", updateStaff);
 router.delete("/staff/:role/:id", deleteStaff);
 
 router.get("/departments", listDepartments);
-router.get("/notifications", listNotifications);
-router.patch("/notifications/:id/read", markNotificationRead);
 
 router.get("/audit", listAudit);
 router.delete("/audit", clearAudit);

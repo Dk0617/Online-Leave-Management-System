@@ -11,7 +11,6 @@ import LecturerUnavailability from "../models/LecturerUnavailability.js";
 import ActingHodAssignment from "../models/ActingHodAssignment.js";
 import Intake from "../models/Intake.js";
 import Leave from "../models/Leave.js";
-import Notification from "../models/Notification.js";
 import AuditEntry from "../models/AuditEntry.js";
 import PhotoChangeRequest from "../models/PhotoChangeRequest.js";
 import { writeAudit } from "../utils/audit.js";
@@ -202,7 +201,12 @@ export const updateStudent = async (req, res) => {
   }
 
   await student.save();
-  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber} (intake ${student.intake})`);  res.json(safe);
+  await writeAudit("ADMIN", req.user.name, "account_updated", `student ${student.indexNumber} (intake ${student.intake})`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `student ${student.indexNumber} (intake ${student.intake})`);
+  }
+  const { password: _pw, ...safe } = student.toObject();
+  res.json(safe);
 };
 
 export const deleteStudent = async (req, res) => {
@@ -354,6 +358,9 @@ export const updateStaff = async (req, res) => {
 
   await staff.save();
   await writeAudit("ADMIN", req.user.name, "account_updated", `${role.toLowerCase()} ${staff.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `${role.toLowerCase()} ${staff.username}`);
+  }
   const { password: _pw, ...safe } = staff.toObject();
   res.json(safe);
 };
@@ -454,6 +461,9 @@ export const updateTroop = async (req, res) => {
   }
   await troop.save();
   await writeAudit("ADMIN", req.user.name, "account_updated", `troop ${troop.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `troop ${troop.username}`);
+  }
   const { password: _pw, ...safe } = troop.toObject();
   res.json(safe);
 };
@@ -475,14 +485,11 @@ export const deleteTroop = async (req, res) => {
 // ── Lecturers — one shared covering-login per department (not an
 // individual's account), with an embedded named roster (tier + rank) admin
 // manages within it; see leavecontrol.js resolveActiveMemberForDepartment
-// for how HOD Cover uses this to pick who's active on a given day. ───────
+// for how Acting HOD uses this to pick who's active on a given day. ───────
 export const createLecturer = async (req, res) => {
   const { username, name, password, email, department } = req.body;
   if (!username || !name || !password || !department) {
     return res.status(400).json({ message: "Department, username, label and password are required" });
-  }
-  if (!isValidSimplePassword(password)) {
-    return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
   }
 
   const existing = await Lecturer.findOne({ username });
@@ -492,14 +499,14 @@ export const createLecturer = async (req, res) => {
   }
   const existingDept = await Lecturer.findOne({ department });
   if (existingDept) {
-    return res.status(409).json({ message: "That department already has a covering account" });
+    return res.status(409).json({ message: "That department already has an Acting HOD account" });
   }
   if (email && (await isEmailTaken(email))) {
     return res.status(409).json({ message: "That email is already used by another account" });
   }
 
   const created = await Lecturer.create({ username, name, password, email: email || undefined, department });
-  await writeAudit("ADMIN", req.user.name, "account_created", `lecturer-cover ${username} (${department})`);
+  await writeAudit("ADMIN", req.user.name, "account_created", `acting-hod ${username} (${department})`);
   const { password: _pw, ...safe } = created.toObject();
   res.status(201).json(safe);
 };
@@ -528,19 +535,19 @@ export const updateLecturer = async (req, res) => {
       return res.status(400).json({ message: "Choose the department from the list" });
     }
     const clash = await Lecturer.findOne({ department, _id: { $ne: lecturer._id } });
-    if (clash) return res.status(409).json({ message: "That department already has a covering account" });
+    if (clash) return res.status(409).json({ message: "That department already has an Acting HOD account" });
     lecturer.department = department;
   }
   if (password) {
-    if (!isValidSimplePassword(password)) {
-      return res.status(400).json({ message: SIMPLE_PASSWORD_MESSAGE });
-    }
     lecturer.password = password;
     lecturer.mustChangePassword = true;
   }
 
   await lecturer.save();
-  await writeAudit("ADMIN", req.user.name, "account_updated", `lecturer-cover ${lecturer.username}`);
+  await writeAudit("ADMIN", req.user.name, "account_updated", `acting-hod ${lecturer.username}`);
+  if (password) {
+    await writeAudit("ADMIN", req.user.name, "password_reset", `acting-hod ${lecturer.username}`);
+  }
   const { password: _pw, ...safe } = lecturer.toObject();
   res.json(safe);
 };
@@ -613,16 +620,6 @@ export const removeLecturerMember = async (req, res) => {
   await lecturer.save();
   await writeAudit("ADMIN", req.user.name, "lecturer_member_removed", `from ${lecturer.department}`);
   res.json(lecturer);
-};
-
-// ── Password-change notifications ──────────────────────────────────
-export const listNotifications = async (req, res) => {
-  res.json(await Notification.find().sort({ createdAt: -1 }));
-};
-
-export const markNotificationRead = async (req, res) => {
-  await Notification.findByIdAndUpdate(req.params.id, { read: true });
-  res.json({ message: "Marked read" });
 };
 
 // ── Audit log ───────────────────────────────────────────────────────

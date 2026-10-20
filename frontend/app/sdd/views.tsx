@@ -9,7 +9,7 @@ import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/componen
 import { useSddPortal } from "@/src/hooks/useSddPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
-import { isApproved, isRejected, isToday } from "@/src/api";
+import { isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -199,14 +199,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
                     <Badge tone="green">Approved</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approve(l.id)}
                       onReject={(remarks) => reject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -274,75 +274,6 @@ export function History({ portal }: { portal: ReturnType<typeof useSddPortal> })
           )}
         </tbody>
       </table>
-      </div>
-    </div>
-  );
-}
-
-export function Overview({ portal }: { portal: ReturnType<typeof useSddPortal> }) {
-  const { overview } = portal;
-
-  return (
-    <div>
-      <div className={styles.infoBanner}>
-        <strong>Full System Overview:</strong> All officer cadet leaves in the system across all stages.
-      </div>
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Index</th>
-              <th>Leave Type</th>
-              <th>Applied</th>
-              <th>Troop</th>
-              <th>Squadron</th>
-              <th>SDD</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overview.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  No officer cadet leave applications in system.
-                </td>
-              </tr>
-            ) : (
-              overview.map((l) => {
-                const overall = isApproved(l) ? "Fully Approved" : isRejected(l) ? "Rejected" : "In Progress";
-                return (
-                  <tr key={l.id}>
-                    <td>{l.studentName}</td>
-                    <td>{l.indexNumber}</td>
-                    <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
-                    <td>{l.appliedDate}</td>
-                    <td>
-                      <Badge tone={tone(l.troopStatus)}>{l.troopStatus}</Badge>
-                    </td>
-                    <td>
-                      <Badge tone={tone(l.sqnStatus)}>{l.sqnStatus}</Badge>
-                    </td>
-                    <td>
-                      <Badge tone={tone(l.sddStatus)}>{l.sddStatus}</Badge>
-                    </td>
-                    <td
-                      className={
-                        overall === "Fully Approved"
-                          ? "text-[var(--ok)]"
-                          : overall === "Rejected"
-                          ? "text-[var(--err)]"
-                          : "text-[var(--muted)]"
-                      }
-                    >
-                      {overall}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );

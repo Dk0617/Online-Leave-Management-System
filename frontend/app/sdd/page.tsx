@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { FolderOpen, History as HistoryIcon, KeyRound, LayoutDashboard, User } from "lucide-react";
+import { History as HistoryIcon, KeyRound, LayoutDashboard, User } from "lucide-react";
 import { DashboardShell, NavItem } from "@/src/components/DashboardShell";
 import { ChangePasswordForm } from "@/src/components/ChangePasswordForm";
 import { MyProfile } from "@/src/components/MyProfile";
 import { useAuth } from "@/src/AuthContext";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
-import { Dashboard, History, Overview } from "./views";
+import { Dashboard, History } from "./views";
 
 const NAV_ITEMS: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "overview", label: "Overview", icon: FolderOpen },
   { key: "history", label: "History", icon: HistoryIcon },
   { key: "profile", label: "My Profile", icon: User },
   { key: "changePass", label: "Change Password", icon: KeyRound },
@@ -19,7 +18,6 @@ const NAV_ITEMS: NavItem[] = [
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
-  overview: "Overview",
   history: "History",
   profile: "My Profile",
   changePass: "Change Password",
@@ -43,7 +41,6 @@ export default function SddPage() {
       roleTag={user?.title}
     >
       {activeView === "dashboard" && <Dashboard portal={portal} />}
-      {activeView === "overview" && <Overview portal={portal} />}
       {activeView === "history" && <History portal={portal} />}
       {activeView === "profile" && <MyProfile />}
       {activeView === "changePass" && <ChangePasswordForm forced={forced} onDone={() => setView("dashboard")} />}

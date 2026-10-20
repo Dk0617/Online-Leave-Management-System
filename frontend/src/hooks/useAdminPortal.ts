@@ -9,7 +9,6 @@ import {
   normalizeIntake,
   normalizeLeave,
   normalizeLecturer,
-  normalizeNotification,
   normalizePhotoChangeRequest,
   normalizeStaff,
   normalizeStudent,
@@ -22,7 +21,6 @@ import {
   Intake,
   LeaveRequest,
   LecturerAccount,
-  NotificationEntry,
   PhotoChangeRequest,
   StaffAccount,
   Student,
@@ -84,7 +82,6 @@ export function useAdminPortal() {
   const [gates, setGates] = useState<StaffAccount[]>([]);
   const [intakes, setIntakes] = useState<Intake[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-  const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [lecturers, setLecturers] = useState<LecturerAccount[]>([]);
   const [events, setEvents] = useState<EventDay[]>([]);
@@ -107,7 +104,6 @@ export function useAdminPortal() {
         gateRaw,
         intakesRaw,
         leavesRaw,
-        notifsRaw,
         auditRaw,
         lecturersRaw,
         eventsRaw,
@@ -123,7 +119,6 @@ export function useAdminPortal() {
         api.get<Record<string, unknown>[]>("/admin/staff/gate"),
         api.get<Record<string, unknown>[]>("/admin/intakes"),
         api.get<Record<string, unknown>[]>("/admin/leaves"),
-        api.get<Record<string, unknown>[]>("/admin/notifications"),
         api.get<Record<string, unknown>[]>("/admin/audit"),
         api.get<Record<string, unknown>[]>("/admin/lecturers"),
         api.get<Record<string, unknown>[]>("/admin/events"),
@@ -139,7 +134,6 @@ export function useAdminPortal() {
       setGates(gateRaw.map(normalizeStaff));
       setIntakes(intakesRaw.map(normalizeIntake));
       setLeaves(leavesRaw.map(normalizeLeave));
-      setNotifications(notifsRaw.map(normalizeNotification));
       setAudit(auditRaw.map(normalizeAudit));
       setLecturers(lecturersRaw.map(normalizeLecturer));
       setEvents(eventsRaw.map(normalizeEventDay));
@@ -216,11 +210,7 @@ export function useAdminPortal() {
     await refresh();
   }
 
-  // ── Notifications & audit ───────────────────────────────────────
-  async function markNotificationRead(id: string) {
-    await api.patch(`/admin/notifications/${id}/read`);
-    await refresh();
-  }
+  // ── Audit ───────────────────────────────────────────────────────
   async function clearAuditLog() {
     await api.delete("/admin/audit");
     await refresh();
@@ -297,7 +287,6 @@ export function useAdminPortal() {
     gates,
     intakes,
     leaves,
-    notifications,
     audit,
     lecturers,
     events,
@@ -318,7 +307,6 @@ export function useAdminPortal() {
     addTroop,
     editTroop,
     removeTroop,
-    markNotificationRead,
     clearAuditLog,
     addLecturer,
     editLecturer,

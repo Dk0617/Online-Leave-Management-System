@@ -135,7 +135,10 @@ export async function applyDecision(
       try {
         const student = await Student.findById(leave.studentId);
         if (student?.email) {
-          await sendRejectionEmail(student.email, student.name, leave, role, leave[commentField]);
+          // Name the Acting HOD in the email when they made the HOD-stage call.
+          const emailRole =
+            statusField === "hodStatus" && leave.hodApprover?.role === "ACTING_HOD" ? "ACTING_HOD" : role;
+          await sendRejectionEmail(student.email, student.name, leave, emailRole, leave[commentField]);
         }
       } catch (err) {
         console.error("Failed to send rejection email:", err.message);

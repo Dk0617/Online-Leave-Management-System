@@ -3,7 +3,7 @@
 import { ReactNode, useState } from "react";
 import { Check, X } from "lucide-react";
 import { LeaveRequest, LEAVE_TYPE_LABELS, LeaveStatus } from "@/src/types";
-import { isApproved, isRejected, isStageMoot } from "@/src/api";
+import { hodStageRole, isApproved, isRejected, isStageMoot } from "@/src/api";
 import { Button, Badge } from "@/src/components/ui";
 
 // ==================================================================
@@ -97,7 +97,7 @@ export function ApprovalActions({
 
   if (rejecting) {
     return (
-      <div className="flex w-56 flex-col gap-2">
+      <div className="inline-flex w-56 flex-col gap-2 align-middle whitespace-normal">
         <input
           autoFocus
           value={remarks}
@@ -126,17 +126,8 @@ export function ApprovalActions({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex gap-2">
-        <Button
-          variant="danger"
-          disabled={submitting}
-          onClick={() => setRejecting(true)}
-          title="Reject"
-          className="!h-8 !w-8 !p-0"
-        >
-          <X size={16} />
-        </Button>
+    <div className="inline-flex flex-col gap-1 align-middle">
+      <div className="flex gap-1.5">
         <Button
           variant="success"
           disabled={submitting}
@@ -146,8 +137,17 @@ export function ApprovalActions({
         >
           <Check size={16} />
         </Button>
+        <Button
+          variant="danger"
+          disabled={submitting}
+          onClick={() => setRejecting(true)}
+          title="Reject"
+          className="!h-8 !w-8 !p-0"
+        >
+          <X size={16} />
+        </Button>
       </div>
-      {error && <p className="w-56 text-[11px] text-[var(--err)]">{error}</p>}
+      {error && <p className="w-56 whitespace-normal text-[11px] text-[var(--err)]">{error}</p>}
     </div>
   );
 }
@@ -202,7 +202,8 @@ const REJECTING_ROLE_LABELS: { field: "hodStatus" | "troopStatus" | "sqnStatus" 
 function rejectionInfo(leave: LeaveRequest): { role: string; comment: string } | null {
   const hit = REJECTING_ROLE_LABELS.find((r) => leave[r.field] === "Rejected");
   if (!hit) return null;
-  return { role: hit.role, comment: leave[hit.commentField] || "" };
+  const role = hit.field === "hodStatus" ? hodStageRole(leave) : hit.role;
+  return { role, comment: leave[hit.commentField] || "" };
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
@@ -254,11 +255,17 @@ export function LeaveDetailModal({
   // isApproved/isRejected. Everything else follows the normal 3-stage
   // cadet chain (Troop -> Squadron -> SDD).
   const isCadetAcademicOnly = isCadet && leave.troopStatus === "N/A";
+  // "Acting HOD" when the department's Acting HOD decided this leave.
+  const hodLabel = hodStageRole(leave);
+  const hodDecidedBy =
+    leave.hodApprover?.role === "ACTING_HOD" && leave.hodApprover.name && leave.hodStatus !== "Pending"
+      ? leave.hodApprover.name
+      : "";
 
   const steps: TimelineStep[] = isCadetAcademicOnly
     ? [
         { label: "Applied", status: "done" },
-        { label: "HOD", status: stepStatus(leave.hodStatus, true) },
+        { label: hodLabel, status: stepStatus(leave.hodStatus, true) },
         { label: "Squadron", status: stepStatus(leave.sqnStatus, leave.hodStatus === "Approved") },
         { label: "Filed", status: approved ? "done" : "wait" },
       ]
@@ -278,7 +285,7 @@ export function LeaveDetailModal({
       ]
     : [
         { label: "Applied", status: "done" },
-        { label: "HOD", status: stepStatus(leave.hodStatus, true) },
+        { label: hodLabel, status: stepStatus(leave.hodStatus, true) },
         { label: "Troop Cmdr", status: stepStatus(leave.troopStatus, leave.hodStatus === "Approved") },
         { label: "PDF Ready", status: approved ? "done" : "wait" },
       ];
@@ -417,10 +424,11 @@ export function LeaveDetailModal({
           {!isCadet ? (
             <>
               <Row
-                label="HOD"
+                label={hodLabel}
                 value={
                   <>
                     <StageBadge leave={leave} field="hodStatus" />
+                    {hodDecidedBy && <span className="ml-2 text-xs text-[var(--muted)]">by {hodDecidedBy}</span>}
                     {leave.hodComment && (
                       <em className="ml-2 text-xs text-[var(--muted)]">{leave.hodComment}</em>
                     )}
@@ -443,10 +451,11 @@ export function LeaveDetailModal({
             <>
               {isCadetAcademicOnly && (
                 <Row
-                  label="HOD"
+                  label={hodLabel}
                   value={
                     <>
                       <StageBadge leave={leave} field="hodStatus" />
+                      {hodDecidedBy && <span className="ml-2 text-xs text-[var(--muted)]">by {hodDecidedBy}</span>}
                       {leave.hodComment && (
                         <em className="ml-2 text-xs text-[var(--muted)]">{leave.hodComment}</em>
                       )}

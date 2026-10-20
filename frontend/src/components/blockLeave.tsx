@@ -43,9 +43,9 @@ export function BlockLeaveRosterModal({ block, onClose }: { block: BlockLeaveReq
                 {block.students
                   .slice()
                   .sort((a, b) => a.no - b.no)
-                  .map((s) => (
+                  .map((s, i) => (
                     <tr key={s.studentId} className="border-t border-[rgba(255,255,255,0.05)]">
-                      <td className="px-3 py-2 text-[var(--white)]">{s.no}</td>
+                      <td className="px-3 py-2 text-[var(--white)]">{i + 1}</td>
                       <td className="px-3 py-2 text-[var(--white)]">{s.indexNumber}</td>
                       <td className="px-3 py-2 text-[var(--white)]">{s.name}</td>
                     </tr>

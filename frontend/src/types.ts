@@ -34,10 +34,10 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   "Emergency Leave": "🚨 Emergency Leave",
 };
 
-// Leave types that require a supporting document attachment. Academic Leave
-// never requires one, for either student type. See requiresAttachment in
-// api.ts, kept in sync with backend/controllers/studentcontrol.js.
-export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave"];
+// Leave types that require a supporting document attachment. Day Scholars
+// need one for Medical, Personal and Academic Leave. See requiresAttachment
+// in api.ts, kept in sync with backend/controllers/studentcontrol.js.
+export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave", "Personal Leave", "Academic Leave"];
 export const DOC_REQUIRED_TYPES_CADET: LeaveType[] = ["Medical Leave", "Personal Leave"];
 
 // ── Auth / session ────────────────────────────────────────────────
@@ -273,16 +273,7 @@ export interface Movement {
   earlyExit?: boolean;
 }
 
-// ── Admin: password-change notifications & audit log ─────────────────
-export interface NotificationEntry {
-  id: string;
-  role: Role;
-  username: string;
-  name?: string;
-  read: boolean;
-  time: string; // createdAt
-}
-
+// ── Admin: audit log (includes password changes and resets) ─────────
 export interface AuditEntry {
   id: string;
   role: string;

@@ -37,6 +37,7 @@ export async function sendApprovalEmail(to, studentName, leave) {
 
 const ROLE_LABELS = {
   HOD: "Head of Department (HOD)",
+  ACTING_HOD: "Acting Head of Department (Acting HOD)",
   TROOP: "Troop Commander",
   SQUADRAN: "Squadron Commander",
   SDD: "Senior Deputy Dean (SDD)",

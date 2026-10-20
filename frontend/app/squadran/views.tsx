@@ -9,7 +9,7 @@ import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
 import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
-import { isToday } from "@/src/api";
+import { hodStageRole, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
 import styles from "@/src/portal.module.css";
 
@@ -255,17 +255,17 @@ function SquadranPendingTable({
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td>
-                    <Badge tone="green">{isAcademicViaHod ? "HOD Approved" : "Troop Approved"}</Badge>
+                    <Badge tone="green">{isAcademicViaHod ? `${hodStageRole(l)} Approved` : "Troop Approved"}</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => onApprove(l.id)}
                       onReject={(remarks) => onReject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               );

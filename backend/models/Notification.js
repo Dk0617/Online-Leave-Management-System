@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 
-// Admin-visible feed of password-change events across every role.
+// Legacy: the old admin "Password Changes" feed. Nothing writes here any
+// more — password changes go to the audit log (see utils/audit.js). Kept
+// only so utils/migratePasswordNotifications.js can move old rows across.
 const notificationSchema = new mongoose.Schema(
   {
     role: { type: String, required: true },
