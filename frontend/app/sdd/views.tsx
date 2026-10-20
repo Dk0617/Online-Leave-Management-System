@@ -199,14 +199,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
                     <Badge tone="green">Approved</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approve(l.id)}
                       onReject={(remarks) => reject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               ))

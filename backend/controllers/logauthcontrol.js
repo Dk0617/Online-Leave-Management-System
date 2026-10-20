@@ -69,7 +69,8 @@ export const changePassword = async (req, res) => {
       .status(400)
       .json({ message: "Current and new password are required" });
   }
-  if (!isValidSelfSetPassword(newPassword)) {
+  // Acting HOD (department cover) accounts keep a simple shared password.
+  if (req.user.role !== "LECTURER" && !isValidSelfSetPassword(newPassword)) {
     return res.status(400).json({ message: SELF_SET_PASSWORD_MESSAGE });
   }
   if (newPassword === currentPassword) {

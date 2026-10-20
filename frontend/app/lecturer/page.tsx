@@ -47,7 +47,7 @@ function useCoverStatus() {
       setStatus(normalizeCoverStatus(raw));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cover status");
+      setError(err instanceof Error ? err.message : "Failed to load Acting HOD status");
     }
   }, []);
 

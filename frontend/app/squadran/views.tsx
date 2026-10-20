@@ -258,14 +258,14 @@ function SquadranPendingTable({
                     <Badge tone="green">{isAcademicViaHod ? "HOD Approved" : "Troop Approved"}</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
-                      View
-                    </Button>
                     <ApprovalActions
                       onApprove={() => onApprove(l.id)}
                       onReject={(remarks) => onReject(l.id, remarks)}
                       onSuccess={(decision) => notify(l, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
+                      View
+                    </Button>
                   </td>
                 </tr>
               );

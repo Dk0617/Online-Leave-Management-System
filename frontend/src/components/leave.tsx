@@ -97,7 +97,7 @@ export function ApprovalActions({
 
   if (rejecting) {
     return (
-      <div className="flex w-56 flex-col gap-2">
+      <div className="inline-flex w-56 flex-col gap-2 align-middle whitespace-normal">
         <input
           autoFocus
           value={remarks}
@@ -126,17 +126,8 @@ export function ApprovalActions({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex gap-2">
-        <Button
-          variant="danger"
-          disabled={submitting}
-          onClick={() => setRejecting(true)}
-          title="Reject"
-          className="!h-8 !w-8 !p-0"
-        >
-          <X size={16} />
-        </Button>
+    <div className="inline-flex flex-col gap-1 align-middle">
+      <div className="flex gap-1.5">
         <Button
           variant="success"
           disabled={submitting}
@@ -146,8 +137,17 @@ export function ApprovalActions({
         >
           <Check size={16} />
         </Button>
+        <Button
+          variant="danger"
+          disabled={submitting}
+          onClick={() => setRejecting(true)}
+          title="Reject"
+          className="!h-8 !w-8 !p-0"
+        >
+          <X size={16} />
+        </Button>
       </div>
-      {error && <p className="w-56 text-[11px] text-[var(--err)]">{error}</p>}
+      {error && <p className="w-56 whitespace-normal text-[11px] text-[var(--err)]">{error}</p>}
     </div>
   );
 }

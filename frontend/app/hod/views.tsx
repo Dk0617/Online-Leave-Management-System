@@ -304,6 +304,11 @@ function PendingTable({
                 </td>
                 <td>{l.appliedDate}</td>
                 <td className="space-x-1.5 whitespace-nowrap">
+                  <ApprovalActions
+                    onApprove={() => onApprove(l.id)}
+                    onReject={(remarks) => onReject(l.id, remarks)}
+                    onSuccess={(decision) => notify(l, decision)}
+                  />
                   <Button variant="secondary" className="!h-8 !w-8 !p-0" title="View" onClick={() => onView(l)}>
                     <Eye size={16} />
                   </Button>
@@ -318,11 +323,6 @@ function PendingTable({
                       <Pencil size={16} />
                     </Button>
                   )}
-                  <ApprovalActions
-                    onApprove={() => onApprove(l.id)}
-                    onReject={(remarks) => onReject(l.id, remarks)}
-                    onSuccess={(decision) => notify(l, decision)}
-                  />
                 </td>
               </tr>
             ))
@@ -667,14 +667,14 @@ export function BlockLeaveQueue({ portal }: { portal: ReturnType<typeof useHodPo
                   <td>{b.students.length}</td>
                   <td className="max-w-[220px] text-xs text-[var(--muted)]">{b.reason}</td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
-                      View Roster
-                    </Button>
                     <ApprovalActions
                       onApprove={() => approveBlockLeave(b.id)}
                       onReject={(remarks) => rejectBlockLeave(b.id, remarks)}
                       onSuccess={(decision) => notify(b, decision)}
                     />
+                    <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setViewing(b)}>
+                      View Roster
+                    </Button>
                   </td>
                 </tr>
               ))

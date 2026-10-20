@@ -1257,7 +1257,7 @@ export function AuditLog({ portal }: { portal: ReturnType<typeof useAdminPortal>
 
 
 // ==================================================================
-// HOD Cover — each department has exactly one shared "covering" login
+// Acting HOD — each department has exactly one shared "covering" login
 // used by all of its lecturers to stand in when the HOD is unavailable.
 // Admin creates that one account per department and maintains a named
 // roster inside it (Senior/Junior tier + rank); admin marks WHO is
@@ -1662,10 +1662,6 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
       setAcctError("Please fill in username and name.");
       return;
     }
-    if (acctPassword.trim() && !isValidPassword(acctPassword.trim())) {
-      setAcctError(PASSWORD_POLICY_MESSAGE);
-      return;
-    }
     setAcctError(null);
     try {
       if (editingAccountId) {
@@ -1690,7 +1686,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
   }
 
   async function handleDeleteAccount(id: string) {
-    if (!confirm("Delete this department's covering account? Its whole roster and unavailability history go with it.")) {
+    if (!confirm("Delete this department's Acting HOD account? Its whole roster and unavailability history go with it.")) {
       return;
     }
     try {
@@ -1752,7 +1748,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
               value={acctName}
               onChange={(e) => setAcctName(e.target.value)}
               className={styles.input}
-              placeholder="e.g. IT Dept Covering Lecturers"
+              placeholder="e.g. IT Dept Acting HOD"
             />
           </div>
         </div>
@@ -1763,7 +1759,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
             </label>
             <input value={acctPassword} onChange={(e) => setAcctPassword(e.target.value)} className={styles.input} />
             <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-              This is the ONE shared password every lecturer in this department uses to log in and cover for
+              This is the ONE shared password every lecturer in this department uses to log in and act as
               the HOD.
             </p>
           </div>
@@ -1798,7 +1794,7 @@ export function HodCover({ portal }: { portal: ReturnType<typeof useAdminPortal>
               {lecturers.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-8 text-center text-[var(--muted)]">
-                    No covering accounts yet.
+                    No Acting HOD accounts yet.
                   </td>
                 </tr>
               ) : (
