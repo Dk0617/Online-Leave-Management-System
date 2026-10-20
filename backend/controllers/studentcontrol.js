@@ -10,10 +10,11 @@ import EventDay, { MANDATORY_EVENT_CATEGORIES } from "../models/EventDay.js";
 import { isGateEligible, isRejected } from "../utils/leaveStatus.js";
 import { writeAudit } from "../utils/audit.js";
  
-// Day Scholars must attach a supporting document for Medical, Personal and
-// Academic Leave. Cadets require Medical + Personal (their Academic Leave
-// document stays optional).
-const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Personal Leave", "Academic Leave"];
+// Day Scholars must attach a supporting document for Medical and Academic
+// Leave (a standalone Personal Leave document stays optional for them).
+// Cadets require Medical + Personal (their Academic Leave document stays
+// optional).
+const DOC_REQUIRED_TYPES_DAY_SCHOLAR = ["Medical Leave", "Academic Leave"];
 const DOC_REQUIRED_TYPES_CADET = ["Medical Leave", "Personal Leave"];
 function requiresAttachment(type, studentType) {
   return (studentType === "CADET" ? DOC_REQUIRED_TYPES_CADET : DOC_REQUIRED_TYPES_DAY_SCHOLAR).includes(type);

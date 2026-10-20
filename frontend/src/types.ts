@@ -35,9 +35,10 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
 };
 
 // Leave types that require a supporting document attachment. Day Scholars
-// need one for Medical, Personal and Academic Leave. See requiresAttachment
-// in api.ts, kept in sync with backend/controllers/studentcontrol.js.
-export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave", "Personal Leave", "Academic Leave"];
+// need one for Medical and Academic Leave (standalone Personal Leave stays
+// optional). See requiresAttachment in api.ts, kept in sync with
+// backend/controllers/studentcontrol.js.
+export const DOC_REQUIRED_TYPES: LeaveType[] = ["Medical Leave", "Academic Leave"];
 export const DOC_REQUIRED_TYPES_CADET: LeaveType[] = ["Medical Leave", "Personal Leave"];
 
 // ── Auth / session ────────────────────────────────────────────────
