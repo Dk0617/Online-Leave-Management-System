@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Home, LogIn, LogOut, Medal, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { BulkDecisionBar, RowCheckbox, SelectAllCheckbox, useRowSelection } from "@/src/components/bulkDecision";
 import { BlockLeaveRosterModal, blockLeaveTone } from "@/src/components/blockLeave";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
@@ -238,11 +239,17 @@ function TroopPendingTable({
     from: (l) => l.startDate,
     to: (l) => l.endDate,
   });
+  const selection = useRowSelection(sorted.map((l) => l.id));
   return (
+    <>
+    <BulkDecisionBar selection={selection} onApprove={onApprove} onReject={(id, remarks) => onReject(id, remarks)} />
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
+            <th className="w-8">
+              <SelectAllCheckbox selection={selection} />
+            </th>
             <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <SortableTh
               label="Type"
@@ -261,13 +268,16 @@ function TroopPendingTable({
         <tbody>
           {sorted.length === 0 ? (
             <tr>
-              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
                 {leaves.length === 0 ? "No pending applications." : "No applications match your search."}
               </td>
             </tr>
           ) : (
             sorted.map((l) => (
               <tr key={l.id}>
+                <td>
+                  <RowCheckbox selection={selection} id={l.id} />
+                </td>
                 <td>
                   {l.studentName}
                   <div className="text-xs text-[var(--muted)]">{l.indexNumber}</div>
@@ -299,6 +309,7 @@ function TroopPendingTable({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -315,6 +326,7 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
     to: (l) => l.endDate,
   });
 
+  const selection = useRowSelection(sortedPending.map((l) => l.id));
   return (
     <div>
       {toast && <Toast message={toast.message} tone={toast.tone} />}
@@ -322,10 +334,14 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
         <strong>Day Scholar — Stage 2:</strong> These leaves have already been approved by the HOD. Your
         approval finalises it. Student can then download the PDF.
       </div>
+      <BulkDecisionBar selection={selection} onApprove={approve} onReject={(id, remarks) => reject(id, remarks)} />
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className="w-8">
+                <SelectAllCheckbox selection={selection} />
+              </th>
               <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableTh label="Index" sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -338,13 +354,16 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
           <tbody>
             {sortedPending.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
                   No Day Scholar leaves awaiting approval.
                 </td>
               </tr>
             ) : (
               sortedPending.map((l) => (
                 <tr key={l.id}>
+                  <td>
+                    <RowCheckbox selection={selection} id={l.id} />
+                  </td>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
                   <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
@@ -388,16 +407,21 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
     to: (l) => l.endDate,
   });
 
+  const selection = useRowSelection(sortedPending.map((l) => l.id));
   return (
     <div>
       {toast && <Toast message={toast.message} tone={toast.tone} />}
       <div className={styles.infoBanner}>
         <strong>Officer Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
       </div>
+      <BulkDecisionBar selection={selection} onApprove={approve} onReject={(id, remarks) => reject(id, remarks)} />
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className="w-8">
+                <SelectAllCheckbox selection={selection} />
+              </th>
               <SortableTh label="Student" sortKey="student" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableTh label="Index" sortKey="index" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableTh label="Leave Type" sortKey="type" activeSortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -409,13 +433,16 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
           <tbody>
             {sortedPending.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">
+                <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
                   No Officer Cadet leaves awaiting approval.
                 </td>
               </tr>
             ) : (
               sortedPending.map((l) => (
                 <tr key={l.id}>
+                  <td>
+                    <RowCheckbox selection={selection} id={l.id} />
+                  </td>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
                   <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>

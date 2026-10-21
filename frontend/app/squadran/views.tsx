@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, LogIn, LogOut, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { BulkDecisionBar, RowCheckbox, SelectAllCheckbox, useRowSelection } from "@/src/components/bulkDecision";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
@@ -223,11 +224,17 @@ function SquadranPendingTable({
     from: (l) => l.startDate,
     to: (l) => l.endDate,
   });
+  const selection = useRowSelection(sorted.map((l) => l.id));
   return (
+    <>
+    <BulkDecisionBar selection={selection} onApprove={onApprove} onReject={(id, remarks) => onReject(id, remarks)} />
     <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
       <table className={styles.table}>
         <thead>
           <tr>
+            <th className="w-8">
+              <SelectAllCheckbox selection={selection} />
+            </th>
             <SortableTh label="Student" sortKey="student" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <SortableTh label="Index" sortKey="index" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
             <SortableTh label="Leave Type" sortKey="type" activeSortKey={sort.sortKey} sortDir={sort.sortDir} onSort={sort.toggleSort} />
@@ -240,7 +247,7 @@ function SquadranPendingTable({
         <tbody>
           {sorted.length === 0 ? (
             <tr>
-              <td colSpan={7} className="py-8 text-center text-[var(--muted)]">
+              <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
                 {leaves.length === 0 ? "No pending applications." : "No applications match your search."}
               </td>
             </tr>
@@ -249,6 +256,9 @@ function SquadranPendingTable({
               const isAcademicViaHod = l.troopStatus === "N/A";
               return (
                 <tr key={l.id}>
+                  <td>
+                    <RowCheckbox selection={selection} id={l.id} />
+                  </td>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
                   <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
@@ -274,6 +284,7 @@ function SquadranPendingTable({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

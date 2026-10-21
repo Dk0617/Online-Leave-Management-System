@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Hourglass, Loader2, LogIn, XCircle } from "lucide-react";
 import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
 import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { BulkDecisionBar, RowCheckbox, SelectAllCheckbox, useRowSelection } from "@/src/components/bulkDecision";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { useSddPortal } from "@/src/hooks/useSddPortal";
@@ -74,6 +75,7 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
       lateEntry: true,
     }));
 
+  const selection = useRowSelection(sortedPending.map((l) => l.id));
   return (
     <div>
       {toast && <Toast message={toast.message} tone={toast.tone} />}
@@ -163,10 +165,14 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
           className="w-full sm:w-72"
         />
       </div>
+      <BulkDecisionBar selection={selection} onApprove={approve} onReject={(id, remarks) => reject(id, remarks)} />
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className="w-8">
+                <SelectAllCheckbox selection={selection} />
+              </th>
               <SortableTh label="Student" sortKey="student" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
               <SortableTh label="Index" sortKey="index" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
               <SortableTh label="Leave Type" sortKey="type" activeSortKey={pendingSortKey} sortDir={pendingSortDir} onSort={togglePendingSort} />
@@ -180,13 +186,16 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSddPortal> 
           <tbody>
             {sortedPending.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
+                <td colSpan={9} className="py-8 text-center text-[var(--muted)]">
                   {pending.length === 0 ? "No applications awaiting your approval." : "No applications match your search."}
                 </td>
               </tr>
             ) : (
               sortedPending.map((l) => (
                 <tr key={l.id}>
+                  <td>
+                    <RowCheckbox selection={selection} id={l.id} />
+                  </td>
                   <td>{l.studentName}</td>
                   <td>{l.indexNumber}</td>
                   <td className="whitespace-nowrap">{LEAVE_TYPE_LABELS[l.type]}</td>
