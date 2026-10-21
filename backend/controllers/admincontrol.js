@@ -19,15 +19,10 @@ function isValidMobile(mobile) {
   return /^\d{10}$/.test(mobile);
 }
 
-// Every account an admin creates by hand — student or staff — gets a
-// password that's handed to the person on paper/verbally for their first
-// login, so it's deliberately not held to any complexity policy: just a
-// sanity-check minimum length. Once the account holder changes it
-// themselves (forced on first login), the real security bar is the
-// stronger self-set policy in logauthcontrol.js changePassword instead.
-const SIMPLE_PASSWORD_MESSAGE = "Password must be at least 4 characters long.";
+// No password rules: any non-empty password is accepted for every account.
+const SIMPLE_PASSWORD_MESSAGE = "Password is required.";
 function isValidSimplePassword(password) {
-  return typeof password === "string" && password.length >= 4;
+  return typeof password === "string" && password.length > 0;
 }
 
 // Email-code login looks a user up by email across every role, so the same

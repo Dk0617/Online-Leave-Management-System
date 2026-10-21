@@ -12,18 +12,6 @@ import { isApproved, isRejected, isToday } from "@/src/api";
 import { ROLE_LABELS, RefName, StaffAccount, StudentType, LeaveRequest, LEAVE_TYPE_LABELS, LecturerAccount } from "@/src/types";
 import styles from "./admin.module.css";
 
-const PASSWORD_POLICY_MESSAGE =
-  "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
-function isValidPassword(password: string): boolean {
-  return (
-    password.length >= 8 &&
-    /[a-z]/.test(password) &&
-    /[A-Z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password)
-  );
-}
-
 function Breakdown({
   label,
   value,
@@ -400,10 +388,6 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
       setError("Mobile number must be exactly 10 digits, numbers only.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
-      return;
-    }
     setError(null);
     const input = {
       indexNumber: indexNumber.trim(),
@@ -603,9 +587,6 @@ export function Students({ portal }: { portal: ReturnType<typeof useAdminPortal>
           <div className="flex gap-2">
             <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={styles.input} />
           </div>
-          <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
-          </p>
         </div>
 
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
@@ -733,10 +714,6 @@ export function StaffRole({
       setError("Please fill in all fields.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
-      return;
-    }
     setError(null);
     try {
       if (editingId) {
@@ -835,9 +812,6 @@ export function StaffRole({
             Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
           </label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
-          <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-            Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
-          </p>
         </div>
         {error && <p className="mb-3 text-xs text-[var(--err)]">{error}</p>}
         <div className="flex gap-2">
@@ -947,10 +921,6 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
       setError("Assign at least one intake to this troop officer.");
       return;
     }
-    if (password.trim() && !isValidPassword(password.trim())) {
-      setError(PASSWORD_POLICY_MESSAGE);
-      return;
-    }
     setError(null);
     try {
       if (editingId) {
@@ -1009,9 +979,6 @@ export function Troop({ portal }: { portal: ReturnType<typeof useAdminPortal> })
               Password {editingId ? "(leave blank to keep current)" : <span className="text-[var(--err)]">*</span>}
             </label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
-            <p className="mt-1.5 text-[11px] text-[var(--muted)]">
-              Min 8 characters, with an uppercase letter, a lowercase letter, a number, and a special character.
-            </p>
           </div>
         </div>
         <div className="mb-3.5">
