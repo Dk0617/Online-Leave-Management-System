@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   normalizeBlockLeave,
@@ -63,15 +63,26 @@ export function useHodPortal(historyMemberId?: string) {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // After a decision the leave is dropped from the list straight away, and
+  // the full reload is debounced — so a bulk approve/reject of many leaves
+  // triggers one reload at the end instead of one per leave.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => refresh(), 300);
+  }
+
   // actingMemberId: which assigned lecturer is deciding, when this hook is
   // used through a department's shared Acting HOD login (app/lecturer).
   async function approve(id: string, comment?: string, actingMemberId?: string) {
     await api.patch(`/hod/leaves/${id}/approve`, { comment, actingMemberId });
-    await refresh();
+    setPending((prev) => prev.filter((l) => l.id !== id));
+    refreshSoon();
   }
   async function reject(id: string, comment?: string, actingMemberId?: string) {
     await api.patch(`/hod/leaves/${id}/reject`, { comment, actingMemberId });
-    await refresh();
+    setPending((prev) => prev.filter((l) => l.id !== id));
+    refreshSoon();
   }
   // Corrects a student's own date/time entry mistake on a leave still
   // pending the HOD's decision — see leavecontrol.js hodCorrectDateTime.

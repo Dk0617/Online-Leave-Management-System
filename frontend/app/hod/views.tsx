@@ -11,7 +11,6 @@ import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/componen
 import { TimeSelect } from "@/src/components/TimeSelect";
 import { EventCalendarView } from "@/src/components/eventCalendar";
 import { useHodPortal } from "@/src/hooks/useHodPortal";
-import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
 import { isToday } from "@/src/api";
 import { BlockLeaveRequest, LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
@@ -84,7 +83,6 @@ export function Dashboard({
   // entirely for a Lecturer covering the queue, rather than exposing a
   // button that would just 403.
   const onCorrect = asLecturer ? undefined : setCorrecting;
-  const { toast, notify } = useDecisionToast();
 
   // Students from this department who've actually returned to campus
   // today, from the real gate movement log.
@@ -104,7 +102,6 @@ export function Dashboard({
 
   return (
     <div>
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load HOD data: {error}</span>
@@ -199,7 +196,6 @@ export function Dashboard({
               onApprove={approve}
               onReject={reject}
               onCorrect={onCorrect}
-              notify={notify}
               sort={pendingSort}
             />
           </div>
@@ -215,7 +211,6 @@ export function Dashboard({
         onApprove={approve}
         onReject={reject}
         onCorrect={onCorrect}
-        notify={notify}
         sort={pendingSort}
       />
 
@@ -244,7 +239,6 @@ function PendingTable({
   onApprove,
   onReject,
   onCorrect,
-  notify,
   sort,
 }: {
   leaves: LeaveRequest[];
@@ -252,7 +246,6 @@ function PendingTable({
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
   onCorrect?: (l: LeaveRequest) => void;
-  notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
   sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
 }) {
   const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
@@ -314,11 +307,6 @@ function PendingTable({
                 </td>
                 <td>{l.appliedDate}</td>
                 <td className="space-x-1.5 whitespace-nowrap">
-                  <ApprovalActions
-                    onApprove={() => onApprove(l.id)}
-                    onReject={(remarks) => onReject(l.id, remarks)}
-                    onSuccess={(decision) => notify(l, decision)}
-                  />
                   <Button variant="secondary" className="!h-8 !w-8 !p-0" title="View" onClick={() => onView(l)}>
                     <Eye size={16} />
                   </Button>

@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, LogIn, LogOut, XCircle } from "lucide-react";
-import { StatTile, Badge, Button, Toast, SearchInput, SortableTh } from "@/src/components/ui";
-import { ApprovalActions, LeaveDetailModal } from "@/src/components/leave";
+import { StatTile, Badge, Button, SearchInput, SortableTh } from "@/src/components/ui";
+import { LeaveDetailModal } from "@/src/components/leave";
 import { BulkDecisionBar, RowCheckbox, SelectAllCheckbox, useRowSelection } from "@/src/components/bulkDecision";
 import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/components/exitStats";
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useSquadranPortal } from "@/src/hooks/useSquadranPortal";
-import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows } from "@/src/hooks/useTableControls";
 import { hodStageRole, isToday } from "@/src/api";
 import { LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
@@ -36,7 +35,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
-  const { toast, notify } = useDecisionToast();
 
   const today = todayStr();
   const todayExitEntries: ExitEntry[] = movements
@@ -83,7 +81,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
 
   return (
     <div>
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load Squadron data: {error}</span>
@@ -176,7 +173,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
               onView={setSelected}
               onApprove={approve}
               onReject={reject}
-              notify={notify}
               sort={pendingSort}
             />
           </div>
@@ -191,7 +187,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useSquadranPor
         onView={setSelected}
         onApprove={approve}
         onReject={reject}
-        notify={notify}
         sort={pendingSort}
       />
 
@@ -207,14 +202,12 @@ function SquadranPendingTable({
   onView,
   onApprove,
   onReject,
-  notify,
   sort,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
-  notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
   sort: ReturnType<typeof useSort>;
 }) {
   const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
@@ -268,11 +261,6 @@ function SquadranPendingTable({
                     <Badge tone="green">{isAcademicViaHod ? `${hodStageRole(l)} Approved` : "Troop Approved"}</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <ApprovalActions
-                      onApprove={() => onApprove(l.id)}
-                      onReject={(remarks) => onReject(l.id, remarks)}
-                      onSuccess={(decision) => notify(l, decision)}
-                    />
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
                       View
                     </Button>

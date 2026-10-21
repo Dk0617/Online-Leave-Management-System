@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/src/components/ui";
 
-// Bulk approve / reject for the approver portals (HOD, Acting HOD, Troop,
-// Squadron, SDD). The approver ticks several pending leaves, then one click
-// applies the same decision to every ticked leave. Each leave still goes
+// Approve / reject for the approver portals (HOD, Acting HOD, Troop,
+// Squadron, SDD). The approver ticks one or more pending leaves, then one
+// click applies the same decision to every ticked leave — this is the only
+// way to decide, the rows themselves just have View. Each leave still goes
 // through the normal single-leave approve/reject call, so every server-side
 // check (and the Acting HOD "I am" requirement) applies exactly as before.
 
@@ -76,18 +77,17 @@ export function BulkDecisionBar({
     const ids = selection.selectedIds;
     setSubmitting(true);
     setResult(null);
-    let done = 0;
-    let firstError: string | null = null;
-    // One at a time, so a failure on one leave doesn't stop the rest.
-    for (const id of ids) {
-      try {
-        if (decision === "Approved") await onApprove(id);
-        else await onReject(id, remarks.trim());
-        done++;
-      } catch (err) {
-        firstError ??= err instanceof Error ? err.message : "Request failed";
-      }
-    }
+    // All at once; a failure on one leave doesn't stop the rest.
+    const results = await Promise.allSettled(
+      ids.map((id) => (decision === "Approved" ? onApprove(id) : onReject(id, remarks.trim())))
+    );
+    const done = results.filter((r) => r.status === "fulfilled").length;
+    const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    const firstError = firstFailure
+      ? firstFailure.reason instanceof Error
+        ? firstFailure.reason.message
+        : "Request failed"
+      : null;
     setSubmitting(false);
     setRejecting(false);
     setRemarks("");

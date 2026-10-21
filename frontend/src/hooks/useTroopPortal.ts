@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, normalizeBlockLeave, normalizeLeave, normalizeMovement, POLL_INTERVAL_MS } from "@/src/api";
 import { BlockLeaveRequest, LeaveRequest, Movement } from "@/src/types";
 
@@ -60,13 +60,24 @@ export function useTroopPortal() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // After a decision the leave is dropped from the list straight away, and
+  // the full reload is debounced — so a bulk approve/reject of many leaves
+  // triggers one reload at the end instead of one per leave.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => refresh(), 300);
+  }
+
   async function approve(id: string, comment?: string) {
     await api.patch(`/troop/leaves/${id}/approve`, { comment });
-    await refresh();
+    setAllPending((prev) => prev.filter((l) => l.id !== id));
+    refreshSoon();
   }
   async function reject(id: string, comment?: string) {
     await api.patch(`/troop/leaves/${id}/reject`, { comment });
-    await refresh();
+    setAllPending((prev) => prev.filter((l) => l.id !== id));
+    refreshSoon();
   }
 
   // Fetched on demand (not part of the main refresh) — this is a

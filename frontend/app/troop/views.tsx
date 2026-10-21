@@ -10,7 +10,6 @@ import { ExitDrilldownModal, ExitEntry, ClickableStatCard } from "@/src/componen
 import { LeaveListDrilldownModal } from "@/src/components/leaveStats";
 import { useAuth } from "@/src/AuthContext";
 import { useTroopPortal } from "@/src/hooks/useTroopPortal";
-import { useDecisionToast } from "@/src/hooks/useDecisionToast";
 import { useSearchFilter, useSort, sortRows, type SortDirection } from "@/src/hooks/useTableControls";
 import { hodStageRole, isToday } from "@/src/api";
 import { BlockLeaveRequest, LEAVE_TYPE_LABELS, LeaveRequest } from "@/src/types";
@@ -42,7 +41,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [drilldown, setDrilldown] = useState<{ title: string; entries: ExitEntry[] } | null>(null);
   const [leaveDrilldown, setLeaveDrilldown] = useState<{ title: string; leaves: LeaveRequest[] } | null>(null);
-  const { toast, notify } = useDecisionToast();
 
   const today = todayStr();
   const todayExitEntries: ExitEntry[] = movements
@@ -89,7 +87,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
 
   return (
     <div>
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       {error && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-4 py-2.5 text-xs text-[var(--err)]">
           <span>Couldn&apos;t load Troop data: {error}</span>
@@ -191,7 +188,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
               onView={setSelected}
               onApprove={approve}
               onReject={reject}
-              notify={notify}
               sort={pendingSort}
             />
           </div>
@@ -206,7 +202,6 @@ export function Dashboard({ portal }: { portal: ReturnType<typeof useTroopPortal
         onView={setSelected}
         onApprove={approve}
         onReject={reject}
-        notify={notify}
         sort={pendingSort}
       />
 
@@ -222,14 +217,12 @@ function TroopPendingTable({
   onView,
   onApprove,
   onReject,
-  notify,
   sort,
 }: {
   leaves: LeaveRequest[];
   onView: (l: LeaveRequest) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, comment?: string) => Promise<void>;
-  notify: (leave: LeaveRequest, decision: "Approved" | "Rejected") => void;
   sort: { sortKey?: string; sortDir: SortDirection; toggleSort: (key: string) => void };
 }) {
   const sorted = sortRows(leaves, sort.sortKey, sort.sortDir, {
@@ -294,11 +287,6 @@ function TroopPendingTable({
                   {l.studentType === "DAY_SCHOLAR" ? "Stage 2 (Final)" : "Stage 1 of 3"}
                 </td>
                 <td className="space-x-1.5 whitespace-nowrap">
-                  <ApprovalActions
-                    onApprove={() => onApprove(l.id)}
-                    onReject={(remarks) => onReject(l.id, remarks)}
-                    onSuccess={(decision) => notify(l, decision)}
-                  />
                   <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => onView(l)}>
                     View
                   </Button>
@@ -316,7 +304,6 @@ function TroopPendingTable({
 export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { dayScholarPending, approve, reject } = portal;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
-  const { toast, notify } = useDecisionToast();
   const { sortKey, sortDir, toggleSort } = useSort();
   const sortedPending = sortRows(dayScholarPending, sortKey, sortDir, {
     student: (l) => l.studentName,
@@ -329,7 +316,6 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
   const selection = useRowSelection(sortedPending.map((l) => l.id));
   return (
     <div>
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       <div className={styles.infoBanner}>
         <strong>Day Scholar — Stage 2:</strong> These leaves have already been approved by the HOD. Your
         approval finalises it. Student can then download the PDF.
@@ -373,11 +359,6 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
                     <Badge tone="green">{hodStageRole(l)} Approved</Badge>
                   </td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <ApprovalActions
-                      onApprove={() => approve(l.id)}
-                      onReject={(remarks) => reject(l.id, remarks)}
-                      onSuccess={(decision) => notify(l, decision)}
-                    />
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
                       View
                     </Button>
@@ -397,7 +378,6 @@ export function DayScholarQueue({ portal }: { portal: ReturnType<typeof useTroop
 export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPortal> }) {
   const { cadetPending, approve, reject } = portal;
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
-  const { toast, notify } = useDecisionToast();
   const { sortKey, sortDir, toggleSort } = useSort();
   const sortedPending = sortRows(cadetPending, sortKey, sortDir, {
     student: (l) => l.studentName,
@@ -410,7 +390,6 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
   const selection = useRowSelection(sortedPending.map((l) => l.id));
   return (
     <div>
-      {toast && <Toast message={toast.message} tone={toast.tone} />}
       <div className={styles.infoBanner}>
         <strong>Officer Cadet — Stage 1:</strong> After your approval, applications move to the Squadron Commander.
       </div>
@@ -449,11 +428,6 @@ export function CadetQueue({ portal }: { portal: ReturnType<typeof useTroopPorta
                   <td>{l.startDate}</td>
                   <td>{l.endDate}</td>
                   <td className="space-x-1.5 whitespace-nowrap">
-                    <ApprovalActions
-                      onApprove={() => approve(l.id)}
-                      onReject={(remarks) => reject(l.id, remarks)}
-                      onSuccess={(decision) => notify(l, decision)}
-                    />
                     <Button variant="secondary" className="!px-2.5 !py-1 !text-[11px]" onClick={() => setSelected(l)}>
                       View
                     </Button>
